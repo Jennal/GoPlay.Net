@@ -111,7 +111,7 @@ namespace GoPlay.Services
             IsStarted = true;
             OnStarted?.Invoke();
 
-            m_sendQueue = new BlockingCollection<Package>(byte.MaxValue);
+            m_sendQueue = new BlockingCollection<Package>(ushort.MaxValue);
             
             m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
             m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
