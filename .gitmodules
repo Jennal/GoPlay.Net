@@ -1,0 +1,3 @@
+[submodule "Frameworks/ThirdParty/NetCoreServer"]
+	path = Frameworks/ThirdParty/NetCoreServer
+	url = git@github.com:Jennal/NetCoreServer.git

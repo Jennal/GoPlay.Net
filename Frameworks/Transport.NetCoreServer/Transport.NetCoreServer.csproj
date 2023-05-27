@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+    <ProjectReference Include="..\ThirdParty\NetCoreServer\source\NetCoreServer\NetCoreServer.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+
+</Project>

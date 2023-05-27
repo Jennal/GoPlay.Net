@@ -1,0 +1,5 @@
+# 基础类型，排除名称空间查询
+int
+float
+bool
+string

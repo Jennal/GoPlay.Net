@@ -1,0 +1,163 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 1 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true in /Users/mac/Documents/Work/GoPlay.Net/Frameworks/Benchmark/bin/Release/net7.0/af7bd348-875b-431c-a38d-578dbae88ba5
+// command took 1.1s and exited with 0
+// start dotnet  build -c Release --no-restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true in /Users/mac/Documents/Work/GoPlay.Net/Frameworks/Benchmark/bin/Release/net7.0/af7bd348-875b-431c-a38d-578dbae88ba5
+// command took 2.07s and exited with 0
+// ***** Done, took 00:00:03 (3.19 sec)   *****
+// Found 1 benchmarks:
+//   BenchmarkRequest.Echo: DefaultJob
+
+// **************************
+// Benchmark: BenchmarkRequest.Echo: DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet af7bd348-875b-431c-a38d-578dbae88ba5.dll --anonymousPipes 121 122 --benchmarkName GoPlay.Benchmarks.BenchmarkRequest.Echo --job Default --benchmarkId 0 in /Users/mac/Documents/Work/GoPlay.Net/Frameworks/Benchmark/bin/Release/net7.0/af7bd348-875b-431c-a38d-578dbae88ba5/bin/Release/net7.0
+Failed to set up high priority. Make sure you have the right permissions. Message: Permission denied
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// Runtime=.NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AdvSIMD,AES,CRC32,DP,RDM,SHA1,SHA256 VectorSize=128
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 111417.00 ns, 111.4170 us/op
+WorkloadJitting  1: 1 op, 6217292.00 ns, 6.2173 ms/op
+
+OverheadJitting  2: 16 op, 120792.00 ns, 7.5495 us/op
+WorkloadJitting  2: 16 op, 4671459.00 ns, 291.9662 us/op
+
+WorkloadPilot    1: 16 op, 5132375.00 ns, 320.7734 us/op
+WorkloadPilot    2: 32 op, 8593458.00 ns, 268.5456 us/op
+WorkloadPilot    3: 64 op, 19165667.00 ns, 299.4635 us/op
+WorkloadPilot    4: 128 op, 35745375.00 ns, 279.2607 us/op
+WorkloadPilot    5: 256 op, 71814583.00 ns, 280.5257 us/op
+WorkloadPilot    6: 512 op, 136408916.00 ns, 266.4237 us/op
+WorkloadPilot    7: 1024 op, 382825333.00 ns, 373.8529 us/op
+WorkloadPilot    8: 2048 op, 458273250.00 ns, 223.7662 us/op
+WorkloadPilot    9: 4096 op, 871327166.00 ns, 212.7264 us/op
+
+OverheadWarmup   1: 4096 op, 10292.00 ns, 2.5127 ns/op
+OverheadWarmup   2: 4096 op, 10208.00 ns, 2.4922 ns/op
+OverheadWarmup   3: 4096 op, 9417.00 ns, 2.2991 ns/op
+OverheadWarmup   4: 4096 op, 9333.00 ns, 2.2786 ns/op
+OverheadWarmup   5: 4096 op, 9500.00 ns, 2.3193 ns/op
+OverheadWarmup   6: 4096 op, 9250.00 ns, 2.2583 ns/op
+OverheadWarmup   7: 4096 op, 9000.00 ns, 2.1973 ns/op
+OverheadWarmup   8: 4096 op, 9125.00 ns, 2.2278 ns/op
+OverheadWarmup   9: 4096 op, 8958.00 ns, 2.1870 ns/op
+
+OverheadActual   1: 4096 op, 9000.00 ns, 2.1973 ns/op
+OverheadActual   2: 4096 op, 9000.00 ns, 2.1973 ns/op
+OverheadActual   3: 4096 op, 9042.00 ns, 2.2075 ns/op
+OverheadActual   4: 4096 op, 9416.00 ns, 2.2988 ns/op
+OverheadActual   5: 4096 op, 9292.00 ns, 2.2686 ns/op
+OverheadActual   6: 4096 op, 8958.00 ns, 2.1870 ns/op
+OverheadActual   7: 4096 op, 8958.00 ns, 2.1870 ns/op
+OverheadActual   8: 4096 op, 10042.00 ns, 2.4517 ns/op
+OverheadActual   9: 4096 op, 8916.00 ns, 2.1768 ns/op
+OverheadActual  10: 4096 op, 8625.00 ns, 2.1057 ns/op
+OverheadActual  11: 4096 op, 9292.00 ns, 2.2686 ns/op
+OverheadActual  12: 4096 op, 9166.00 ns, 2.2378 ns/op
+OverheadActual  13: 4096 op, 9625.00 ns, 2.3499 ns/op
+OverheadActual  14: 4096 op, 9417.00 ns, 2.2991 ns/op
+OverheadActual  15: 4096 op, 9292.00 ns, 2.2686 ns/op
+
+WorkloadWarmup   1: 4096 op, 887486792.00 ns, 216.6716 us/op
+WorkloadWarmup   2: 4096 op, 1005399458.00 ns, 245.4589 us/op
+WorkloadWarmup   3: 4096 op, 922163833.00 ns, 225.1377 us/op
+WorkloadWarmup   4: 4096 op, 880823291.00 ns, 215.0447 us/op
+WorkloadWarmup   5: 4096 op, 886543125.00 ns, 216.4412 us/op
+WorkloadWarmup   6: 4096 op, 880812375.00 ns, 215.0421 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 4096 op, 878356875.00 ns, 214.4426 us/op
+WorkloadActual   2: 4096 op, 871363000.00 ns, 212.7351 us/op
+WorkloadActual   3: 4096 op, 880997000.00 ns, 215.0872 us/op
+WorkloadActual   4: 4096 op, 876691708.00 ns, 214.0361 us/op
+WorkloadActual   5: 4096 op, 866763750.00 ns, 211.6122 us/op
+WorkloadActual   6: 4096 op, 874170458.00 ns, 213.4205 us/op
+WorkloadActual   7: 4096 op, 878793958.00 ns, 214.5493 us/op
+WorkloadActual   8: 4096 op, 886516250.00 ns, 216.4346 us/op
+WorkloadActual   9: 4096 op, 883966791.00 ns, 215.8122 us/op
+WorkloadActual  10: 4096 op, 868621834.00 ns, 212.0659 us/op
+WorkloadActual  11: 4096 op, 861274750.00 ns, 210.2722 us/op
+WorkloadActual  12: 4096 op, 872922083.00 ns, 213.1157 us/op
+WorkloadActual  13: 4096 op, 875672042.00 ns, 213.7871 us/op
+WorkloadActual  14: 4096 op, 870187042.00 ns, 212.4480 us/op
+WorkloadActual  15: 4096 op, 882205375.00 ns, 215.3822 us/op
+
+// AfterActualRun
+WorkloadResult   1: 4096 op, 878347709.00 ns, 214.4404 us/op
+WorkloadResult   2: 4096 op, 871353834.00 ns, 212.7329 us/op
+WorkloadResult   3: 4096 op, 880987834.00 ns, 215.0849 us/op
+WorkloadResult   4: 4096 op, 876682542.00 ns, 214.0338 us/op
+WorkloadResult   5: 4096 op, 866754584.00 ns, 211.6100 us/op
+WorkloadResult   6: 4096 op, 874161292.00 ns, 213.4183 us/op
+WorkloadResult   7: 4096 op, 878784792.00 ns, 214.5471 us/op
+WorkloadResult   8: 4096 op, 886507084.00 ns, 216.4324 us/op
+WorkloadResult   9: 4096 op, 883957625.00 ns, 215.8100 us/op
+WorkloadResult  10: 4096 op, 868612668.00 ns, 212.0636 us/op
+WorkloadResult  11: 4096 op, 861265584.00 ns, 210.2699 us/op
+WorkloadResult  12: 4096 op, 872912917.00 ns, 213.1135 us/op
+WorkloadResult  13: 4096 op, 875662876.00 ns, 213.7849 us/op
+WorkloadResult  14: 4096 op, 870177876.00 ns, 212.4458 us/op
+WorkloadResult  15: 4096 op, 882196209.00 ns, 215.3799 us/op
+
+// AfterAll
+// Benchmark Process 29844 has exited with code 0.
+
+Mean = 213.678 μs, StdErr = 0.435 μs (0.20%), N = 15, StdDev = 1.686 μs
+Min = 210.270 μs, Q1 = 212.589 μs, Median = 213.785 μs, Q3 = 214.816 μs, Max = 216.432 μs
+IQR = 2.227 μs, LowerFence = 209.249 μs, UpperFence = 218.156 μs
+ConfidenceInterval = [211.876 μs; 215.480 μs] (CI 99.9%), Margin = 1.802 μs (0.84% of Mean)
+Skewness = -0.22, Kurtosis = 2.1, MValue = 2
+
+// ** Remained 0 (0.0%) benchmark(s) to run. Estimated finish 2023-05-27 15:14 (0h 0m from now) **
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts/results/GoPlay.Benchmarks.BenchmarkRequest-report.csv
+  BenchmarkDotNet.Artifacts/results/GoPlay.Benchmarks.BenchmarkRequest-report-github.md
+  BenchmarkDotNet.Artifacts/results/GoPlay.Benchmarks.BenchmarkRequest-report.html
+
+// * Detailed results *
+BenchmarkRequest.Echo: DefaultJob
+Runtime = .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD; GC = Concurrent Workstation
+Mean = 213.678 μs, StdErr = 0.435 μs (0.20%), N = 15, StdDev = 1.686 μs
+Min = 210.270 μs, Q1 = 212.589 μs, Median = 213.785 μs, Q3 = 214.816 μs, Max = 216.432 μs
+IQR = 2.227 μs, LowerFence = 209.249 μs, UpperFence = 218.156 μs
+ConfidenceInterval = [211.876 μs; 215.480 μs] (CI 99.9%), Margin = 1.802 μs (0.84% of Mean)
+Skewness = -0.22, Kurtosis = 2.1, MValue = 2
+-------------------- Histogram --------------------
+[209.373 μs ; 217.329 μs) | @@@@@@@@@@@@@@@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet=v0.13.3, OS=macOS 13.2.1 (22D68) [Darwin 22.3.0]
+Apple M1, 1 CPU, 8 logical and 8 physical cores
+.NET SDK=7.0.203
+  [Host]     : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD
+  DefaultJob : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD
+
+
+| Method |     Mean |   Error |  StdDev | Ratio |
+|------- |---------:|--------:|--------:|------:|
+|   Echo | 213.7 μs | 1.80 μs | 1.69 μs |  1.00 |
+
+// * Legends *
+  Mean   : Arithmetic mean of all measurements
+  Error  : Half of 99.9% confidence interval
+  StdDev : Standard deviation of all measurements
+  Ratio  : Mean of the ratio distribution ([Current]/[Baseline])
+  1 μs   : 1 Microsecond (0.000001 sec)
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:20 (20.95 sec), executed benchmarks: 1
+
+Global total time: 00:00:24 (24.14 sec), executed benchmarks: 1
+// * Artifacts cleanup *

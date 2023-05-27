@@ -1,0 +1,74 @@
+syntax = "proto3";
+import "google/protobuf/any.proto";
+
+package GoPlay.Services.Core.Protocols;
+
+//状态码
+enum StatusCode {
+    Success = 0;
+    Failed  = 1;
+    Error   = 2;
+    Timeout = 3;
+}
+
+enum PackageType {
+    HankShakeReq  = 0;
+    HankShakeResp = 1;
+    Ping          = 2;
+    Pong          = 3;
+    Notify        = 4;
+    Request       = 5;
+    Response      = 6;
+    Push          = 7;
+    Kick          = 8;
+}
+
+enum EncodingType {
+    Protobuf = 0;
+    Json = 1;
+}
+
+enum ServerTag {
+    Empty = 0;
+    FrontEnd = 1;
+    BackEnd = 2;
+    All = 3;
+}
+
+//服务器返回的状态信息
+message Status {
+    StatusCode Code = 1;
+    string Message  = 2;
+}
+
+message Session {
+    string Guid = 1;    //SessionID
+    map<string, google.protobuf.Any> Values = 2;
+}
+
+message PackageInfo {
+    PackageType Type = 1;
+    uint32 Id = 2; //包ID
+    EncodingType EncodingType = 3;
+    uint32 Route = 4;
+    uint32 ContentSize = 5;
+}
+
+//协议头部信息
+message Header {
+    Status Status = 1;   //服务端返回的状态信息
+    Session Session = 2;
+    PackageInfo PackageInfo = 3;
+}
+
+message ReqHankShake {
+    string ClientVersion = 1;
+    ServerTag ServerTag = 2;
+    string AppKey = 3;
+}
+
+message RespHandShake {
+    string ServerVersion = 1;
+    uint32 HeartBeatInterval = 2;
+    map<string, uint32> Routes = 3;
+}

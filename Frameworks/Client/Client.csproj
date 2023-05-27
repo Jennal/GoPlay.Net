@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+    <ProjectReference Include="..\Common.Data\Common.Data.csproj" />
+    <ProjectReference Include="..\ThirdParty\NetCoreServer\source\NetCoreServer\NetCoreServer.csproj" />
+    <ProjectReference Include="..\Transport.NetCoreServer\Transport.NetCoreServer.csproj" />
+    <ProjectReference Include="..\Transport.WatsonTcp\Transport.WatsonTcp.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>GoPlay.Service.Client</AssemblyName>
+    <RootNamespace>GoPlay.Services</RootNamespace>
+    <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,49 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+package GoPlay.Services.Core.Protocols;
+
+message PbAny {
+    google.protobuf.Any Value = 1;
+}
+
+message PbTime {
+    google.protobuf.Timestamp Value = 1;
+}
+
+message PbString {
+    string Value = 1;
+}
+
+message PbInt {
+    int32 Value = 1;
+}
+
+message PbLong {
+    int64 Value = 1;
+}
+
+message PbFloat {
+    float Value = 1;
+}
+
+message PbBool {
+    bool Value = 1;
+}
+
+message PbStringArray {
+    repeated string Value = 1;
+}
+
+message PbIntArray {
+    repeated int32 Value = 1;
+}
+
+message PbFloatArray {
+    repeated float Value = 1;
+}
+
+message PbBoolArray {
+    repeated bool Value = 1;
+}

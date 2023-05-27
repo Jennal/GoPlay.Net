@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>GoPlay.Common.Data</AssemblyName>
+    <RootNamespace>GoPlay.Common.Data</RootNamespace>
+    <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+
+</Project>

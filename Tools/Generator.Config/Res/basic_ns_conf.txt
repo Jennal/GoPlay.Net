@@ -1,0 +1,5 @@
+# 基础名称空间
+System
+System.Linq
+System.Text
+System.Collections.Generic
