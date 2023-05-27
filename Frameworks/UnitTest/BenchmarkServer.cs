@@ -12,6 +12,7 @@ using GoPlay.Services.Core.Debug;
 using GoPlay.Services.Core.Encodes;
 using GoPlay.Services.Core.Protocols;
 using GoPlay.Services.Core.Routers;
+using GoPlay.Services.Core.Transport.NetCoreServer;
 using GoPlay.Services.Core.Transports.TCP;
 
 namespace UnitTest
@@ -113,7 +114,7 @@ namespace UnitTest
         }
 
         [Test]
-        public async Task TestMultiClientRequest()
+        public async Task TestTcpMultiClientRequest()
         {
             var clientCount = 100;
             var requestCount = 100;
@@ -154,6 +155,55 @@ namespace UnitTest
 
             Task.WaitAll(tasks.ToArray());
             Console.WriteLine(Profiler.StatisPrefix("Request"));
+        }
+        
+        [Test]
+        public async Task TestNetCoreMultiClientRequest()
+        {
+            var clientCount = 100;
+            var requestCount = 1000;
+
+            var encoder = ProtobufEncoder.Instance;
+            var server = new Server<NcServer>();
+            server.Register(new TestProcessor());
+            var task = server.Start("127.0.0.1", 5557);
+            await Task.Yield();
+
+            Profiler.Begin("Total");
+            var tasks = new List<Task>();
+            for (int i = 0; i < clientCount; i++)
+            {
+                var clientId = i;
+                var profilerKey = $"Request_{clientId}";
+                var t = Task.Run(async () =>
+                {
+                    var client = new Client<NcClient>();
+                    client.RequestTimeout = TimeSpan.MaxValue;
+                    var ok = await client.Connect("127.0.0.1", 5557);
+                    if (!ok) throw new Exception("Connection Failed");
+
+                    for (var j = 0; j < requestCount; j++)
+                    {
+                        var id = clientId * j;
+                        Profiler.Begin(profilerKey);
+                        var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
+                        {
+                            Value = $"Hello_{id}"
+                        });
+                        Profiler.End(profilerKey);
+
+                        Assert.AreEqual(StatusCode.Success, status.Code);
+                        Assert.AreEqual($"[Test] Server reply: Hello_{id}", result.Value);
+                    }
+                });
+
+                tasks.Add(t);
+            }
+
+            Task.WaitAll(tasks.ToArray());
+            Profiler.End("Total");
+            Console.WriteLine(Profiler.StatisPrefix("Request"));
+            Console.WriteLine(Profiler.Statistics("Total"));
         }
 
         [Test]
