@@ -11,7 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Generator.Extension", "Gene
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Generator.Core", "Generator.Core\Generator.Core.csproj", "{180DF2BA-D419-471B-A8A0-8D88CD58FC6C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Data", "..\Server\Common.Data\Common.Data.csproj", "{BEF67819-12C4-46ED-A5CE-B59442DEEF8E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Data", "..\Frameworks\Common.Data\Common.Data.csproj", "{BEF67819-12C4-46ED-A5CE-B59442DEEF8E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
