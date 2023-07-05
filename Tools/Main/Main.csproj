@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>wh</ToolCommandName>
+    <ToolCommandName>goplay</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <AssemblyName>GoPlay.Tools</AssemblyName>
     <RootNamespace>GoPlay</RootNamespace>
