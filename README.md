@@ -1,8 +1,8 @@
 # GoPlay Server Framework
 
-GoPlay是一个足够简单，开箱即用的TCP长连接RPC开发框架。
+GoPlay源于网络游戏开发的需求，基于C#编写的一套简单易用的RPC框架，但不限于游戏使用，可以用于解决任何实时网络通讯的问题。
 
-## Sample
+## How To Use
 
 ### Server
 
@@ -23,12 +23,12 @@ class EchoProcessor : ProcessorBase
 ### Client
 
 ```csharp
+//Echo_Echo是自动代码生成的函数
 var (status, resp) = await client.Echo_Echo(new PbString{
    Value = "Hello"
 });
-if (status.Code == Status.Success) {
-   Console.Writeline(resp.Value);
-}
+Assert.AreEqual(StatusCode.Success, status.Code);
+Assert.AreEqual("Serv reply: Hello", resp.Value);
 ```
 
 ## 概念
