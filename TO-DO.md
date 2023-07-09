@@ -6,6 +6,7 @@
 - [x] `SessionManager` 用于管理客户端状态信息
 - [] ~~使用Expression创建Delegate并缓存来优化Route执行效率~~
 https://stackoverflow.com/questions/840261/passing-arguments-to-c-sharp-generic-new-of-templated-type
+- [] Tool的导出ClientExtension，增加Protobuf Data Namespace的自动识别
 
 ### Client
 
