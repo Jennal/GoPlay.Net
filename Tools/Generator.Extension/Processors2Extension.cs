@@ -34,11 +34,14 @@ namespace GoPlay.Generators.Extension
         private static List<PushData> _frontPushes;
         private static List<PushData> _backPushes;
 
+        private static List<string> _frontNs;
+        private static List<string> _backNs;
+        
         private static string _outFrontFile;
         private static string _outBackFile;
         private static string[] _baseClasses;
         
-        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="")
+        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="")
         {
             _outFrontFile = outputFrontendFile;
             _outBackFile = outputBackendFile;
@@ -58,6 +61,9 @@ namespace GoPlay.Generators.Extension
             _frontPushes = new List<PushData>();
             _backPushes = new List<PushData>();
 
+            _frontNs = CreateNs(frontendNs);
+            _backNs = CreateNs(backendNs);
+            
             var files = Directory.EnumerateFiles(slnFolder, "*.csproj", SearchOption.AllDirectories);
             foreach (var csprojPath in files)
             {
@@ -65,11 +71,23 @@ namespace GoPlay.Generators.Extension
                 await ResolveProject(csprojPath);
             }
 
-            if(!string.IsNullOrEmpty(_outFrontFile)) Write(_outFrontFile, frontendTpl, _frontends, _frontPushes);
-            if(!string.IsNullOrEmpty(_outBackFile)) Write(_outBackFile, backendTpl, _backends, _backPushes);
+            if(!string.IsNullOrEmpty(_outFrontFile)) Write(_outFrontFile, frontendTpl, _frontends, _frontPushes, _frontNs);
+            if(!string.IsNullOrEmpty(_outBackFile)) Write(_outBackFile, backendTpl, _backends, _backPushes, _backNs);
         }
 
-        private static void Write(string outFile, string tpl, List<TemplateData> data, List<PushData> pushes)
+        private static List<string> CreateNs(string ns)
+        {
+            if (string.IsNullOrEmpty(ns)) return BASIC_NAMESPACES.ToList();
+            
+            var nsList = ns.Split(",", StringSplitOptions.RemoveEmptyEntries)
+                .Select(o => o.Trim())
+                .Where(o => !string.IsNullOrEmpty(o));
+
+            return BASIC_NAMESPACES.Union(nsList)
+                                   .ToList();
+        }
+
+        private static void Write(string outFile, string tpl, List<TemplateData> data, List<PushData> pushes, List<string> ns)
         {
             Console.Write($"Writing: {outFile}...");
             {
@@ -77,7 +95,7 @@ namespace GoPlay.Generators.Extension
                 {
                     data = data,
                     pushes = pushes,
-                    namespaces = BASIC_NAMESPACES,
+                    namespaces = ns,
                 });
                 File.WriteAllText(outFile, content);
             }
