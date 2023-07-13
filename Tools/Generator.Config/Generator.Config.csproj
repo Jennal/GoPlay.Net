@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Server\Common.Data\Common.Data.csproj" />
+    <ProjectReference Include="..\..\Frameworks\Common.Data\Common.Data.csproj" />
     <ProjectReference Include="..\Generator.Core\Generator.Core.csproj" />
   </ItemGroup>
 

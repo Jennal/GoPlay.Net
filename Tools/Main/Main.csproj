@@ -10,6 +10,18 @@
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <AssemblyName>GoPlay.Tools</AssemblyName>
     <RootNamespace>GoPlay</RootNamespace>
+    <Title>GoPlay CommandLine Tools</Title>
+    <Authors>Jennal</Authors>
+    <Description>GoPlay CommandLine Tools
+
+- config: export Excel to cs &amp; yaml
+- extension: analyze GoPlay.Net Server solution and generate extension methods for Requst/Notify and Protocol Consts</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net/tree/main/Tools</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net/tree/main/Tools</RepositoryUrl>
+    <PackageTags>goplay,game,server,rpc</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +34,11 @@
     <Reference Include="EPPlus, Version=6.0.3.0, Culture=neutral, PublicKeyToken=ea159fdaa78159a1">
       <HintPath>..\Libs\EPPlus.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\"/>
+    <None Include="..\..\LICENSE" Pack="true" Visible="false" PackagePath=""/>
   </ItemGroup>
 
   <ItemGroup>
