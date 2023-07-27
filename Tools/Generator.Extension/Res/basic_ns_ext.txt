@@ -1,4 +1,4 @@
 # 基础名称空间
 System
 System.Threading.Tasks
-GoPlay.Services.Core.Protocols
+GoPlay.Core.Protocols

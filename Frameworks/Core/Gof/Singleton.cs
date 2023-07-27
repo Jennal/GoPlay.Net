@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GoPlay.Services.Core.Gof
+namespace GoPlay.Core.Gof
 {
     public class Singleton<T>
         where T : Singleton<T>, new()

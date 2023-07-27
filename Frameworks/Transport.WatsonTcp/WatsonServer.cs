@@ -2,10 +2,10 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 using WatsonTcp;
 
-namespace GoPlay.Services.Core.Transports.Watson
+namespace GoPlay.Core.Transports.Watson
 {
     public class WatsonServer : TransportServerBase
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using GoPlay.Services.Core.Attributes;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Attributes;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Utils
+namespace GoPlay.Core.Utils
 {
     public static class ReflectUtil
     {   

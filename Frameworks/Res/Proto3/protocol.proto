@@ -1,7 +1,7 @@
 syntax = "proto3";
 import "google/protobuf/any.proto";
 
-package GoPlay.Services.Core.Protocols;
+package GoPlay.Core.Protocols;
 
 //状态码
 enum StatusCode {

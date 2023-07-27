@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using UnitTest.Processors;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
 
 namespace UnitTest
 {

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Linq;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public partial class Client<T>
     {

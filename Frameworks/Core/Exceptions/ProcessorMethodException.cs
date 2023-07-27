@@ -1,7 +1,7 @@
 ﻿using System;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Exceptions
+namespace GoPlay.Exceptions
 {
     public class ProcessorMethodException : Exception
     {

@@ -6,11 +6,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnitTest.Processors;
-using GoPlay.Services;
-using GoPlay.Services.Core.Debug;
-using GoPlay.Services.Core.Encodes;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Transport.NetCoreServer;
+using GoPlay;
+using GoPlay.Core.Debug;
+using GoPlay.Core.Encodes;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Transport.NetCoreServer;
 
 namespace UnitTest
 {

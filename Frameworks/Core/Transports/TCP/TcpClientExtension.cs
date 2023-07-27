@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace GoPlay.Services.Core.Transports.TCP
+namespace GoPlay.Core.Transports.TCP
 {
     public static class TcpClientExtension
     {

@@ -1,14 +1,14 @@
 ﻿using System.Collections.Concurrent;
 using Core.Encodes.Factory;
-using GoPlay.Services.Core;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Processors;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Transports;
-using GoPlay.Services.Core.Utils;
-using GoPlay.Services.Exceptions;
+using GoPlay.Core;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Processors;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Transports;
+using GoPlay.Core.Utils;
+using GoPlay.Exceptions;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public abstract partial class Server : IFilterable, IPackageSender, IDisposable
     {

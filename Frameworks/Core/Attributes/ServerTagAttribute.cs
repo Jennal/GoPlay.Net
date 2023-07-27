@@ -1,7 +1,7 @@
 using System;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Attributes
+namespace GoPlay.Core.Attributes
 {
     // [Flags]
     // public enum ServerTag

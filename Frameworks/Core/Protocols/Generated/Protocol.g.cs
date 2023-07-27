@@ -9,7 +9,7 @@ using pb = global::Google.Protobuf;
 using pbc = global::Google.Protobuf.Collections;
 using pbr = global::Google.Protobuf.Reflection;
 using scg = global::System.Collections.Generic;
-namespace GoPlay.Services.Core.Protocols {
+namespace GoPlay.Core.Protocols {
 
   /// <summary>Holder for reflection information generated from protocol.proto</summary>
   public static partial class ProtocolReflection {
@@ -56,13 +56,13 @@ namespace GoPlay.Services.Core.Protocols {
             "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.AnyReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GoPlay.Services.Core.Protocols.StatusCode), typeof(global::GoPlay.Services.Core.Protocols.PackageType), typeof(global::GoPlay.Services.Core.Protocols.EncodingType), typeof(global::GoPlay.Services.Core.Protocols.ServerTag), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.Status), global::GoPlay.Services.Core.Protocols.Status.Parser, new[]{ "Code", "Message" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.Session), global::GoPlay.Services.Core.Protocols.Session.Parser, new[]{ "Guid", "Values" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PackageInfo), global::GoPlay.Services.Core.Protocols.PackageInfo.Parser, new[]{ "Type", "Id", "EncodingType", "Route", "ContentSize" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.Header), global::GoPlay.Services.Core.Protocols.Header.Parser, new[]{ "Status", "Session", "PackageInfo" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.ReqHankShake), global::GoPlay.Services.Core.Protocols.ReqHankShake.Parser, new[]{ "ClientVersion", "ServerTag", "AppKey" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.RespHandShake), global::GoPlay.Services.Core.Protocols.RespHandShake.Parser, new[]{ "ServerVersion", "HeartBeatInterval", "Routes" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, })
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GoPlay.Core.Protocols.StatusCode), typeof(global::GoPlay.Core.Protocols.PackageType), typeof(global::GoPlay.Core.Protocols.EncodingType), typeof(global::GoPlay.Core.Protocols.ServerTag), }, null, new pbr::GeneratedClrTypeInfo[] {
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Status), global::GoPlay.Core.Protocols.Status.Parser, new[]{ "Code", "Message" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Session), global::GoPlay.Core.Protocols.Session.Parser, new[]{ "Guid", "Values" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PackageInfo), global::GoPlay.Core.Protocols.PackageInfo.Parser, new[]{ "Type", "Id", "EncodingType", "Route", "ContentSize" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Header), global::GoPlay.Core.Protocols.Header.Parser, new[]{ "Status", "Session", "PackageInfo" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.ReqHankShake), global::GoPlay.Core.Protocols.ReqHankShake.Parser, new[]{ "ClientVersion", "ServerTag", "AppKey" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.RespHandShake), global::GoPlay.Core.Protocols.RespHandShake.Parser, new[]{ "ServerVersion", "HeartBeatInterval", "Routes" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, })
           }));
     }
     #endregion
@@ -123,7 +123,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[0]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[0]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -156,10 +156,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "Code" field.</summary>
     public const int CodeFieldNumber = 1;
-    private global::GoPlay.Services.Core.Protocols.StatusCode code_ = global::GoPlay.Services.Core.Protocols.StatusCode.Success;
+    private global::GoPlay.Core.Protocols.StatusCode code_ = global::GoPlay.Core.Protocols.StatusCode.Success;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.StatusCode Code {
+    public global::GoPlay.Core.Protocols.StatusCode Code {
       get { return code_; }
       set {
         code_ = value;
@@ -202,7 +202,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (Code != global::GoPlay.Services.Core.Protocols.StatusCode.Success) hash ^= Code.GetHashCode();
+      if (Code != global::GoPlay.Core.Protocols.StatusCode.Success) hash ^= Code.GetHashCode();
       if (Message.Length != 0) hash ^= Message.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -222,7 +222,7 @@ namespace GoPlay.Services.Core.Protocols {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (Code != global::GoPlay.Services.Core.Protocols.StatusCode.Success) {
+      if (Code != global::GoPlay.Core.Protocols.StatusCode.Success) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Code);
       }
@@ -240,7 +240,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Code != global::GoPlay.Services.Core.Protocols.StatusCode.Success) {
+      if (Code != global::GoPlay.Core.Protocols.StatusCode.Success) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Code);
       }
@@ -258,7 +258,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (Code != global::GoPlay.Services.Core.Protocols.StatusCode.Success) {
+      if (Code != global::GoPlay.Core.Protocols.StatusCode.Success) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Code);
       }
       if (Message.Length != 0) {
@@ -276,7 +276,7 @@ namespace GoPlay.Services.Core.Protocols {
       if (other == null) {
         return;
       }
-      if (other.Code != global::GoPlay.Services.Core.Protocols.StatusCode.Success) {
+      if (other.Code != global::GoPlay.Core.Protocols.StatusCode.Success) {
         Code = other.Code;
       }
       if (other.Message.Length != 0) {
@@ -298,7 +298,7 @@ namespace GoPlay.Services.Core.Protocols {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
           case 8: {
-            Code = (global::GoPlay.Services.Core.Protocols.StatusCode) input.ReadEnum();
+            Code = (global::GoPlay.Core.Protocols.StatusCode) input.ReadEnum();
             break;
           }
           case 18: {
@@ -321,7 +321,7 @@ namespace GoPlay.Services.Core.Protocols {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
           case 8: {
-            Code = (global::GoPlay.Services.Core.Protocols.StatusCode) input.ReadEnum();
+            Code = (global::GoPlay.Core.Protocols.StatusCode) input.ReadEnum();
             break;
           }
           case 18: {
@@ -349,7 +349,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[1]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[1]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -567,7 +567,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[2]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[2]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -603,10 +603,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "Type" field.</summary>
     public const int TypeFieldNumber = 1;
-    private global::GoPlay.Services.Core.Protocols.PackageType type_ = global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq;
+    private global::GoPlay.Core.Protocols.PackageType type_ = global::GoPlay.Core.Protocols.PackageType.HankShakeReq;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.PackageType Type {
+    public global::GoPlay.Core.Protocols.PackageType Type {
       get { return type_; }
       set {
         type_ = value;
@@ -630,10 +630,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "EncodingType" field.</summary>
     public const int EncodingTypeFieldNumber = 3;
-    private global::GoPlay.Services.Core.Protocols.EncodingType encodingType_ = global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf;
+    private global::GoPlay.Core.Protocols.EncodingType encodingType_ = global::GoPlay.Core.Protocols.EncodingType.Protobuf;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.EncodingType EncodingType {
+    public global::GoPlay.Core.Protocols.EncodingType EncodingType {
       get { return encodingType_; }
       set {
         encodingType_ = value;
@@ -691,9 +691,9 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (Type != global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq) hash ^= Type.GetHashCode();
+      if (Type != global::GoPlay.Core.Protocols.PackageType.HankShakeReq) hash ^= Type.GetHashCode();
       if (Id != 0) hash ^= Id.GetHashCode();
-      if (EncodingType != global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf) hash ^= EncodingType.GetHashCode();
+      if (EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) hash ^= EncodingType.GetHashCode();
       if (Route != 0) hash ^= Route.GetHashCode();
       if (ContentSize != 0) hash ^= ContentSize.GetHashCode();
       if (_unknownFields != null) {
@@ -714,7 +714,7 @@ namespace GoPlay.Services.Core.Protocols {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (Type != global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq) {
+      if (Type != global::GoPlay.Core.Protocols.PackageType.HankShakeReq) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Type);
       }
@@ -722,7 +722,7 @@ namespace GoPlay.Services.Core.Protocols {
         output.WriteRawTag(16);
         output.WriteUInt32(Id);
       }
-      if (EncodingType != global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf) {
+      if (EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) {
         output.WriteRawTag(24);
         output.WriteEnum((int) EncodingType);
       }
@@ -744,7 +744,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Type != global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq) {
+      if (Type != global::GoPlay.Core.Protocols.PackageType.HankShakeReq) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Type);
       }
@@ -752,7 +752,7 @@ namespace GoPlay.Services.Core.Protocols {
         output.WriteRawTag(16);
         output.WriteUInt32(Id);
       }
-      if (EncodingType != global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf) {
+      if (EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) {
         output.WriteRawTag(24);
         output.WriteEnum((int) EncodingType);
       }
@@ -774,13 +774,13 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (Type != global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq) {
+      if (Type != global::GoPlay.Core.Protocols.PackageType.HankShakeReq) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Type);
       }
       if (Id != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
       }
-      if (EncodingType != global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf) {
+      if (EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) EncodingType);
       }
       if (Route != 0) {
@@ -801,13 +801,13 @@ namespace GoPlay.Services.Core.Protocols {
       if (other == null) {
         return;
       }
-      if (other.Type != global::GoPlay.Services.Core.Protocols.PackageType.HankShakeReq) {
+      if (other.Type != global::GoPlay.Core.Protocols.PackageType.HankShakeReq) {
         Type = other.Type;
       }
       if (other.Id != 0) {
         Id = other.Id;
       }
-      if (other.EncodingType != global::GoPlay.Services.Core.Protocols.EncodingType.Protobuf) {
+      if (other.EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) {
         EncodingType = other.EncodingType;
       }
       if (other.Route != 0) {
@@ -832,7 +832,7 @@ namespace GoPlay.Services.Core.Protocols {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
           case 8: {
-            Type = (global::GoPlay.Services.Core.Protocols.PackageType) input.ReadEnum();
+            Type = (global::GoPlay.Core.Protocols.PackageType) input.ReadEnum();
             break;
           }
           case 16: {
@@ -840,7 +840,7 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           }
           case 24: {
-            EncodingType = (global::GoPlay.Services.Core.Protocols.EncodingType) input.ReadEnum();
+            EncodingType = (global::GoPlay.Core.Protocols.EncodingType) input.ReadEnum();
             break;
           }
           case 32: {
@@ -867,7 +867,7 @@ namespace GoPlay.Services.Core.Protocols {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
           case 8: {
-            Type = (global::GoPlay.Services.Core.Protocols.PackageType) input.ReadEnum();
+            Type = (global::GoPlay.Core.Protocols.PackageType) input.ReadEnum();
             break;
           }
           case 16: {
@@ -875,7 +875,7 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           }
           case 24: {
-            EncodingType = (global::GoPlay.Services.Core.Protocols.EncodingType) input.ReadEnum();
+            EncodingType = (global::GoPlay.Core.Protocols.EncodingType) input.ReadEnum();
             break;
           }
           case 32: {
@@ -910,7 +910,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[3]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -944,13 +944,13 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "Status" field.</summary>
     public const int StatusFieldNumber = 1;
-    private global::GoPlay.Services.Core.Protocols.Status status_;
+    private global::GoPlay.Core.Protocols.Status status_;
     /// <summary>
     ///服务端返回的状态信息
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.Status Status {
+    public global::GoPlay.Core.Protocols.Status Status {
       get { return status_; }
       set {
         status_ = value;
@@ -959,10 +959,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "Session" field.</summary>
     public const int SessionFieldNumber = 2;
-    private global::GoPlay.Services.Core.Protocols.Session session_;
+    private global::GoPlay.Core.Protocols.Session session_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.Session Session {
+    public global::GoPlay.Core.Protocols.Session Session {
       get { return session_; }
       set {
         session_ = value;
@@ -971,10 +971,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "PackageInfo" field.</summary>
     public const int PackageInfoFieldNumber = 3;
-    private global::GoPlay.Services.Core.Protocols.PackageInfo packageInfo_;
+    private global::GoPlay.Core.Protocols.PackageInfo packageInfo_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.PackageInfo PackageInfo {
+    public global::GoPlay.Core.Protocols.PackageInfo PackageInfo {
       get { return packageInfo_; }
       set {
         packageInfo_ = value;
@@ -1094,19 +1094,19 @@ namespace GoPlay.Services.Core.Protocols {
       }
       if (other.status_ != null) {
         if (status_ == null) {
-          Status = new global::GoPlay.Services.Core.Protocols.Status();
+          Status = new global::GoPlay.Core.Protocols.Status();
         }
         Status.MergeFrom(other.Status);
       }
       if (other.session_ != null) {
         if (session_ == null) {
-          Session = new global::GoPlay.Services.Core.Protocols.Session();
+          Session = new global::GoPlay.Core.Protocols.Session();
         }
         Session.MergeFrom(other.Session);
       }
       if (other.packageInfo_ != null) {
         if (packageInfo_ == null) {
-          PackageInfo = new global::GoPlay.Services.Core.Protocols.PackageInfo();
+          PackageInfo = new global::GoPlay.Core.Protocols.PackageInfo();
         }
         PackageInfo.MergeFrom(other.PackageInfo);
       }
@@ -1127,21 +1127,21 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           case 10: {
             if (status_ == null) {
-              Status = new global::GoPlay.Services.Core.Protocols.Status();
+              Status = new global::GoPlay.Core.Protocols.Status();
             }
             input.ReadMessage(Status);
             break;
           }
           case 18: {
             if (session_ == null) {
-              Session = new global::GoPlay.Services.Core.Protocols.Session();
+              Session = new global::GoPlay.Core.Protocols.Session();
             }
             input.ReadMessage(Session);
             break;
           }
           case 26: {
             if (packageInfo_ == null) {
-              PackageInfo = new global::GoPlay.Services.Core.Protocols.PackageInfo();
+              PackageInfo = new global::GoPlay.Core.Protocols.PackageInfo();
             }
             input.ReadMessage(PackageInfo);
             break;
@@ -1163,21 +1163,21 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           case 10: {
             if (status_ == null) {
-              Status = new global::GoPlay.Services.Core.Protocols.Status();
+              Status = new global::GoPlay.Core.Protocols.Status();
             }
             input.ReadMessage(Status);
             break;
           }
           case 18: {
             if (session_ == null) {
-              Session = new global::GoPlay.Services.Core.Protocols.Session();
+              Session = new global::GoPlay.Core.Protocols.Session();
             }
             input.ReadMessage(Session);
             break;
           }
           case 26: {
             if (packageInfo_ == null) {
-              PackageInfo = new global::GoPlay.Services.Core.Protocols.PackageInfo();
+              PackageInfo = new global::GoPlay.Core.Protocols.PackageInfo();
             }
             input.ReadMessage(PackageInfo);
             break;
@@ -1203,7 +1203,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[4]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1249,10 +1249,10 @@ namespace GoPlay.Services.Core.Protocols {
 
     /// <summary>Field number for the "ServerTag" field.</summary>
     public const int ServerTagFieldNumber = 2;
-    private global::GoPlay.Services.Core.Protocols.ServerTag serverTag_ = global::GoPlay.Services.Core.Protocols.ServerTag.Empty;
+    private global::GoPlay.Core.Protocols.ServerTag serverTag_ = global::GoPlay.Core.Protocols.ServerTag.Empty;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::GoPlay.Services.Core.Protocols.ServerTag ServerTag {
+    public global::GoPlay.Core.Protocols.ServerTag ServerTag {
       get { return serverTag_; }
       set {
         serverTag_ = value;
@@ -1297,7 +1297,7 @@ namespace GoPlay.Services.Core.Protocols {
     public override int GetHashCode() {
       int hash = 1;
       if (ClientVersion.Length != 0) hash ^= ClientVersion.GetHashCode();
-      if (ServerTag != global::GoPlay.Services.Core.Protocols.ServerTag.Empty) hash ^= ServerTag.GetHashCode();
+      if (ServerTag != global::GoPlay.Core.Protocols.ServerTag.Empty) hash ^= ServerTag.GetHashCode();
       if (AppKey.Length != 0) hash ^= AppKey.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -1321,7 +1321,7 @@ namespace GoPlay.Services.Core.Protocols {
         output.WriteRawTag(10);
         output.WriteString(ClientVersion);
       }
-      if (ServerTag != global::GoPlay.Services.Core.Protocols.ServerTag.Empty) {
+      if (ServerTag != global::GoPlay.Core.Protocols.ServerTag.Empty) {
         output.WriteRawTag(16);
         output.WriteEnum((int) ServerTag);
       }
@@ -1343,7 +1343,7 @@ namespace GoPlay.Services.Core.Protocols {
         output.WriteRawTag(10);
         output.WriteString(ClientVersion);
       }
-      if (ServerTag != global::GoPlay.Services.Core.Protocols.ServerTag.Empty) {
+      if (ServerTag != global::GoPlay.Core.Protocols.ServerTag.Empty) {
         output.WriteRawTag(16);
         output.WriteEnum((int) ServerTag);
       }
@@ -1364,7 +1364,7 @@ namespace GoPlay.Services.Core.Protocols {
       if (ClientVersion.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(ClientVersion);
       }
-      if (ServerTag != global::GoPlay.Services.Core.Protocols.ServerTag.Empty) {
+      if (ServerTag != global::GoPlay.Core.Protocols.ServerTag.Empty) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) ServerTag);
       }
       if (AppKey.Length != 0) {
@@ -1385,7 +1385,7 @@ namespace GoPlay.Services.Core.Protocols {
       if (other.ClientVersion.Length != 0) {
         ClientVersion = other.ClientVersion;
       }
-      if (other.ServerTag != global::GoPlay.Services.Core.Protocols.ServerTag.Empty) {
+      if (other.ServerTag != global::GoPlay.Core.Protocols.ServerTag.Empty) {
         ServerTag = other.ServerTag;
       }
       if (other.AppKey.Length != 0) {
@@ -1411,7 +1411,7 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           }
           case 16: {
-            ServerTag = (global::GoPlay.Services.Core.Protocols.ServerTag) input.ReadEnum();
+            ServerTag = (global::GoPlay.Core.Protocols.ServerTag) input.ReadEnum();
             break;
           }
           case 26: {
@@ -1438,7 +1438,7 @@ namespace GoPlay.Services.Core.Protocols {
             break;
           }
           case 16: {
-            ServerTag = (global::GoPlay.Services.Core.Protocols.ServerTag) input.ReadEnum();
+            ServerTag = (global::GoPlay.Core.Protocols.ServerTag) input.ReadEnum();
             break;
           }
           case 26: {
@@ -1466,7 +1466,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[5]; }
+      get { return global::GoPlay.Core.Protocols.ProtocolReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

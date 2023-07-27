@@ -1,10 +1,10 @@
 ﻿using System.Text;
 using Newtonsoft.Json;
-using GoPlay.Services.Core.Gof;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Gof;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Encodes
+namespace GoPlay.Core.Encodes
 {
     public class JsonEncoder : Singleton<JsonEncoder>, IEncoder
     {

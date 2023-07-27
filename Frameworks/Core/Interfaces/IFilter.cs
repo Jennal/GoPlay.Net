@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Net.Sockets;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Interfaces
+namespace GoPlay.Core.Interfaces
 {
     public interface IFilterable
     {

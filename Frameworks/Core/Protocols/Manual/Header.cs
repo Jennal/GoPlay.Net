@@ -1,4 +1,4 @@
-﻿namespace GoPlay.Services.Core.Protocols
+﻿namespace GoPlay.Core.Protocols
 {
     public partial class Header
     {

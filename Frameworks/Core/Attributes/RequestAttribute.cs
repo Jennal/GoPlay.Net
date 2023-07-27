@@ -1,6 +1,6 @@
 using System;
 
-namespace GoPlay.Services.Core.Attributes
+namespace GoPlay.Core.Attributes
 {
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
     public class RequestAttribute : NameAttribute

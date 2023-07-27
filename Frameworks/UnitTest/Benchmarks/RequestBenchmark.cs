@@ -4,9 +4,9 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 using UnitTest.Processors;
-using GoPlay.Services;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Transport.NetCoreServer;
+using GoPlay;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Transport.NetCoreServer;
 
 namespace UnitTest.Benchmarks;
 

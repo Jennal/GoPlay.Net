@@ -2,14 +2,14 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using GoPlay.Services;
-using GoPlay.Services.Core.Attributes;
-using GoPlay.Services.Core.Debug;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
-using GoPlay.Services.Core.Processors;
-using GoPlay.Services.Core.Transports.TCP;
+using GoPlay;
+using GoPlay.Core.Attributes;
+using GoPlay.Core.Debug;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
+using GoPlay.Core.Processors;
+using GoPlay.Core.Transports.TCP;
 
 [Processor("test")]
 class TestProcessor : ProcessorBase

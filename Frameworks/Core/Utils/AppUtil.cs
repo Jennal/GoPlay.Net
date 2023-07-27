@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace GoPlay.Services.Core.Utils
+namespace GoPlay.Core.Utils
 {
     public static class AppUtil
     {

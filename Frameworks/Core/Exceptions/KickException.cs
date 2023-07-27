@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GoPlay.Services.Exceptions
+namespace GoPlay.Exceptions
 {
     public class KickException : Exception
     {

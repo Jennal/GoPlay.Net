@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using WatsonTcp;
 
-namespace GoPlay.Services.Core.Transports.Watson
+namespace GoPlay.Core.Transports.Watson
 {
     public class WatsonClient : TransportClientBase
     {

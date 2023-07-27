@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public partial class Client<T> : IFilterable
     {

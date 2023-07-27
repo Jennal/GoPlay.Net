@@ -1,14 +1,14 @@
 ﻿using System.Reflection;
-using GoPlay.Services.Core.Attributes;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
-using GoPlay.Services.Core.Processors;
-using GoPlay.Services.Exceptions;
+using GoPlay.Core.Attributes;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
+using GoPlay.Core.Processors;
+using GoPlay.Exceptions;
 #if DEBUG && PROFILER
-using GoPlay.Services.Core.Debug;
+using GoPlay.Core.Debug;
 #endif
 
-namespace GoPlay.Services.Core.Routers
+namespace GoPlay.Core.Routers
 {
     public partial class Route
     {

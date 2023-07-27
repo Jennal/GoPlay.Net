@@ -1,12 +1,12 @@
 ﻿using System.Collections.Concurrent;
-using GoPlay.Services.Core;
-using GoPlay.Services.Core.Processors;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
-using GoPlay.Services.Exceptions;
-using GoPlay.Services.Interfaces;
+using GoPlay.Core;
+using GoPlay.Core.Processors;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
+using GoPlay.Exceptions;
+using GoPlay.Interfaces;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public abstract partial class Server
     {

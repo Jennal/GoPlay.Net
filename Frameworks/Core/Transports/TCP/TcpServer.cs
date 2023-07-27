@@ -7,10 +7,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
 
-namespace GoPlay.Services.Core.Transports.TCP
+namespace GoPlay.Core.Transports.TCP
 {
     public class TcpServer : TransportServerBase
     {

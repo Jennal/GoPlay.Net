@@ -1,6 +1,6 @@
 ﻿using Google.Protobuf;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public interface ISessionManager
     {

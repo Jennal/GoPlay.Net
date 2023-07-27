@@ -1,8 +1,8 @@
 ﻿using System;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Filters
+namespace GoPlay.Core.Filters
 {
     public class HeartbeatFilter : IFilter
     {

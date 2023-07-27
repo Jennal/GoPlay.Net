@@ -1,7 +1,7 @@
 ﻿using System;
-using GoPlay.Services.Core.Encodes;
-using GoPlay.Services.Core.Interfaces;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Encodes;
+using GoPlay.Core.Interfaces;
+using GoPlay.Core.Protocols;
 
 namespace Core.Encodes.Factory
 {

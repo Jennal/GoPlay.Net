@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace GoPlay.Services.Core.Transports
+namespace GoPlay.Core.Transports
 {
     public abstract class TransportServerBase
     {

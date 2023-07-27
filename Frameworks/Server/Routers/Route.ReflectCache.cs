@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services.Core.Routers
+namespace GoPlay.Core.Routers
 {
     public partial class Route
     {

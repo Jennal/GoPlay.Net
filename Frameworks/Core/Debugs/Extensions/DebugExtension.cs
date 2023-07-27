@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace GoPlay.Services.Core.Debug
+namespace GoPlay.Core.Debug
 {
     public static class DebugExtension
     {

@@ -1,7 +1,7 @@
 ﻿using System;
-using GoPlay.Services.Core.Attributes;
-using GoPlay.Services.Core.Processors;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Attributes;
+using GoPlay.Core.Processors;
+using GoPlay.Core.Protocols;
 
 namespace UnitTest.Processors;
 

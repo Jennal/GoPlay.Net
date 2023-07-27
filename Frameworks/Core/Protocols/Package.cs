@@ -2,9 +2,9 @@
 using System.IO;
 using System.Threading.Tasks;
 using Core.Encodes.Factory;
-using GoPlay.Services.Core.Debug;
+using GoPlay.Core.Debug;
 
-namespace GoPlay.Services.Core.Protocols
+namespace GoPlay.Core.Protocols
 {
     public class Package
     {

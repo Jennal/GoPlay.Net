@@ -1,4 +1,4 @@
-﻿namespace GoPlay.Services.Interfaces;
+﻿namespace GoPlay.Interfaces;
 
 public interface IStart
 {

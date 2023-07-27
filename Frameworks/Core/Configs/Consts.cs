@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GoPlay.Services.Core
+namespace GoPlay.Core
 {
     public static class Consts
     {

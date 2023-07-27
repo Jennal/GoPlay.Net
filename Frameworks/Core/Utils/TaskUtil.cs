@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GoPlay.Services.Core.Utils
+namespace GoPlay.Core.Utils
 {
     public static class TaskUtil
     {

@@ -5,9 +5,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using GoPlay.Services.Core.Transports;
+using GoPlay.Core.Transports;
 
-namespace GoPlay.Services.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.NetCoreServer
 {
     public class HttpClient : TransportClientBase
     {

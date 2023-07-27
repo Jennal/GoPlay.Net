@@ -3,8 +3,8 @@
   <PropertyGroup>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <AssemblyName>GoPlay.Service.Core</AssemblyName>
-    <RootNamespace>GoPlay.Services.Core</RootNamespace>
+    <AssemblyName>GoPlay.Core</AssemblyName>
+    <RootNamespace>GoPlay.Core</RootNamespace>
     <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
   </PropertyGroup>
 

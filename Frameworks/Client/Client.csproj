@@ -12,7 +12,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AssemblyName>GoPlay.Service.Client</AssemblyName>
-    <RootNamespace>GoPlay.Services</RootNamespace>
+    <RootNamespace>GoPlay</RootNamespace>
     <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
   </PropertyGroup>
 

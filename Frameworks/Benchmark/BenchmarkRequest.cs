@@ -2,9 +2,9 @@
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using GoPlay.Services;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Transport.NetCoreServer;
+using GoPlay;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Transport.NetCoreServer;
 
 namespace GoPlay.Benchmarks;
 

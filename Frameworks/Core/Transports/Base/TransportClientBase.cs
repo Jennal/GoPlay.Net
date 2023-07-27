@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GoPlay.Services.Core.Transports
+namespace GoPlay.Core.Transports
 {
     public abstract class TransportClientBase : IDisposable
     {

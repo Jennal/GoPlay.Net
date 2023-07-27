@@ -1,7 +1,7 @@
-﻿using GoPlay.Services.Core;
-using GoPlay.Services.Core.Protocols;
+﻿using GoPlay.Core;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public partial class Server<T>
     {

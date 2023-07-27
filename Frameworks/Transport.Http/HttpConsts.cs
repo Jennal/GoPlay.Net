@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GoPlay.Services.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.NetCoreServer
 {
     public static class HttpConsts
     {

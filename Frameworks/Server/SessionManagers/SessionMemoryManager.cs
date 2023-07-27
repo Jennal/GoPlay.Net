@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using Google.Protobuf;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public class SessionMemoryManager : ISessionManager
     {

@@ -5,10 +5,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using GoPlay.Services.Core.Transports;
+using GoPlay.Core.Transports;
 using TcpClient = NetCoreServer.TcpClient;
 
-namespace GoPlay.Services.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.NetCoreServer
 {
     class PackClient : TcpClient
     {

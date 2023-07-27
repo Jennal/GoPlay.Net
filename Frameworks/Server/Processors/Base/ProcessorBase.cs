@@ -1,8 +1,8 @@
-﻿using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Routers;
-using GoPlay.Services.Core.Utils;
+﻿using GoPlay.Core.Protocols;
+using GoPlay.Core.Routers;
+using GoPlay.Core.Utils;
 
-namespace GoPlay.Services.Core.Processors
+namespace GoPlay.Core.Processors
 {
     public abstract class ProcessorBase
     {

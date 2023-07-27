@@ -2,10 +2,10 @@ using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnitTest.Processors;
-using GoPlay.Services;
-using GoPlay.Services.Core.Debug;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Transports.TCP;
+using GoPlay;
+using GoPlay.Core.Debug;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Transports.TCP;
 
 namespace UnitTest
 {

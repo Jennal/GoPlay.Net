@@ -1,7 +1,7 @@
 ﻿using System.Linq.Expressions;
 using System.Reflection;
 
-namespace GoPlay.Services.Core.Utils
+namespace GoPlay.Core.Utils
 {
     public static class ExpressionUtil
     {

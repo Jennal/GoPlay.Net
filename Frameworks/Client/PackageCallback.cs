@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
-using GoPlay.Services.Core.Protocols;
+using GoPlay.Core.Protocols;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public class PackageCallback
     {

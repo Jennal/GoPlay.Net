@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public interface IMainThreadActionRunner
     {

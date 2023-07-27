@@ -1,6 +1,6 @@
 using System;
 
-namespace GoPlay.Services.Core.Attributes
+namespace GoPlay.Core.Attributes
 {
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
     public class HideInHandShakeAttribute : Attribute

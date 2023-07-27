@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
-namespace GoPlay.Services.Core.Debug
+namespace GoPlay.Core.Debug
 {
     public class ProfileStatus
     {

@@ -2,12 +2,12 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
-using GoPlay.Services.Core;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Utils;
-using GoPlay.Services.Exceptions;
+using GoPlay.Core;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
+using GoPlay.Exceptions;
 
-namespace GoPlay.Services
+namespace GoPlay
 {
     public partial class Client<T>
     {

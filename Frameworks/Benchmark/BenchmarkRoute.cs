@@ -1,10 +1,10 @@
 ﻿using System.Reflection;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using GoPlay.Services.Core.Encodes;
-using GoPlay.Services.Core.Protocols;
-using GoPlay.Services.Core.Routers;
-using GoPlay.Services.Core.Utils;
+using GoPlay.Core.Encodes;
+using GoPlay.Core.Protocols;
+using GoPlay.Core.Routers;
+using GoPlay.Core.Utils;
 
 namespace GoPlay.Benchmarks;
 

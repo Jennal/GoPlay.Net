@@ -3,7 +3,7 @@ using System.Threading;
 using NetMQ;
 using NetMQ.Sockets;
 
-namespace GoPlay.Services.Core.Transports.ZMQ
+namespace GoPlay.Core.Transports.ZMQ
 {
     public class ZmqServer : TransportServerBase
     {

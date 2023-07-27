@@ -9,7 +9,7 @@ using pb = global::Google.Protobuf;
 using pbc = global::Google.Protobuf.Collections;
 using pbr = global::Google.Protobuf.Reflection;
 using scg = global::System.Collections.Generic;
-namespace GoPlay.Services.Core.Protocols {
+namespace GoPlay.Core.Protocols {
 
   /// <summary>Holder for reflection information generated from basic.proto</summary>
   public static partial class BasicReflection {
@@ -38,17 +38,17 @@ namespace GoPlay.Services.Core.Protocols {
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.TimestampReflection.Descriptor, global::Google.Protobuf.WellKnownTypes.AnyReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbAny), global::GoPlay.Services.Core.Protocols.PbAny.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbTime), global::GoPlay.Services.Core.Protocols.PbTime.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbString), global::GoPlay.Services.Core.Protocols.PbString.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbInt), global::GoPlay.Services.Core.Protocols.PbInt.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbLong), global::GoPlay.Services.Core.Protocols.PbLong.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbFloat), global::GoPlay.Services.Core.Protocols.PbFloat.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbBool), global::GoPlay.Services.Core.Protocols.PbBool.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbStringArray), global::GoPlay.Services.Core.Protocols.PbStringArray.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbIntArray), global::GoPlay.Services.Core.Protocols.PbIntArray.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbFloatArray), global::GoPlay.Services.Core.Protocols.PbFloatArray.Parser, new[]{ "Value" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Services.Core.Protocols.PbBoolArray), global::GoPlay.Services.Core.Protocols.PbBoolArray.Parser, new[]{ "Value" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbAny), global::GoPlay.Core.Protocols.PbAny.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbTime), global::GoPlay.Core.Protocols.PbTime.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbString), global::GoPlay.Core.Protocols.PbString.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbInt), global::GoPlay.Core.Protocols.PbInt.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbLong), global::GoPlay.Core.Protocols.PbLong.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbFloat), global::GoPlay.Core.Protocols.PbFloat.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbBool), global::GoPlay.Core.Protocols.PbBool.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbStringArray), global::GoPlay.Core.Protocols.PbStringArray.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbIntArray), global::GoPlay.Core.Protocols.PbIntArray.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbFloatArray), global::GoPlay.Core.Protocols.PbFloatArray.Parser, new[]{ "Value" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PbBoolArray), global::GoPlay.Core.Protocols.PbBoolArray.Parser, new[]{ "Value" }, null, null, null, null)
           }));
     }
     #endregion
@@ -69,7 +69,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[0]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[0]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -267,7 +267,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[1]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[1]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -465,7 +465,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[2]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[2]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -654,7 +654,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[3]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -843,7 +843,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[4]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1032,7 +1032,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[5]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1221,7 +1221,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[6]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1410,7 +1410,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[7]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1588,7 +1588,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[8]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1768,7 +1768,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[9]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1948,7 +1948,7 @@ namespace GoPlay.Services.Core.Protocols {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::GoPlay.Services.Core.Protocols.BasicReflection.Descriptor.MessageTypes[10]; }
+      get { return global::GoPlay.Core.Protocols.BasicReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
