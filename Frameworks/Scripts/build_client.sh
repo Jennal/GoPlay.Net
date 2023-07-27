@@ -18,8 +18,8 @@ declare -a arr=(
     "System.Buffers.dll" 
     "System.Memory.dll" 
     "System.Runtime.CompilerServices.Unsafe.dll" 
-    "GoPlay.Service.Client.dll" 
-    "GoPlay.Service.Core.dll"
+    "GoPlay.Client.dll" 
+    "GoPlay.Core.dll"
 )
 
 ## now loop through the above array
