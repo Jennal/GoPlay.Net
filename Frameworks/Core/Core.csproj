@@ -6,11 +6,32 @@
     <AssemblyName>GoPlay.Core</AssemblyName>
     <RootNamespace>GoPlay.Core</RootNamespace>
     <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
+    <Title>GoPlay.Core</Title>
+    <Authors>Jennal</Authors>
+    <Description>GoPlay.Core
+
+For more information, please go to [https://github.com/Jennal/GoPlay.Net](https://github.com/Jennal/GoPlay.Net)</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net</RepositoryUrl>
+    <PackageTags>goplay,game,server,rpc</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>	
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>	
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.21.12" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath=""/>
+    <None Include="..\..\LICENSE" Pack="true" Visible="false" PackagePath=""/>
   </ItemGroup>
 
 </Project>

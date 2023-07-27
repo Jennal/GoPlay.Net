@@ -2,10 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj" />
-    <ProjectReference Include="..\Common.Data\Common.Data.csproj" />
-    <ProjectReference Include="..\ThirdParty\NetCoreServer\source\NetCoreServer\NetCoreServer.csproj" />
-    <ProjectReference Include="..\Transport.NetCoreServer\Transport.NetCoreServer.csproj" />
-    <ProjectReference Include="..\Transport.WatsonTcp\Transport.WatsonTcp.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -14,6 +10,27 @@
     <AssemblyName>GoPlay.Client</AssemblyName>
     <RootNamespace>GoPlay</RootNamespace>
     <TargetFrameworks>net6.0;net7.0;netstandard2.1</TargetFrameworks>
+    <Title>GoPlay.Client</Title>
+    <Authors>Jennal</Authors>
+    <Description>GoPlay.Client
+
+For more information, please go to [https://github.com/Jennal/GoPlay.Net](https://github.com/Jennal/GoPlay.Net)</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net</RepositoryUrl>
+    <PackageTags>goplay,game,server,rpc</PackageTags>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>	
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>	
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath=""/>
+    <None Include="..\..\LICENSE" Pack="true" Visible="false" PackagePath=""/>
+  </ItemGroup>
 
 </Project>

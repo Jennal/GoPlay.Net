@@ -23,6 +23,11 @@ For more information, please go to [https://github.com/Jennal/GoPlay.Net](https:
     <PackageTags>goplay,game,server,rpc</PackageTags>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>	
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>	
+  </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
