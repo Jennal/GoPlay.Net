@@ -44,17 +44,19 @@ class Program
             cmd.AddOption(new Option<string>(new []{"-i", "--input-sln-folder"}, "输入Solution目录"));
             cmd.AddOption(new Option<string>(new []{"-of", "--output-frontend-file"}, "输出前端扩展cs文件路径"));
             cmd.AddOption(new Option<string>(new []{"-ob", "--output-backend-file"}, "输出后端扩展cs文件路径"));
-            cmd.AddOption(new Option<string>(new []{"-b", "--base-classes"}, () => "ProcessorBase", "输入父类用于过滤：ProcessorBase,SpckProcessor"));
+            cmd.AddOption(new Option<string>(new []{"-b", "--base-classes"}, () => "ProcessorBase", "输入父类用于过滤：ProcessorBase,MyProcessor"));
             cmd.AddOption(new Option<string>(new []{"-tf", "--template-frontend-file"}, () => "", "输出前端扩展的liquid模板文件路径"));
             cmd.AddOption(new Option<string>(new []{"-tb", "--template-backend-file"}, () => "", "输出后端扩展的liquid模板文件路径"));
+            cmd.AddOption(new Option<string>(new []{"-nf", "--namespace-frontend"}, () => "", "输出前端，增加的using namespace，多个namespace用逗号隔开，例如：System,MyNamespace"));
+            cmd.AddOption(new Option<string>(new []{"-nb", "--namespace-backend"}, () => "", "输出前端，增加的using namespace，多个namespace用逗号隔开，例如：System,MyNamespace"));
 
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
-                (string inputSlnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string templateFrontendFile, string templateBackendFile) =>
+                (string inputSlnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string templateFrontendFile, string templateBackendFile, string namespaceFrontend, string namespaceBackend) =>
                 {
                     var watch = new Stopwatch();
                     watch.Start();
-                    Processors2Extension.Generate(inputSlnFolder, outputFrontendFile, outputBackendFile, baseClasses, templateFrontendFile, templateBackendFile).Wait();
+                    Processors2Extension.Generate(inputSlnFolder, outputFrontendFile, outputBackendFile, baseClasses, templateFrontendFile, templateBackendFile, namespaceFrontend, namespaceBackend).Wait();
                     watch.Stop();
                     Console.WriteLine($"Time Elapsed: {watch.Elapsed}");
                     Console.WriteLine("========== Generate Extension Finished ==========");
