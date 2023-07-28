@@ -1,5 +1,7 @@
 # GoPlay Server Framework
 
+[![NuGet](https://img.shields.io/nuget/v/GoPlay.Server)](https://www.nuget.org/packages/GoPlay.Server)
+
 GoPlay源于网络游戏开发的需求，基于C#编写的一套简单易用的RPC框架，但不限于游戏使用，可以用于解决任何实时网络通讯的问题。
 
 ## How To Use
