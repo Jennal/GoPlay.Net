@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using Core.Encodes.Factory;
+using GoPlay.Core.Encodes.Factory;
 using GoPlay.Core;
 using GoPlay.Core.Interfaces;
 using GoPlay.Core.Processors;

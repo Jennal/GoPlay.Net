@@ -1,8 +1,8 @@
 ﻿using System.Text;
-using Newtonsoft.Json;
 using GoPlay.Core.Gof;
 using GoPlay.Core.Interfaces;
 using GoPlay.Core.Protocols;
+using LitJson;
 
 namespace GoPlay.Core.Encodes
 {
@@ -19,7 +19,7 @@ namespace GoPlay.Core.Encodes
         {
             AssertTypeValid<T>();
 
-            var json = JsonConvert.SerializeObject(data);
+            var json = JsonMapper.ToJson(data);
             return Encoding.UTF8.GetBytes(json);
         }
 
@@ -30,7 +30,7 @@ namespace GoPlay.Core.Encodes
             if (data == null || data.Length <= 0) return default;
             
             var json = Encoding.UTF8.GetString(data);
-            return JsonConvert.DeserializeObject<T>(json);
+            return JsonMapper.ToObject<T>(json);
         }
     }
 }

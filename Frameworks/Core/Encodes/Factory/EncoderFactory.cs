@@ -1,9 +1,8 @@
 ﻿using System;
-using GoPlay.Core.Encodes;
 using GoPlay.Core.Interfaces;
 using GoPlay.Core.Protocols;
 
-namespace Core.Encodes.Factory
+namespace GoPlay.Core.Encodes.Factory
 {
     public class EncoderFactory
     {

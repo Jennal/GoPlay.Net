@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
-using Core.Encodes.Factory;
+using GoPlay.Core.Encodes.Factory;
 using GoPlay.Core.Debug;
 
 namespace GoPlay.Core.Protocols

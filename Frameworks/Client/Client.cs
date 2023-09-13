@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Core.Encodes.Factory;
+using GoPlay.Core.Encodes.Factory;
 using GoPlay.Core;
 using GoPlay.Core.Interfaces;
 using GoPlay.Core.Protocols;

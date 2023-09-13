@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using LitJson;
 
 namespace GoPlay.Core.Debug
 {
@@ -14,7 +14,7 @@ namespace GoPlay.Core.Debug
 
         public static string Dump(this object obj)
         {
-            return JsonConvert.SerializeObject(obj);
+            return JsonMapper.ToJson(obj);
         }
     }
 }
