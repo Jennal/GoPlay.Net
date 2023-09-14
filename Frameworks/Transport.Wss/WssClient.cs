@@ -3,27 +3,68 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using GoPlay.Core.Transports;
-using TcpClient = NetCoreServer.TcpClient;
+using NetCoreServer;
 
-namespace GoPlay.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.Wss
 {
-    class PackClient : TcpClient
+    class PackClient : NetCoreServer.WssClient
     {
-        public BlockingCollection<byte[]> RecvChannel = new BlockingCollection<byte[]>(byte.MaxValue);
-        public SocketError LastError;
-
+        private SocketError LastError;
+        
+        private WssClient m_client;
         private CancellationToken m_token;
         private byte[] m_buffer;
+        private string m_host;
+        private int m_port;
+        private bool m_isUpgraded;
+        private bool m_wsConnected;
         
-        public PackClient(IPAddress address, int port, CancellationToken token) : base(address, port)
+        public bool IsUpgraded => m_isUpgraded;
+        public bool WsConnected => m_wsConnected;
+        
+        public PackClient(WssClient client, SslContext context, string host, IPAddress address, int port, CancellationToken token) : base(context, address, port)
         {
+            m_client = client;
+            m_host = host;
+            m_port = port;
             m_token = token;
+            m_isUpgraded = false;
+            m_wsConnected = false;
         }
 
-        protected override void OnReceived(byte[] buffer, long offset, long size)
+        public override void OnWsConnecting(HttpRequest request)
+        {
+            request.SetBegin("GET", "/");
+            request.SetHeader("Host", m_host);
+            request.SetHeader("Origin", $"https://{m_host}:{m_port}");
+            request.SetHeader("Upgrade", "websocket");
+            request.SetHeader("Connection", "Upgrade");
+            request.SetHeader("Sec-WebSocket-Key", Convert.ToBase64String(WsNonce));
+            request.SetHeader("Sec-WebSocket-Protocol", "GoPlay.Net");
+            request.SetHeader("Sec-WebSocket-Version", "13");
+            request.SetBody();
+
+            m_isUpgraded = true;
+        }
+
+        public override void OnWsConnected(HttpResponse response)
+        {
+            // Console.WriteLine($"WebSocket client connected a new session with Id {Id}");
+            m_wsConnected = true;
+        }
+
+        public override void OnWsDisconnected()
+        {
+            // Console.WriteLine($"WebSocket client disconnected a session with Id {Id}");
+            m_wsConnected = false;
+        }
+        
+        public override void OnWsReceived(byte[] buffer, long offset, long size)
         {
             var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
             if (m_buffer == null)
@@ -57,7 +98,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
                         }
 
                         var packData = br.ReadBytes(len);
-                        RecvChannel.Add(packData, m_token);
+                        m_client.OnRecv(packData);
                     }
 
                     data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
@@ -71,23 +112,21 @@ namespace GoPlay.Core.Transport.NetCoreServer
         {
             LastError = error;
         }
-
-        protected override void Dispose(bool disposingManagedResources)
-        {
-            base.Dispose(disposingManagedResources);
-            RecvChannel.Dispose();
-        }
     }
     
-    public class NcClient : TransportClientBase
+    public class WssClient : TransportClientBase
     {
         private PackClient m_client;
         private CancellationTokenSource m_cancelSource;
+        private BlockingCollection<byte[]> m_responseChannel = new BlockingCollection<byte[]>(byte.MaxValue);
+
+        protected virtual string KeyPath => "client.pfx";
+        protected virtual string KeyPass => "W2d@pass";
         
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_cancelSource = new CancellationTokenSource();
-
+            
             var addresses = Dns.GetHostAddresses(host);
             foreach (var address in addresses)
             {
@@ -96,19 +135,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
                 
                 try
                 {
-                    m_client = new PackClient(address, port, m_cancelSource.Token);
+                    var context = new SslContext(SslProtocols.Tls12, new X509Certificate2(KeyPath, KeyPass), (sender, certificate, chain, sslPolicyErrors) => true);
+                    m_client = new PackClient(this, context, host, address, port, m_cancelSource.Token);
 
                     m_client.ConnectAsync();
                     var startTime = DateTime.UtcNow;
-                    while (!m_client.IsConnected)
+                    while (!m_client.IsConnected || !m_client.IsUpgraded || !m_client.WsConnected)
                     {
                         Thread.Yield();
                         var ts = DateTime.UtcNow.Subtract(startTime);
-                        if (ts > timeout)
-                        {
-                            Console.WriteLine($"Connect timeout: {ts}");
-                            throw new Exception("Connect timeout!");
-                        }
+                        if (ts > timeout) throw new Exception("Connect timeout!");
                     }
 
                     return;
@@ -125,17 +161,23 @@ namespace GoPlay.Core.Transport.NetCoreServer
         public override void Disconnect()
         {
             if (m_client == null) return;
-            if (m_cancelSource == null) return;
             
             m_cancelSource.Cancel();
+            m_cancelSource.Dispose();
+            m_cancelSource = null;
             
             m_client.Dispose();
             m_client = null;
         }
 
+        internal void OnRecv(byte[] data)
+        {
+            m_responseChannel.Add(data, m_cancelSource.Token);
+        }
+        
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
         {
-            return new ValueTask<byte[]>(m_client.RecvChannel.Take(cancelSource.Token));
+            return new ValueTask<byte[]>(m_responseChannel.Take(m_cancelSource.Token));
         }
 
         public override ValueTask Send(byte[] data, CancellationTokenSource cancelSource)
@@ -149,7 +191,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
                     bw.Write((ushort)data.Length);
                     bw.Write(data);
                     
-                    m_client.SendAsync(ms.ToArray());
+                    m_client.SendBinaryAsync(ms.ToArray());
                 }
             }
             
@@ -158,8 +200,8 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         public override void Dispose()
         {
-            m_client?.Dispose();
             m_cancelSource?.Dispose();
+            m_client?.Dispose();
         }
     }
 }

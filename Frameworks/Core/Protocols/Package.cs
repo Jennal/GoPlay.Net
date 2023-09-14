@@ -94,7 +94,7 @@ namespace GoPlay.Core.Protocols
                 {
                     var headerLength = br.ReadUInt16();
                     var headerBytes = br.ReadBytes(headerLength);
-                    var header = Header.Parser.ParseFrom(headerBytes);
+                    var header = Header.Parse(headerBytes);
 
                     if (header.PackageInfo.ContentSize > Consts.Package.MAX_SIZE)
                         throw new Exception(
@@ -119,7 +119,7 @@ namespace GoPlay.Core.Protocols
                 {
                     var headerLength = br.ReadUInt16();
                     var headerBytes = br.ReadBytes(headerLength);
-                    var header = Header.Parser.ParseFrom(headerBytes);
+                    var header = Header.Parse(headerBytes);
 
                     var encoder = EncoderFactory.Create(header.PackageInfo.EncodingType);
                     TData body = default(TData);

@@ -23,8 +23,15 @@ namespace GoPlay
 
         public uint GetRouteId(string route)
         {
-            if (!m_handshake.Routes.ContainsKey(route)) throw new Exception($"Client: route not exists: {route}");
-            return m_handshake.Routes[route];
+            try
+            {
+                if (!m_handshake.Routes.ContainsKey(route)) throw new Exception($"Client: route not exists: {route}");
+                return m_handshake.Routes[route];
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
 
         public string GetRouteById(uint routeId)

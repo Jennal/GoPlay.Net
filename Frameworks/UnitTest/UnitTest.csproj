@@ -25,11 +25,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Client\Client.csproj" />
+    <ProjectReference Include="..\Common.Data\Common.Data.csproj" />
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Server\Server.csproj" />
     <ProjectReference Include="..\Transport.Http\Transport.Http.csproj" />
     <ProjectReference Include="..\Transport.NetCoreServer\Transport.NetCoreServer.csproj" />
     <ProjectReference Include="..\Transport.WatsonTcp\Transport.WatsonTcp.csproj" />
+    <ProjectReference Include="..\Transport.Wss\Transport.Wss.csproj" />
   </ItemGroup>
 
 </Project>
