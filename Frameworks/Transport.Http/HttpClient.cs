@@ -2,12 +2,11 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using GoPlay.Core.Transports;
 
-namespace GoPlay.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.Http
 {
     public class HttpClient : TransportClientBase
     {

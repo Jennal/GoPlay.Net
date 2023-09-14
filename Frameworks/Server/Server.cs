@@ -234,7 +234,19 @@ namespace GoPlay
 
         public override void Send(Package package)
         {
-            m_sendQueue.Add(package, CanelToken);
+            try
+            {
+                if (!Transport.SupportPush && package.Header.PackageInfo.Type == PackageType.Push)
+                {
+                    throw new PushNotSupportedException();
+                }
+
+                m_sendQueue.Add(package, CanelToken);
+            }
+            catch (Exception err)
+            {
+                OnErrorEvent(package.Header.ClientId, err);
+            }
         }
 
         public override void Kick(uint clientId, string reason)

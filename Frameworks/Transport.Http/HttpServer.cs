@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
 
-namespace GoPlay.Core.Transport.NetCoreServer
+namespace GoPlay.Core.Transport.Http
 {
     class HttpPackSession : HttpSession
     {
@@ -125,6 +123,8 @@ namespace GoPlay.Core.Transport.NetCoreServer
         private CancellationTokenSource m_cancelSource;
 
         internal CancellationToken CancellationToken => m_cancelSource.Token;
+        
+        public override bool SupportPush => false;
         
         public override void Start(string host, int port, CancellationTokenSource cancelSource = null)
         {

@@ -8,6 +8,8 @@ namespace GoPlay.Core.Transports
         public event Action<uint> OnClientConnected;
         public event Action<uint> OnClientDisconnected;
         public event Action<uint, Exception> OnError;
+
+        public virtual bool SupportPush => true;
         
         public abstract void Start(string host, int port, CancellationTokenSource cancelSource=null);
         public abstract void Stop();
