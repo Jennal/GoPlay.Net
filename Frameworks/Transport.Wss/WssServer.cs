@@ -164,7 +164,7 @@ namespace GoPlay.Core.Transport.Wss
         internal CancellationToken CancellationToken => m_cancelSource.Token;
         
         protected virtual string KeyPath => "server.pfx";
-        protected virtual string KeyPass => "kJ^gPhR$lRaMB7r";
+        protected virtual string KeyPass => "qwerty";
         
         public override void Start(string host, int port, CancellationTokenSource cancelSource = null)
         {

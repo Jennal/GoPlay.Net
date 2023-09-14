@@ -121,7 +121,7 @@ namespace GoPlay.Core.Transport.Wss
         private BlockingCollection<byte[]> m_responseChannel = new BlockingCollection<byte[]>(byte.MaxValue);
 
         protected virtual string KeyPath => "client.pfx";
-        protected virtual string KeyPass => "W2d@pass";
+        protected virtual string KeyPass => "qwerty";
         
         public override void Connect(string host, int port, TimeSpan timeout)
         {
