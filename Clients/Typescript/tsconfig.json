@@ -1,9 +1,10 @@
 {
     "compilerOptions": {
         "module": "CommonJS",
+        "lib": ["DOM", "ES2015"],
         "baseUrl": ".",
         "paths": {
-            "*": ["./node_modules/*"]
+            "*": ["./*", "./node_modules/*"]
         },
         "noImplicitAny": false,
         "removeComments": true,

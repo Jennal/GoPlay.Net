@@ -68,8 +68,8 @@ export function copyArray(dest, doffset, src, soffset, length) {
 }
 
 export class ByteArray extends Uint8Array {
-    private woffset = 0;
-    private roffset = 0;
+    public woffset = 0;
+    public roffset = 0;
 
     public writeUint8 (val) {
         this[this.woffset++] = val & 0xff;
@@ -136,7 +136,7 @@ export class ByteArray extends Uint8Array {
         return h << 16 | l;
     }
 
-    public readBytes (len) {
+    public readBytes (len): ByteArray {
         if (len <= 0) return undefined;
 
         if (this.roffset + len > this.length) return undefined;
@@ -144,7 +144,7 @@ export class ByteArray extends Uint8Array {
         var bytes = this.slice(this.roffset, this.roffset + len);
         // console.log(bytes, bytes.length, len);
         this.roffset += len;
-        return bytes;
+        return new ByteArray(bytes);
     }
 
     public readString (len) {

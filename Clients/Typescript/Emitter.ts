@@ -86,9 +86,8 @@ export default class Emitter {
      * @param {Mixed} ...
      * @return {Emitter}
      */
-    public emit(event) {
-        var args = [].slice.call(arguments, 1),
-            callbacks = this._callbacks[event];
+    public emit(event, ...args: any[]) {
+        var callbacks = this._callbacks[event];
 
         if (callbacks) {
             callbacks = callbacks.slice(0);
