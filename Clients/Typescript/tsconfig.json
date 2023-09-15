@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "baseUrl": ".",
+        "paths": {
+            "*": ["./node_modules/*"]
+        },
+        "noImplicitAny": false,
+        "removeComments": true,
+        "preserveConstEnums": true,
+        "sourceMap": true,
+        "outDir": "./dist",
+    },
+    "include": ["**/*.ts"]
+}

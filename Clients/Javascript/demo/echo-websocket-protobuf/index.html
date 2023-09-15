@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <title>Goplay Client Websocket Test</title>
+    <script src="../../protobuf.min.js"></script>
+    <script src="../../pb.helpers.js"></script>
+    <script src="../../basic.pb.js"></script>
+    <script src="../../protocol.pb.js"></script>
+    <script src="../../goplay.client.js"></script>
+    <script src="echo.pb.js"></script>
+    <script>
+        var PBString = protobuf.roots["default"].proto.String;
+
+        function writeLn(line) {
+            var content = document.getElementById("content");
+            var d = new Date();
+            var dateStr = d.getFullYear() +
+                "-" + ("0" + (d.getMonth() + 1)).slice(-2) +
+                "-" + ("0" + d.getDate()).slice(-2) +
+                " " + ("0" + d.getHours()).slice(-2) +
+                ":" + ("0" + d.getMinutes()).slice(-2) +
+                ":" + ("0" + d.getSeconds()).slice(-2);
+            content.innerHTML = "[" + dateStr + "] " + line + "<br />" + content.innerHTML;
+        }
+
+        function sendClicked() {
+            var elem = document.getElementById("data");
+            var data = elem.value;
+            elem.value = "";
+
+            if (!data || data.length == 0) return;
+            data = PBString.create({"Value":data});
+            console.log(data);
+
+            goplay.notify("echo.services.notify", data);
+            goplay.request("echo.services.echo", data, function (line) {
+                line = PBString.decode(line).Value;
+                console.log("Request callback: ", line);
+                writeLn("Request callback: " + line);
+            }, function (err) {
+                console.log(err.Code, err.Message);
+                writeLn("Request Error: [" + err.Code + "] " + err.Message);
+            });
+        }
+
+        function requestError() {
+            goplay.request("echo.services.error", function (line) {
+                line = PBString.decode(line).Value;
+                console.log("Request error callback: ", line);
+                writeLn("Request error callback: " + line);
+            }, function (err) {
+                console.log(err.Code, err.Message);
+                writeLn("Request Error: [" + err.Code + "] " + err.Message);
+            });
+        }
+
+        goplay.defaults.encoding = goplay.pkg.ENCODING_PROTOBUF;
+
+        goplay.on("echo.push", function (data) {
+            data = PBString.decode(data).Value;
+            console.log("echo.push: ", data)
+            writeLn("echo.push: " + data);
+        })
+        goplay.connect("localhost", 1234)
+    </script>
+</head>
+
+<body>
+    <div>
+        <input id="data" type="text" name="data" />
+        <input type="button" value="Send" onclick="javascript:sendClicked();" />
+        <input type="button" value="Test Error" onclick="javascript:requestError();" />
+    </div>
+    <p id="content">
+
+    </p>
+</body>
+
+</html>
