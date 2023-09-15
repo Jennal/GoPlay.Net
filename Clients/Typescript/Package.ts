@@ -1,4 +1,4 @@
-import { GoPlay } from "./pkg";
+import { GoPlay } from "./pkg.pb";
 import { getEncoder } from "./Encoder";
 import { ByteArray } from "./ByteArray";
 import IdGen from "./IdGen";
@@ -24,10 +24,10 @@ export default class Package<T> {
         this.header.PackageInfo.ContentSize = this.rawData?.length || 0;
         let headerBytes = encoder.encode(this.header);
         
-        let bytes = new ByteArray();
-        bytes.writeUint16(headerBytes.length);
-        bytes.writeBytes(headerBytes);
-        bytes.writeBytes(this.rawData);
+        let bytes = new ByteArray(2 + headerBytes.length + this.rawData.length);
+        bytes = bytes.writeUint16(headerBytes.length);
+        bytes = bytes.writeBytes(headerBytes);
+        bytes = bytes.writeBytes(this.rawData);
         
         return bytes;
     }
@@ -65,7 +65,7 @@ export default class Package<T> {
         let headerLength = bytes.readUint16();
         let headerBytes = bytes.readBytes(headerLength);
         let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes);
-    
+
         encoder = getEncoder(header.PackageInfo.EncodingType);
         var dataBytes = bytes.readBytes(header.PackageInfo.ContentSize);
         let data = encoder.decode(type, dataBytes);

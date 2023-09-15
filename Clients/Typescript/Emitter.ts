@@ -1,6 +1,10 @@
 export default class Emitter {
     private _callbacks = {};
 
+    public get callbacks() {
+        return this._callbacks;
+    }
+
     /**
      * Listen on the given `event` with `fn`.
      *
@@ -51,16 +55,18 @@ export default class Emitter {
      */
     public off = this.removeEventListener;
     public removeListener = this.removeEventListener;
-    public removeEventListener(event, fn) {
-        // specific event
-        var callbacks = this._callbacks[event];
-        if (!callbacks) return this;
+    public removeEventListener(...args: any[]) {
+        let [event, fn] = args;
 
         // remove all handlers
-        if (1 == arguments.length) {
+        if (1 == args.length) {
             delete this._callbacks[event];
             return this;
         }
+
+        // specific event
+        var callbacks = this._callbacks[event];
+        if (!callbacks) return this;
 
         // remove specific handler
         var cb;

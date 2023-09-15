@@ -1,5 +1,5 @@
 import { ByteArray } from "./ByteArray";
-import { GoPlay } from "./pkg";
+import { GoPlay } from "./pkg.pb";
 
 export interface IEncoder {
     encode(obj: any): ByteArray;
@@ -15,8 +15,8 @@ export class ProtobufEncoder implements IEncoder {
         return obj.constructor.encode(obj).finish();
     }
     decode<T>(type: { new(): T }, bytes: ByteArray): T {
-        if (!type.prototype.decode) throw new Error("not a protobuf type!");
-        return type.prototype.decode(bytes);
+        if (!type.hasOwnProperty('decode')) throw new Error("not a protobuf type!");
+        return type['decode'](bytes);
     }
 }
 

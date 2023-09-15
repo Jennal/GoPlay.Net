@@ -103,7 +103,7 @@ export class ByteArray extends Uint8Array {
     public writeBytes (data) {
         if (!data || !data.length) return this;
 
-        var result = copyArray(this, this.length, data, 0, data.length);
+        var result = copyArray(this, this.woffset, data, 0, data.length);
         result.woffset = this.woffset + data.length;
         return result;
     }
@@ -137,7 +137,7 @@ export class ByteArray extends Uint8Array {
     }
 
     public readBytes (len): ByteArray {
-        if (len <= 0) return undefined;
+        if (!len || len <= 0) return undefined;
 
         if (this.roffset + len > this.length) return undefined;
 

@@ -3,6 +3,7 @@ export default class IdGen {
     private max: number;
 
     public constructor(max: number) {
+        this.id = 0;
         this.max = max;
     }
 

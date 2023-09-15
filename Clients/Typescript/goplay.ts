@@ -1,9 +1,7 @@
-import { GoPlay } from './pkg';
+import { GoPlay } from './pkg.pb';
 import { ByteArray } from './ByteArray';
-import { getEncoder } from './Encoder';
 import Emitter from './Emitter';
 import TaskCompletionSource from './TaskCompletionSource';
-import IdGen from './IdGen';
 import Package from './Package';
 
 let WebSocket: typeof import('ws') | typeof window.WebSocket;
@@ -41,11 +39,7 @@ export default class goplay {
     private static url: string;
     private static buffer: ByteArray;
 
-    private static emitter: Emitter = new Emitter();
-    private static emit = goplay.emitter.emit;
-    private static on = goplay.emitter.on;
-    private static off = goplay.emitter.off;
-    private static once = goplay.emitter.once;
+    public static emitter: Emitter = new Emitter();
 
     private static connectTask: TaskCompletionSource<boolean>;
     private static connectTimeOutId;
@@ -54,6 +48,34 @@ export default class goplay {
     private static requestMap = {};
     private static pushMap = {};
     
+    public static emit(event: string, ...args: any[]) {
+        goplay.emitter.emit(event, ...args);
+    }
+
+    public static on(event: string, fn: Function) {
+        goplay.emitter.on(event, fn);
+    }
+
+    public static off(...args: any[]) {
+        goplay.emitter.off(...args);
+    }
+
+    public static once(event: string, fn: Function) {
+        goplay.emitter.once(event, fn);
+    }
+
+    public static listeners(event: string) {
+        return goplay.emitter.listeners(event);
+    }
+
+    public static hasListeners(event: string) {
+        return goplay.emitter.hasListeners(event);
+    }
+
+    public static removeAllListeners() {
+        goplay.emitter.removeAllListeners();
+    }
+
     public static get isConnected(): boolean {
         if (!goplay.ws) return false;
         if (goplay.ws.readyState > 1) return false;
