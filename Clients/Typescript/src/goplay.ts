@@ -1,3 +1,4 @@
+import * as protobuf from "protobufjs";
 import { GoPlay } from './pkg.pb';
 import { ByteArray } from './ByteArray';
 import Emitter from './Emitter';
@@ -6,12 +7,15 @@ import Package from './Package';
 
 let WebSocket: typeof import('ws') | typeof window.WebSocket;
 if (typeof window === 'undefined') {
-  // We are in Node.js
-  WebSocket = require('ws');
+    // We are in Node.js
+    WebSocket = require('ws');
 } else {
-  // We are in a web browser
-  WebSocket = window.WebSocket;
+    // We are in a web browser
+    WebSocket = window.WebSocket;
+    window['$protobuf'] = protobuf;
+    window['GoPlay'] = protobuf.roots.default['GoPlay'];
 }
+// const GoPlay = GoPlay || window['GoPlay'];
 
 const Consts = {
     Info: {
@@ -33,6 +37,7 @@ const Consts = {
 };
 
 export default class goplay {
+    public static Consts = Consts;
     public static encodingType = GoPlay.Core.Protocols.EncodingType.Protobuf;
 
     private static ws;
@@ -83,8 +88,7 @@ export default class goplay {
         return true;
     }
 
-    public static async connect(host: string, port: number): Promise<boolean> {
-        let url = `wss://${host}:${port}/ws`;
+    public static async connect(url: string): Promise<boolean> {
         if (goplay.isConnected && goplay.url == url) return;
 
         if (goplay.isConnected && goplay.url != url) goplay.disconnect();
@@ -177,9 +181,9 @@ export default class goplay {
         }
     }
 
-    public static onerror(event: Event) {
-        console.log("onerror", event);
-        goplay.emit(Consts.Events.ERROR, event);
+    public static onerror(...args: any[]) {
+        console.log("onerror", args);
+        goplay.emit(Consts.Events.ERROR, ...args);
     }
 
     public static onclose(event: Event) {
@@ -370,4 +374,9 @@ class HeartBeat {
             HeartBeat.clearKey(key);
         }
     }
+}
+
+//For Browser
+if (typeof window !== 'undefined') {
+    (window as any)['goplay'] = goplay;
 }

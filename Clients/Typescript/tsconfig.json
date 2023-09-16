@@ -1,10 +1,12 @@
 {
     "compilerOptions": {
-        "module": "CommonJS",
+        "target": "ES5",
+        "module": "ESNext",
+        "moduleResolution": "node",
         "lib": ["DOM", "ES2015"],
         "baseUrl": ".",
         "paths": {
-            "*": ["./*", "./node_modules/*"]
+            "*": ["./src/*"]
         },
         "noImplicitAny": false,
         "removeComments": true,
@@ -12,5 +14,9 @@
         "sourceMap": true,
         "outDir": "./dist",
     },
-    "include": ["**/*.ts"]
+    "include": ["src/*.ts"],
+    "exclude": [
+        "node_modules/**/*",
+        "unit_test/*",
+    ]
 }

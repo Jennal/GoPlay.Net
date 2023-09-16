@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <title>Goplay.Net Websocket Client Demo</title>
+    <script src="../dist/bundle.js"></script>
+    <script>
+        var PBString = GoPlay.Core.Protocols.PbString;
+
+        function writeLn(line) {
+            var content = document.getElementById("content");
+            var d = new Date();
+            var dateStr = d.getFullYear() +
+                "-" + ("0" + (d.getMonth() + 1)).slice(-2) +
+                "-" + ("0" + d.getDate()).slice(-2) +
+                " " + ("0" + d.getHours()).slice(-2) +
+                ":" + ("0" + d.getMinutes()).slice(-2) +
+                ":" + ("0" + d.getSeconds()).slice(-2);
+            content.innerHTML = "[" + dateStr + "] " + line + "<br />" + content.innerHTML;
+        }
+
+        async function sendClicked() {
+            var elem = document.getElementById("data");
+            var data = elem.value;
+            elem.value = "";
+
+            if (!data || data.length == 0) return;
+            data = PBString.create({"Value":data});
+            console.log(data);
+
+            goplay.notify("test.notify", data);
+            var result = await goplay.request("test.echo", data, PBString);
+            console.log("Requst[test.echo] => ", result);
+            writeLn("Requst[test.echo] => ", result);
+        }
+
+        async function requestError() {
+            var elem = document.getElementById("data");
+            var data = elem.value;
+            elem.value = "";
+
+            if (!data || data.length == 0) return;
+            data = PBString.create({"Value":data});
+            console.log(data);
+
+            var result = await goplay.request("test.err", data, PBString);
+            console.log("Requst[test.err] => ", result);
+            writeLn("Requst[test.err] => ", result);
+        }
+
+        goplay.on(goplay.Consts.Events.CONNECTED, function() {
+            console.log("connected");
+            writeLn("connected");
+        });
+
+        goplay.onType("test.push", PBString, function (data) {
+            console.log("test.push: ", data);
+            writeLn("test.push: " + data);
+        })
+        goplay.connect("wss://localhost:8888");
+    </script>
+</head>
+
+<body>
+    <div>
+        <input id="data" type="text" name="data" />
+        <input type="button" value="Send" onclick="javascript:sendClicked();" />
+        <input type="button" value="Test Error" onclick="javascript:requestError();" />
+    </div>
+    <p id="content">
+
+    </p>
+</body>
+
+</html>

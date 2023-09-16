@@ -48,7 +48,7 @@ export default class Package<T> {
             return null;
         }
         let headerBytes = bytes.readBytes(headerLength);
-        let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes);
+        let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes) as GoPlay.Core.Protocols.Header;
     
         if (!bytes.hasReadSize(header.PackageInfo.ContentSize)) {
             bytes.roffset -= headerLength + 2;
@@ -64,7 +64,7 @@ export default class Package<T> {
         
         let headerLength = bytes.readUint16();
         let headerBytes = bytes.readBytes(headerLength);
-        let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes);
+        let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes) as GoPlay.Core.Protocols.Header;
 
         encoder = getEncoder(header.PackageInfo.EncodingType);
         var dataBytes = bytes.readBytes(header.PackageInfo.ContentSize);
