@@ -10,7 +10,7 @@ export default class Package<T> {
     public data: T;
     public rawData: ByteArray;
 
-    constructor(header: GoPlay.Core.Protocols.Header, data: any, rawData: ByteArray) {
+    constructor(header: GoPlay.Core.Protocols.Header, data: any, rawData: ByteArray | null) {
         this.header = header;
         this.data = data;
         this.rawData = rawData;
@@ -24,7 +24,7 @@ export default class Package<T> {
         this.header.PackageInfo.ContentSize = this.rawData?.length || 0;
         let headerBytes = encoder.encode(this.header);
         
-        let bytes = new ByteArray(2 + headerBytes.length + this.rawData.length);
+        let bytes = new ByteArray(2 + headerBytes.length + this.header.PackageInfo.ContentSize);
         bytes = bytes.writeUint16(headerBytes.length);
         bytes = bytes.writeBytes(headerBytes);
         bytes = bytes.writeBytes(this.rawData);
@@ -43,7 +43,7 @@ export default class Package<T> {
         
         if (!bytes.hasReadSize(2)) return null;
         let headerLength = bytes.readUint16();
-        if (!bytes.hasReadSize(2)) {
+        if (!bytes.hasReadSize(headerLength)) {
             bytes.roffset -= 2;
             return null;
         }
@@ -51,7 +51,7 @@ export default class Package<T> {
         let header = encoder.decode(GoPlay.Core.Protocols.Header, headerBytes) as GoPlay.Core.Protocols.Header;
     
         if (!bytes.hasReadSize(header.PackageInfo.ContentSize)) {
-            bytes.roffset -= headerLength + 2;
+            bytes.roffset -= (headerLength + 2);
             return null;
         }
         var dataBytes = bytes.readBytes(header.PackageInfo.ContentSize);

@@ -1,4 +1,5 @@
-import goplay from '../goplay';
+import {describe, expect, it, beforeEach, jest} from '@jest/globals';
+import goplay from '../src/goplay';
 
 describe('Emitter', () => {
   let emitter;

@@ -3,6 +3,7 @@
         "target": "ES5",
         "module": "ESNext",
         "moduleResolution": "node",
+        "esModuleInterop": true,
         "lib": ["DOM", "ES2015"],
         "baseUrl": ".",
         "paths": {

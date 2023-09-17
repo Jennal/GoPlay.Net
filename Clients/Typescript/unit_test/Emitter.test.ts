@@ -1,4 +1,5 @@
-import Emitter from '../Emitter';
+import {describe, expect, it, beforeEach, jest} from '@jest/globals';
+import Emitter from '../src/Emitter';
 
 describe('Emitter', () => {
   let emitter: Emitter;

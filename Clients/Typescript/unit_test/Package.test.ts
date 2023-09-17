@@ -1,6 +1,7 @@
-import Package from '../Package';
-import { GoPlay } from '../pkg.pb';
-import { ByteArray } from '../ByteArray';
+import {describe, expect, it, beforeEach, jest} from '@jest/globals';
+import Package from '../src/Package';
+import { GoPlay } from '../src/pkg.pb';
+import { ByteArray } from '../src/ByteArray';
 
 describe('Package', () => {
   it('should encode and decode a package correctly', () => {

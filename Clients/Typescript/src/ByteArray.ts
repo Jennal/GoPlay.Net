@@ -12,7 +12,7 @@ export function strencode(str) {
             codes = [0xe0 | (charCode >> 12), 0x80 | ((charCode & 0xfc0) >> 6), 0x80 | (charCode & 0x3f)];
         }
         for (var j = 0; j < codes.length; j++) {
-            byteArray[offset] = codes[j];
+            byteArray.data[offset] = codes[j];
             ++offset;
         }
     }
@@ -28,14 +28,14 @@ export function strdecode(buffer) {
     var charCode = 0;
     var end = bytes.length;
     while (offset < end) {
-        if (bytes[offset] < 128) {
-            charCode = bytes[offset];
+        if (bytes.data[offset] < 128) {
+            charCode = bytes.data[offset];
             offset += 1;
-        } else if (bytes[offset] < 224) {
-            charCode = ((bytes[offset] & 0x3f) << 6) + (bytes[offset + 1] & 0x3f);
+        } else if (bytes.data[offset] < 224) {
+            charCode = ((bytes.data[offset] & 0x3f) << 6) + (bytes.data[offset + 1] & 0x3f);
             offset += 2;
         } else {
-            charCode = ((bytes[offset] & 0x0f) << 12) + ((bytes[offset + 1] & 0x3f) << 6) + (bytes[offset + 2] & 0x3f);
+            charCode = ((bytes.data[offset] & 0x0f) << 12) + ((bytes.data[offset + 1] & 0x3f) << 6) + (bytes.data[offset + 2] & 0x3f);
             offset += 3;
         }
         array.push(charCode);
@@ -44,49 +44,68 @@ export function strdecode(buffer) {
 };
 
 export function copyArray(dest, doffset, src, soffset, length) {
-    if ('function' === typeof src.copy) {
-        // Buffer
-        src.copy(dest, doffset, soffset, soffset + length);
-        return dest;
-    } else {
-        // Uint8Array
-        var result = dest;
-        if (dest.length < (doffset + length)) {
-            result = new ByteArray(doffset + length);
-        }
-
-        for (var i = 0; i < dest.length; i++) {
-            result[i] = dest[i];
-        }
-
-        for (var index = 0; index < length; index++) {
-            result[doffset++] = src[soffset++];
-        }
-
-        return result;
+    // Uint8Array
+    var result = dest;
+    if (dest.length < (doffset + length)) {
+        result = new ByteArray(doffset + length);
+        result.woffset = dest.woffset;
+        result.roffset = dest.roffset;
     }
+
+    for (var i = 0; i < dest.length; i++) {
+        result.data[i] = dest.data[i];
+    }
+
+    for (var index = 0; index < length; index++) {
+        result.data[doffset++] = src.data[soffset++];
+    }
+
+    return result;
 }
 
-export class ByteArray extends Uint8Array {
+export class ByteArray {
     public woffset = 0;
     public roffset = 0;
+    public data: Uint8Array;
+
+    public constructor(data?: Uint8Array | ByteArray | number) {
+        if (data instanceof Uint8Array) {
+            this.data = data;
+        } else if (data instanceof ByteArray) {
+            this.data = new Uint8Array(data.buffer);
+        } else {
+            this.data = new Uint8Array(data as number);
+        }
+    }
+
+    public get buffer (): ArrayBufferLike {
+        return this.data.buffer;
+    }
+
+    public get length (): number {
+        return this.data.length;
+    }
+
+    public slice (start, end) {
+        return this.data.slice(start, end);
+    }
 
     public writeUint8 (val) {
-        this[this.woffset++] = val & 0xff;
+        this.data[this.woffset++] = val & 0xff;
         return this;
     }
 
     public writeUint16 (val) {
-        this[this.woffset++] = (val >> 8) & 0xff;
-        this[this.woffset++] = val & 0xff;
+        this.data[this.woffset++] = val & 0xff;
+        this.data[this.woffset++] = (val >> 8) & 0xff;
         return this;
     }
 
     public writeUint32 (val) {
-        this[this.woffset++] = (val >> 24) & 0xff;
-        this[this.woffset++] = (val >> 16) & 0xff;
-        this[this.woffset++] = (val >> 8) & 0xff;
-        this[this.woffset++] = val & 0xff;
+        this.data[this.woffset++] = val & 0xff;
+        this.data[this.woffset++] = (val >> 8) & 0xff;
+        this.data[this.woffset++] = (val >> 16) & 0xff;
+        this.data[this.woffset++] = (val >> 24) & 0xff;
         return this;
     }
 
@@ -115,22 +134,22 @@ export class ByteArray extends Uint8Array {
     public readUint8 () {
         if (this.roffset + 1 > this.length) return undefined;
 
-        var val = this[this.roffset] & 0xff;
+        var val = this.data[this.roffset] & 0xff;
         this.roffset += 1;
         return val;
     }
 
     public readUint16 () {
-        var h = this.readUint8();
         var l = this.readUint8();
+        var h = this.readUint8();
         if (h == undefined || l == undefined) return undefined;
 
         return h << 8 | l;
     }
 
     public readUint32 () {
-        var h = this.readUint16();
         var l = this.readUint16();
+        var h = this.readUint16();
         if (h == undefined || l == undefined) return undefined;
 
         return h << 16 | l;

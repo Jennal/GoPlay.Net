@@ -35,15 +35,18 @@ namespace GoPlay.Core.Transport.Wss
             {
                 ClientIP = ep.Address.ToString();    
             }
+            
+            Console.WriteLine($"WebSocket session with Id {Id} connected: {ClientIP}");
         }
 
         public override void OnWsDisconnected()
         {
-            // Console.WriteLine($"Chat WebSocket session with Id {Id} disconnected!");
+            Console.WriteLine($"WebSocket session with Id {Id} disconnected!");
         }
         
         public override void OnWsReceived(byte[] buffer, long offset, long size)
         {
+            Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
             var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
             if (m_buffer == null)
             {

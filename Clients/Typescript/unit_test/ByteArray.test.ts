@@ -1,4 +1,5 @@
-import { ByteArray, copyArray, strencode, strdecode } from '../ByteArray';
+import {describe, expect, it} from '@jest/globals';
+import { ByteArray, copyArray, strencode, strdecode } from '../src/ByteArray';
 
 describe('ByteArray', () => {
   it('should write and read uint8 values', () => {
@@ -20,9 +21,12 @@ describe('ByteArray', () => {
   });
 
   it('should write and read strings', () => {
-    const buffer = new ByteArray(10);
-    buffer.writeString('hello');
-    expect(buffer.readString(5)).toEqual('hello');
+    let buffer = new ByteArray(10);
+    buffer = buffer.writeString('hello');
+    console.log("buffer", buffer);
+    let result = buffer.readString(5);
+    console.log("result", result);
+    expect(result).toEqual('hello');
   });
 
   it('should write and read bytes', () => {
@@ -67,5 +71,19 @@ describe('ByteArray', () => {
     buffer2.writeUint16(0x3456);
 
     expect(buffer1).toEqual(buffer2);
+  });
+
+  it('should writeBytes exceed', () => {
+    let buffer1 = new ByteArray(3);
+    buffer1.writeUint8(0x12);
+    buffer1.writeUint16(0x3456);
+    
+    const buffer2 = new ByteArray(3);
+    buffer2.writeUint8(0x12);
+    buffer2.writeUint16(0x3456);
+    
+    buffer1 = buffer1.writeBytes(buffer2);
+    // console.log("buffer1", buffer1);
+    expect(buffer1.length).toEqual(6);
   });
 });

@@ -12,11 +12,12 @@ export class ProtobufEncoder implements IEncoder {
 
         if (!obj.constructor || !obj.constructor.encode) throw new Error("not a protobuf object!");
         // console.log(obj.constructor.name, obj, t);
-        return obj.constructor.encode(obj).finish();
+        return new ByteArray(obj.constructor.encode(obj).finish());
     }
+
     decode<T>(type: { new(): T }, bytes: ByteArray): T {
         if (!type.hasOwnProperty('decode')) throw new Error("not a protobuf type!");
-        return type['decode'](bytes);
+        return type['decode'](bytes.data);
     }
 }
 

@@ -1,0 +1,5 @@
+:443 {
+  tls ../../../Frameworks/Keys/server.crt ../../../Frameworks/Keys/server.key
+  root * .
+  file_server
+}

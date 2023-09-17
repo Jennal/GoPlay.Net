@@ -1,4 +1,5 @@
-import TaskCompletionSource from '../TaskCompletionSource';
+import {describe, expect, it, beforeEach, jest} from '@jest/globals';
+import TaskCompletionSource from '../src/TaskCompletionSource';
 
 describe('TaskCompletionSource', () => {
   it('should resolve the promise with the correct value', async () => {

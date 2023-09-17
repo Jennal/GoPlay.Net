@@ -6,6 +6,7 @@ using GoPlay.Core.Interfaces;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Routers;
 using LitJson;
+using Newtonsoft.Json;
 using Console = Colorful.Console;
 using Formatter = Colorful.Formatter;
 
@@ -164,7 +165,7 @@ public class LoggerFilter : IFilter
                 var fieldInfo = Route.GetDataField(paramInfo.ParameterType);
                 var field = fieldInfo.GetValue(result);
 
-                var json = JsonMapper.ToJson(field);
+                var json = JsonConvert.SerializeObject(field);
                 return json;
             }
         }
@@ -194,7 +195,7 @@ public class LoggerFilter : IFilter
         if (fieldInfo == null) return GetByteArray(pack.RawData);
 
         var data = fieldInfo.GetValue(pack);
-        var json = JsonMapper.ToJson(data);
+        var json = JsonConvert.SerializeObject(data);
         return json;
     }
 }

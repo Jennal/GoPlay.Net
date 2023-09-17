@@ -15,7 +15,6 @@ if (typeof window === 'undefined') {
     window['$protobuf'] = protobuf;
     window['GoPlay'] = protobuf.roots.default['GoPlay'];
 }
-// const GoPlay = GoPlay || window['GoPlay'];
 
 const Consts = {
     Info: {
@@ -121,13 +120,30 @@ export default class goplay {
     }
 
     public static send(pack: Package<any>) {
-        goplay.ws.send(pack.encode());
+        var data = pack.encode();
+        // console.log("Send: ", pack, data);
+        var buffer = new ByteArray(2);
+        buffer.writeUint16(data.length);
+        goplay.ws.send(buffer.data);
+        goplay.ws.send(data.data);
     }
 
     private static recv(): Package<any> {
         if (!goplay.buffer || !goplay.buffer.length) return null;
 
-        var pack = Package.tryDecodeRaw(goplay.buffer);
+        if (!goplay.buffer.hasReadSize(2)) return null;
+        var packSize = goplay.buffer.readUint16();
+
+        if (!goplay.buffer.hasReadSize(packSize)) {
+            goplay.buffer.roffset -= 2;
+            return null;
+        }
+
+        var data = goplay.buffer.readBytes(packSize);
+        var pack = Package.tryDecodeRaw(data);
+        // console.log("recv: ", pack);
+
+        //TODO: remove read data from buffer
         return pack;
     }
 
@@ -138,13 +154,15 @@ export default class goplay {
 
     public static onmessage(event: MessageEvent) {
         var data = new ByteArray(event.data);
-        // console.log("onmessage", event, data);
+        // console.log("onmessage-1", event, data, goplay.buffer);
 
         if (!goplay.buffer) {
             goplay.buffer = data;
+            goplay.buffer.woffset = data.length;
         } else {
             goplay.buffer = goplay.buffer.writeBytes(data);
         }
+        // console.log("onmessage-2", goplay.buffer);
 
         var pack = goplay.recv();
         if (!pack) return;

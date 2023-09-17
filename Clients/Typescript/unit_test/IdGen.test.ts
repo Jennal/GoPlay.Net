@@ -1,5 +1,5 @@
 import {describe, expect, test} from '@jest/globals';
-import IdGen from '../IdGen';
+import IdGen from '../src/IdGen';
 
 describe('IdGen', () => {
   test('should generate unique IDs', () => {

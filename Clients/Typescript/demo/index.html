@@ -4,7 +4,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
     <title>Goplay.Net Websocket Client Demo</title>
-    <script src="../dist/bundle.js"></script>
+    <script src="bundle.js"></script>
     <script>
         var PBString = GoPlay.Core.Protocols.PbString;
 
@@ -20,7 +20,7 @@
             content.innerHTML = "[" + dateStr + "] " + line + "<br />" + content.innerHTML;
         }
 
-        async function sendClicked() {
+        function sendClicked() {
             var elem = document.getElementById("data");
             var data = elem.value;
             elem.value = "";
@@ -30,12 +30,14 @@
             console.log(data);
 
             goplay.notify("test.notify", data);
-            var result = await goplay.request("test.echo", data, PBString);
-            console.log("Requst[test.echo] => ", result);
-            writeLn("Requst[test.echo] => ", result);
+            goplay.request("test.echo", data, PBString)
+                .then(function (result) {
+                    console.log("Requst[test.echo] => ", result);
+                    writeLn("Requst[test.echo] => ", result);
+                });
         }
 
-        async function requestError() {
+        function requestError() {
             var elem = document.getElementById("data");
             var data = elem.value;
             elem.value = "";
@@ -44,9 +46,11 @@
             data = PBString.create({"Value":data});
             console.log(data);
 
-            var result = await goplay.request("test.err", data, PBString);
-            console.log("Requst[test.err] => ", result);
-            writeLn("Requst[test.err] => ", result);
+            goplay.request("test.err", data, PBString)
+                .then(function (result) {
+                    console.log("Requst[test.err] => ", result);
+                    writeLn("Requst[test.err] => ", result);
+                });
         }
 
         goplay.on(goplay.Consts.Events.CONNECTED, function() {
@@ -58,7 +62,12 @@
             console.log("test.push: ", data);
             writeLn("test.push: " + data);
         })
-        goplay.connect("wss://localhost:8888");
+
+        goplay.connect("wss://localhost:8888")
+            .then(function (result) {
+                console.log("connect => ", result);
+                writeLn("connect => " + result);
+            });
     </script>
 </head>
 
