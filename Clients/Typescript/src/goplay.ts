@@ -122,10 +122,10 @@ export default class goplay {
     public static send(pack: Package<any>) {
         var data = pack.encode();
         // console.log("Send: ", pack, data);
-        var buffer = new ByteArray(2);
+        var buffer = new ByteArray(2 + data.length);
         buffer.writeUint16(data.length);
+        buffer = buffer.writeBytes(data);
         goplay.ws.send(buffer.data);
-        goplay.ws.send(data.data);
     }
 
     private static recv(): Package<any> {
@@ -170,7 +170,7 @@ export default class goplay {
         var header = pack.header;
         if (header.PackageInfo.Type != GoPlay.Core.Protocols.PackageType.Ping && 
             header.PackageInfo.Type != GoPlay.Core.Protocols.PackageType.Pong) {
-            console.log("Recv: ", header, data);
+            // console.log("Recv: ", header, data);
         }
 
         switch (header.PackageInfo.Type) {
@@ -247,6 +247,7 @@ export default class goplay {
     private static onHandshake(p: Package<any>) {
         let pack = p.decodeFromRaw(GoPlay.Core.Protocols.RespHandShake);
         goplay.handShake = pack.data;
+        // console.log("onHandshake: ", goplay.handShake);
 
         HeartBeat.start(goplay.handShake.HeartBeatInterval);
         goplay.emit(Consts.Events.CONNECTED);
@@ -261,8 +262,8 @@ export default class goplay {
 
     private static onResponse (p: Package<any>) {
         var key = goplay.getCallbackKey(p.header);
-        console.log("key: ", key);
-        console.log("onResponse: ", p);
+        // console.log("key: ", key);
+        // console.log("onResponse: ", p);
         var type = goplay.requestMap[key];
         if (type) {
             delete goplay.requestMap[key];
@@ -280,22 +281,17 @@ export default class goplay {
     }
 
     private static onPush (p: Package<any>) {
-        var key = goplay.getCallbackKey(p.header);
-        console.log("key: ", key);
-        console.log("onPush: ", p);
+        var key = goplay.getPushKey(p.header);
+        // console.log("key: ", key);
 
         var type = goplay.pushMap[key];
         if (type) {
             let pack = p.decodeFromRaw(type);
-            goplay.emit(key, {
-                status: p.header.Status,
-                data: pack.data
-            });
+            console.log(`onPush[${key}]: `, pack);
+            goplay.emit(key, pack.data);
         } else {
-            goplay.emit(key, {
-                status: p.header.Status,
-                data: p.rawData
-            });
+            console.log(`onPush[${key}]: `, p);
+            goplay.emit(key, p.rawData);
         }
     }
 
@@ -306,6 +302,10 @@ export default class goplay {
 
     private static getCallbackKey (header: GoPlay.Core.Protocols.Header): string {
         return `${header.PackageInfo.Route}-${header.PackageInfo.Id}`;
+    }
+
+    private static getPushKey (header: GoPlay.Core.Protocols.Header): string {
+        return goplay.getRoute(header.PackageInfo.Route);
     }
 
     public static onType<T>(event: string, type: {new():T}, fn: Function) {

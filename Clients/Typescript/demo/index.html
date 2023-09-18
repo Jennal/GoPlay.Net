@@ -7,8 +7,19 @@
     <script src="bundle.js"></script>
     <script>
         var PBString = GoPlay.Core.Protocols.PbString;
+        var StatusCode = GoPlay.Core.Protocols.StatusCode;
 
-        function writeLn(line) {
+        function writeLn() {
+            if (arguments.length == 0) return;
+            var line = "";
+            for (var i = 0; i < arguments.length; i++) {
+                if (typeof arguments[i] == "string") {
+                    line += arguments[i];
+                } else {
+                    line += JSON.stringify(arguments[i]);
+                }
+            }
+
             var content = document.getElementById("content");
             var d = new Date();
             var dateStr = d.getFullYear() +
@@ -27,13 +38,18 @@
 
             if (!data || data.length == 0) return;
             data = PBString.create({"Value":data});
-            console.log(data);
+            // console.log(data);
 
             goplay.notify("test.notify", data);
             goplay.request("test.echo", data, PBString)
                 .then(function (result) {
+                    var {status, data} = result;
+                    if (status.Code == StatusCode.Success) {
+                        writeLn("Requst[test.echo] => ", status, data);
+                    } else {
+                        writeLn("<span style='color:red'>", "Requst[test.echo] => ", status, data, "</span>");
+                    }
                     console.log("Requst[test.echo] => ", result);
-                    writeLn("Requst[test.echo] => ", result);
                 });
         }
 
@@ -44,29 +60,39 @@
 
             if (!data || data.length == 0) return;
             data = PBString.create({"Value":data});
-            console.log(data);
+            // console.log(data);
 
             goplay.request("test.err", data, PBString)
                 .then(function (result) {
+                    var {status, data} = result;
+                    if (status.Code == StatusCode.Success) {
+                        writeLn("Requst[test.err] => ", status, data);
+                    } else {
+                        writeLn("<span style='color:red'>", "Requst[test.err] => ", status, data, "</span>");
+                    }
                     console.log("Requst[test.err] => ", result);
-                    writeLn("Requst[test.err] => ", result);
                 });
         }
 
         goplay.on(goplay.Consts.Events.CONNECTED, function() {
-            console.log("connected");
-            writeLn("connected");
+            console.log("websocket connected");
+            writeLn("websocket connected");
+        });
+
+        goplay.on("test.push", function (data) {
+            console.log("on[test.push]: ", data);
+            writeLn("on[test.push]: ", data);
         });
 
         goplay.onType("test.push", PBString, function (data) {
-            console.log("test.push: ", data);
-            writeLn("test.push: " + data);
-        })
+            console.log("onType[test.push]: ", data);
+            writeLn("onType[test.push]: " + data.Value);
+        });
 
         goplay.connect("wss://localhost:8888")
             .then(function (result) {
-                console.log("connect => ", result);
-                writeLn("connect => " + result);
+                console.log("goplay connected => ", result);
+                writeLn("goplay connected => " + result);
             });
     </script>
 </head>

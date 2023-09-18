@@ -55,8 +55,14 @@ public class TestProcessor : ProcessorBase
     public void Notify(Header header, PbString str)
     {
         // Console.WriteLine($">>>> Server.Notify Recv: {str.Value}");
-        str.Value = $"Push: {str.Value}";
-        Push("test.push", header, str);
-        Push("test.push", header, str);
+        Push("test.push", header, new PbString
+        {
+            Value = $"Push: {str.Value} - 1"
+        });
+
+        Push("test.push", header, new PbString
+        {
+            Value = $"Push: {str.Value} - 2"
+        });
     }
 }

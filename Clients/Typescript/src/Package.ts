@@ -33,6 +33,8 @@ export default class Package<T> {
     }
 
     public decodeFromRaw<T>(type: { new(): T }): Package<T> {
+        if (!this.rawData) return new Package<T>(this.header, null, this.rawData);
+
         let encoder = getEncoder(this.header.PackageInfo.EncodingType);
         let data = encoder.decode<T>(type, this.rawData);
         return new Package<T>(this.header, data, this.rawData);

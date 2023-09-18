@@ -46,7 +46,7 @@ namespace GoPlay.Core.Transport.Wss
         
         public override void OnWsReceived(byte[] buffer, long offset, long size)
         {
-            Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
+            // Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
             var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
             if (m_buffer == null)
             {

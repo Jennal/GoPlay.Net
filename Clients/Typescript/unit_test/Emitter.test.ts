@@ -75,4 +75,22 @@ describe('Emitter', () => {
     emitter.off('event2');
     expect(emitter.hasListeners('event2')).toBe(false);
   });
+
+  it('should pass all parameters to listeners', () => {
+    const listener = function(...args) {
+      expect(args).toEqual([1, 2, 3]);
+    };
+
+    const listener2 = function(a, b, c) {
+      expect(a).toEqual(1);
+      expect(b).toEqual(2);
+      expect(c).toEqual(3);
+    };
+    emitter.on('event1', listener);
+    emitter.on('event1', listener2);
+    expect(emitter.hasListeners('event1')).toBe(true);
+    expect(emitter.hasListeners('event2')).toBe(false);
+    
+    emitter.emit('event1', 1, 2, 3);
+  });
 });
