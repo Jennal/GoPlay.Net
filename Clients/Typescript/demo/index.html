@@ -14,9 +14,9 @@
             var line = "";
             for (var i = 0; i < arguments.length; i++) {
                 if (typeof arguments[i] == "string") {
-                    line += arguments[i];
+                    line += " " + arguments[i];
                 } else {
-                    line += JSON.stringify(arguments[i]);
+                    line += " " + JSON.stringify(arguments[i]);
                 }
             }
 
@@ -31,7 +31,7 @@
             content.innerHTML = "[" + dateStr + "] " + line + "<br />" + content.innerHTML;
         }
 
-        function sendClicked() {
+        async function sendClicked() {
             var elem = document.getElementById("data");
             var data = elem.value;
             elem.value = "";
@@ -41,19 +41,16 @@
             // console.log(data);
 
             goplay.notify("test.notify", data);
-            goplay.request("test.echo", data, PBString)
-                .then(function (result) {
-                    var {status, data} = result;
-                    if (status.Code == StatusCode.Success) {
-                        writeLn("Requst[test.echo] => ", status, data);
-                    } else {
-                        writeLn("<span style='color:red'>", "Requst[test.echo] => ", status, data, "</span>");
-                    }
-                    console.log("Requst[test.echo] => ", result);
-                });
+            var {status, data} = await goplay.request("test.echo", data, PBString);
+            if (status.Code == StatusCode.Success) {
+                writeLn("Requst[test.echo] => ", status, data);
+            } else {
+                writeLn("<span style='color:red'>", "Requst[test.echo] => ", status, data, "</span>");
+            }
+            console.log("Requst[test.echo] => ", status, data);
         }
 
-        function requestError() {
+        async function requestError() {
             var elem = document.getElementById("data");
             var data = elem.value;
             elem.value = "";
@@ -62,21 +59,23 @@
             data = PBString.create({"Value":data});
             // console.log(data);
 
-            goplay.request("test.err", data, PBString)
-                .then(function (result) {
-                    var {status, data} = result;
-                    if (status.Code == StatusCode.Success) {
-                        writeLn("Requst[test.err] => ", status, data);
-                    } else {
-                        writeLn("<span style='color:red'>", "Requst[test.err] => ", status, data, "</span>");
-                    }
-                    console.log("Requst[test.err] => ", result);
-                });
+            var {status, data} = await goplay.request("test.err", data, PBString);
+            if (status.Code == StatusCode.Success) {
+                writeLn("Requst[test.err] => ", status, data);
+            } else {
+                writeLn("<span style='color:red'>", "Requst[test.err] => ", status, data, "</span>");
+            }
+            console.log("Requst[test.err] => ", status, data);
         }
 
         goplay.on(goplay.Consts.Events.CONNECTED, function() {
             console.log("websocket connected");
             writeLn("websocket connected");
+        });
+
+        goplay.on(goplay.Consts.Events.DISCONNECTED, function() {
+            console.log("websocket disconnected");
+            writeLn("websocket disconnected");
         });
 
         goplay.on("test.push", function (data) {
@@ -89,19 +88,37 @@
             writeLn("onType[test.push]: " + data.Value);
         });
 
-        goplay.connect("wss://localhost:8888")
-            .then(function (result) {
-                console.log("goplay connected => ", result);
-                writeLn("goplay connected => " + result);
-            });
+        async function connect() {
+            var ok = await goplay.connect("wss://localhost:8888");
+            console.log("goplay connected => ", ok);
+            writeLn("goplay connected => " + ok);
+
+            document.getElementById("btnConnect").disabled = goplay.isConnected;
+            document.getElementById("btnDisconnect").disabled = !goplay.isConnected;
+            document.getElementById("btnSend").disabled = !goplay.isConnected;
+            document.getElementById("btnError").disabled = !goplay.isConnected;
+        }
+
+        function disconnect() {
+            goplay.disconnect();
+
+            document.getElementById("btnConnect").disabled = goplay.isConnected;
+            document.getElementById("btnDisconnect").disabled = !goplay.isConnected;
+            document.getElementById("btnSend").disabled = !goplay.isConnected;
+            document.getElementById("btnError").disabled = !goplay.isConnected;
+        }
     </script>
 </head>
 
 <body>
     <div>
+        <input id="btnConnect" type="button" value="Connect" onclick="javascript:connect();" />
+        <input id="btnDisconnect" type="button" value="Disconnect" onclick="javascript:disconnect();" disabled />
+    </div>
+    <div>
         <input id="data" type="text" name="data" />
-        <input type="button" value="Send" onclick="javascript:sendClicked();" />
-        <input type="button" value="Test Error" onclick="javascript:requestError();" />
+        <input id="btnSend" type="button" value="Send" onclick="javascript:sendClicked();" disabled />
+        <input id="btnError" type="button" value="Test Error" onclick="javascript:requestError();" disabled />
     </div>
     <p id="content">
 
