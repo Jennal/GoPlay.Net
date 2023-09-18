@@ -32,6 +32,7 @@
     <ProjectReference Include="..\Transport.NetCoreServer\Transport.NetCoreServer.csproj" />
     <ProjectReference Include="..\Transport.WatsonTcp\Transport.WatsonTcp.csproj" />
     <ProjectReference Include="..\Transport.Wss\Transport.Wss.csproj" />
+    <ProjectReference Include="..\Transport.Ws\Transport.Ws.csproj" />
   </ItemGroup>
 
 </Project>

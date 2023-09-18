@@ -11,16 +11,16 @@ using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
 
-namespace GoPlay.Core.Transport.Wss
+namespace GoPlay.Core.Transport.Ws
 {
-    class WssPackSession : WssSession
+    class WsPackSession : WsSession
     {
         private byte[] m_buffer;
         public uint ClientId { get; }
         public string ClientIP;
-        public WssPackServer PackServer => Server as WssPackServer;
+        public WsPackServer PackServer => Server as WsPackServer;
 
-        public WssPackSession(WssPackServer server, uint clientId) : base(server)
+        public WsPackSession(WsPackServer server, uint clientId) : base(server)
         {
             ClientId = clientId;
         }
@@ -96,40 +96,40 @@ namespace GoPlay.Core.Transport.Wss
         }
     }
 
-    class WssPackServer : global::NetCoreServer.WssServer
+    class WsPackServer : global::NetCoreServer.WsServer
     {
-        internal WssServer m_server;
+        internal WsServer m_server;
         private IdLoopGenerator m_idGen = new IdLoopGenerator(uint.MaxValue);
-        private ConcurrentDictionary<uint, WssPackSession> m_sessions = new ConcurrentDictionary<uint, WssPackSession>();
+        private ConcurrentDictionary<uint, WsPackSession> m_sessions = new ConcurrentDictionary<uint, WsPackSession>();
         private BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
 
-        public WssPackServer(WssServer server, SslContext context, IPAddress address, int port) : base(context, address, port)
+        public WsPackServer(WsServer server, IPAddress address, int port) : base(address, port)
         {
             m_server = server;
         }
 
-        protected override SslSession CreateSession() { return new WssPackSession(this, m_idGen.Next()); }
+        protected override TcpSession CreateSession() { return new WsPackSession(this, m_idGen.Next()); }
 
-        protected override void OnConnected(SslSession session)
+        protected override void OnConnected(TcpSession session)
         {
             base.OnConnected(session);
-            if (session is WssPackSession packSession == false) return;
+            if (session is WsPackSession packSession == false) return;
             
             m_sessions[packSession.ClientId] = packSession;
             m_server.OnConnected(packSession.ClientId);
         }
 
-        protected override void OnDisconnected(SslSession session)
+        protected override void OnDisconnected(TcpSession session)
         {
-            if (session is WssPackSession packSession == false) return;
+            if (session is WsPackSession packSession == false) return;
 
             m_server.OnDisconnected(packSession.ClientId);
             m_sessions.TryRemove(packSession.ClientId, out _);
         }
 
-        internal void OnRecv(SslSession session, byte[] data)
+        internal void OnRecv(TcpSession session, byte[] data)
         {
-            if (session is WssPackSession packSession == false) return;
+            if (session is WsPackSession packSession == false) return;
             m_readChannel.Add((packSession.ClientId, data), m_server.CancellationToken);
         }
 
@@ -154,12 +154,12 @@ namespace GoPlay.Core.Transport.Wss
             }
         }
 
-        public bool GetSession(uint clientId, out WssPackSession session)
+        public bool GetSession(uint clientId, out WsPackSession session)
         {
             return m_sessions.TryGetValue(clientId, out session);
         }
     }
-
+    
     class StaticContentParams
     {
         public string path;
@@ -168,16 +168,16 @@ namespace GoPlay.Core.Transport.Wss
         public TimeSpan? timeout = null;
     }
     
-    public class WssServer : TransportServerBase
+    public class WsServer : TransportServerBase
     {
-        private WssPackServer m_server;
+        private WsPackServer m_server;
         private CancellationTokenSource m_cancelSource;
 
         internal CancellationToken CancellationToken => m_cancelSource.Token;
         
         protected virtual string KeyPath => "server.pfx";
         protected virtual string KeyPass => "qwerty";
-
+        
         private List<StaticContentParams> _staticContentParams = new List<StaticContentParams>();
         
         public override void Start(string host, int port, CancellationTokenSource cancelSource = null)
@@ -185,9 +185,8 @@ namespace GoPlay.Core.Transport.Wss
             m_cancelSource = cancelSource ?? new CancellationTokenSource();
             
             var address = host == "*" ? IPAddress.Any : IPAddress.Parse(host);
-            var context = new SslContext(SslProtocols.Tls12, new X509Certificate2(KeyPath, KeyPass), (sender, certificate, chain, sslPolicyErrors) => true);
-            m_server = new WssPackServer(this, context, address, port);
-
+            m_server = new WsPackServer(this, address, port);
+            
             foreach (var param in _staticContentParams)
             {
                 m_server.AddStaticContent(param.path, param.prefix, param.filter, param.timeout);

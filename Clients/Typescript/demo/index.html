@@ -89,7 +89,8 @@
         });
 
         async function connect() {
-            var ok = await goplay.connect("wss://localhost:8888");
+            var url = document.getElementById("url").value;
+            var ok = await goplay.connect(url);
             console.log("goplay connected => ", ok);
             writeLn("goplay connected => " + ok);
 
@@ -112,6 +113,7 @@
 
 <body>
     <div>
+        <input id="url" type="text" name="url" value="wss://localhost:8888" />
         <input id="btnConnect" type="button" value="Connect" onclick="javascript:connect();" />
         <input id="btnDisconnect" type="button" value="Disconnect" onclick="javascript:disconnect();" disabled />
     </div>

@@ -4,9 +4,9 @@ using GoPlay;
 using Demo.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using WssSrv = GoPlay.Core.Transport.Wss.WssServer;
+using WsSrv = GoPlay.Core.Transport.Ws.WsServer;
 
-namespace Demo.WssServer;
+namespace Demo.WsServer;
 
 public static class Program
 {
@@ -66,7 +66,7 @@ public static class Program
 
 internal class GoPlayService : IHostedService
 {
-    private Server<WssSrv> _server;
+    private Server<WsSrv> _server;
     private Task _serverTask;
     
     private string _host;
@@ -80,7 +80,7 @@ internal class GoPlayService : IHostedService
 
     public Task StartAsync(CancellationToken _)
     {
-        _server = new Server<WssSrv>();
+        _server = new Server<WsSrv>();
         Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff)}] Server<{_server.TransportType.Name}> starting: {_host}:{_port}");
 
         _server.RegisterFilter(new LoggerFilter());
