@@ -50,6 +50,7 @@ Assert.AreEqual("Serv reply: Hello", resp.Value);
 ## Thanks
 
 Thanks to JetBrains for providing an open source license for GoPlay.Net.
+
 [![Thanks to JetBrains to provide opensource license for GoPlay.Net](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)](https://jb.gg/OpenSourceSupport)
 
 ## The MIT License
