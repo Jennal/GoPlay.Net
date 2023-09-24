@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using GoPlay.Core.Interfaces;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
@@ -168,7 +169,7 @@ namespace GoPlay.Core.Transport.Ws
         public TimeSpan? timeout = null;
     }
     
-    public class WsServer : TransportServerBase
+    public class WsServer : TransportServerBase, IAddStaticContent
     {
         private WsPackServer m_server;
         private CancellationTokenSource m_cancelSource;

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using GoPlay.Core.Interfaces;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
@@ -117,7 +118,7 @@ namespace GoPlay.Core.Transport.Http
         }
     }
     
-    public class HttpServer : TransportServerBase
+    public class HttpServer : TransportServerBase, IAddStaticContent
     {
         private HttpPackServer m_server;
         private CancellationTokenSource m_cancelSource;
@@ -179,6 +180,11 @@ namespace GoPlay.Core.Transport.Http
         internal void OnClientError(uint clientId, Exception err)
         {
             InvokeOnError(clientId, err);
+        }
+
+        public void AddStaticContent(string path, string prefix = "/", string filter = "*.*", TimeSpan? timeout = null)
+        {
+            m_server.AddStaticContent(path, prefix, filter, timeout);
         }
     }
 }

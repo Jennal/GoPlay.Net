@@ -87,7 +87,7 @@ internal class GoPlayService : IHostedService
                     
         _server.Register(new TestProcessor());
         
-        _server.Transport.AddStaticContent("../../../../../../Clients/Typescript/demo");
+        _server.AddStaticContent("../../../../../../Clients/Typescript/demo");
         
         _serverTask = _server.Start(_host, _port);
         return Task.CompletedTask;
