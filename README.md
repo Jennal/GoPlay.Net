@@ -2,7 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/GoPlay.Server)](https://www.nuget.org/packages/GoPlay.Server)
 
-GoPlay源于网络游戏开发的需求，基于C#编写的一套简单易用的RPC框架，但不限于游戏使用，可以用于解决任何实时网络通讯的问题。
+GoPlay originated from the demand for online game development. It is a simple, easy-to-use, low learning curve, and out-of-the-box RPC framework based on C#, but not limited to game usage. It can be used to solve any real-time network communication problems.
 
 ## How To Use
 
@@ -25,7 +25,7 @@ class EchoProcessor : ProcessorBase
 ### Client
 
 ```csharp
-//Echo_Echo是自动代码生成的函数
+//Echo_Echo is a function generated automatically by code.
 var (status, resp) = await client.Echo_Echo(new PbString{
    Value = "Hello"
 });
@@ -33,19 +33,24 @@ Assert.AreEqual(StatusCode.Success, status.Code);
 Assert.AreEqual("Serv reply: Hello", resp.Value);
 ```
 
-## 概念
+## Concepts
 
 ### Request
 
-- 客户端向服务端发起请求，并获得服务端回复
+- Client sends a request to the server and expects a response from the server.
 
 ### Notify
 
-- 客户端向服务端发起请求，不要求服务端返回
+- Client sends a request to the server without requiring a response from the server.
 
 ### Push
 
-- 服务端主动推送数据给客户端
+- The server actively pushes data to the client.
+
+## Thanks
+
+Thanks to JetBrains for providing an open source license for GoPlay.Net.
+[![Thanks to JetBrains to provide opensource license for GoPlay.Net](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)](https://jb.gg/OpenSourceSupport)
 
 ## The MIT License
 
