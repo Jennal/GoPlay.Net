@@ -2,7 +2,7 @@ const path = require('path');
 
 module.exports = {
   entry: './dist/goplay.js',
-  mode: 'development',
+  mode: 'production',
   output: {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'demo')
