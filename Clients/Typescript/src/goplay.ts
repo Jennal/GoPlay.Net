@@ -37,6 +37,7 @@ const Consts = {
 
 export default class goplay {
     public static Consts = Consts;
+    public static Core = GoPlay.Core;
     public static encodingType = GoPlay.Core.Protocols.EncodingType.Protobuf;
 
     private static ws;
