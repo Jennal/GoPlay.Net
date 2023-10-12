@@ -89,10 +89,11 @@ export default class goplay {
     }
 
     public static async connect(url: string): Promise<boolean> {
-        if (goplay.isConnected && goplay.url == url) return;
+        if (goplay.isConnected && goplay.url == url) return true;
 
         if (goplay.isConnected && goplay.url != url) goplay.disconnect();
 
+        goplay.url = url;
         let ws = new WebSocket(url);
         ws.binaryType = "arraybuffer";
         ws.onopen = goplay.onopen;
