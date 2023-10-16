@@ -49,6 +49,8 @@ export default class goplay {
     private static connectTask: TaskCompletionSource<boolean>;
     private static connectTimeOutId;
 
+    private static disconnectTask: TaskCompletionSource<boolean>;
+
     private static handShake: GoPlay.Core.Protocols.RespHandShake;
     private static requestMap = {};
     private static pushMap = {};
@@ -91,7 +93,7 @@ export default class goplay {
     public static async connect(url: string): Promise<boolean> {
         if (goplay.isConnected && goplay.url == url) return true;
 
-        if (goplay.isConnected && goplay.url != url) goplay.disconnect();
+        if (goplay.isConnected && goplay.url != url) await goplay.disconnect();
 
         goplay.url = url;
         let ws = new WebSocket(url);
@@ -113,12 +115,15 @@ export default class goplay {
         return goplay.connectTask.promise;
     }
     
-    public static disconnect() {
-        if (!goplay.ws) return;
+    public static async disconnect(): Promise<boolean> {
+        if (!goplay.ws) return true;
 
+        goplay.disconnectTask = new TaskCompletionSource<boolean>();
         if (goplay.ws.readyState <= 1) goplay.ws.close();
+        else goplay.disconnectTask.result = true;
         goplay.ws = null;
         goplay.emit(Consts.Events.DISCONNECTED);
+        return goplay.disconnectTask.promise;
     }
 
     public static send(pack: Package<any>) {
@@ -209,7 +214,7 @@ export default class goplay {
     public static onclose(event: Event) {
         console.log("onclose", event);
         HeartBeat.stop();
-        goplay.disconnect();
+        goplay.disconnectTask.result = true;
     }
 
     public static getRouteEncoded(route) {
