@@ -4,6 +4,10 @@ import { ByteArray } from './ByteArray';
 import Emitter from './Emitter';
 import TaskCompletionSource from './TaskCompletionSource';
 import Package from './Package';
+import Long from 'long';
+
+protobuf.util.Long = Long;
+protobuf.configure();
 
 let WebSocket: typeof import('ws') | typeof window.WebSocket;
 if (typeof window === 'undefined') {
