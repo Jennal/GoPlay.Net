@@ -1,3 +1,3 @@
 #!/bin/sh
 npm install -g protobufjs
-npm install -g pbjs
+npm install -g protobufjs-cli
