@@ -40,8 +40,9 @@ namespace GoPlay.Generators.Extension
         private static string _outFrontFile;
         private static string _outBackFile;
         private static string[] _baseClasses;
+        private static string[] _ignores;
         
-        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="")
+        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="", string ignores="")
         {
             _outFrontFile = outputFrontendFile;
             _outBackFile = outputBackendFile;
@@ -63,6 +64,7 @@ namespace GoPlay.Generators.Extension
 
             _frontNs = CreateNs(frontendNs);
             _backNs = CreateNs(backendNs);
+            _ignores = ignores.Split(",", StringSplitOptions.RemoveEmptyEntries);
             
             var files = Directory.EnumerateFiles(slnFolder, "*.csproj", SearchOption.AllDirectories);
             foreach (var csprojPath in files)
@@ -150,6 +152,7 @@ namespace GoPlay.Generators.Extension
         {
             if (type.Name == PROCESSOR_BASE) return false;
             if (_baseClasses?.Contains(type.Name) ?? false) return false;
+            if (_ignores?.Contains(type.Name) ?? false) return false;
 
             var types = type.DeclaringSyntaxReferences
                 .Select(o => o.GetSyntax() as ClassDeclarationSyntax)
