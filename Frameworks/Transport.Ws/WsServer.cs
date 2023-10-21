@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using GoPlay.Core.Interfaces;
 using NetCoreServer;
@@ -19,6 +17,7 @@ namespace GoPlay.Core.Transport.Ws
         private byte[] m_buffer;
         public uint ClientId { get; }
         public string ClientIP;
+        public Dictionary<string, string> Headers = new Dictionary<string, string>();
         public WsPackServer PackServer => Server as WsPackServer;
 
         public WsPackSession(WsPackServer server, uint clientId) : base(server)
@@ -26,16 +25,49 @@ namespace GoPlay.Core.Transport.Ws
             ClientId = clientId;
         }
 
+        public void SetHeaders(HttpRequest request)
+        {
+            Headers.Clear();
+            for (var i = 0; i < request.Headers; i++)
+            {
+                var (key, value) = request.Header(i);
+                Headers.Add(key, value);
+            }
+        }
+
+        public bool HasHeader(string key)
+        {
+            return Headers.ContainsKey(key);
+        }
+        
+        public string GetHeader(string key)
+        {
+            if (Headers.TryGetValue(key, out var value)) return value;
+            return string.Empty;
+        }
+        
         public override void OnWsConnected(HttpRequest request)
         {
-            var ep = Socket.RemoteEndPoint as IPEndPoint;
-            if (ep == null)
+            SetHeaders(request);
+            if (HasHeader("X-Forwarded-For"))
             {
-                ClientIP = "unknown";
+                ClientIP = GetHeader("X-Forwarded-For");
+            }
+            else if (HasHeader("X-Real-IP"))
+            {
+                ClientIP = GetHeader("X-Real-IP");
             }
             else
             {
-                ClientIP = ep.Address.ToString();    
+                var ep = Socket.RemoteEndPoint as IPEndPoint;
+                if (ep == null)
+                {
+                    ClientIP = "unknown";
+                }
+                else
+                {
+                    ClientIP = ep.Address.ToString();
+                }
             }
             
             Console.WriteLine($"WebSocket session with Id {Id} connected: {ClientIP}");
