@@ -44,6 +44,8 @@ export default class goplay {
     public static Core = GoPlay.Core;
     public static encodingType = GoPlay.Core.Protocols.EncodingType.Protobuf;
 
+    public static debug: boolean = false;
+
     private static ws;
     private static url: string;
     private static buffer: ByteArray;
@@ -132,7 +134,7 @@ export default class goplay {
 
     public static send(pack: Package<any>) {
         var data = pack.encode();
-        // console.log("Send: ", pack, data);
+        if (goplay.debug) console.log("Send: ", pack, data);
         var buffer = new ByteArray(2 + data.length);
         buffer.writeUint16(data.length);
         buffer = buffer.writeBytes(data);
@@ -152,7 +154,7 @@ export default class goplay {
 
         var data = goplay.buffer.readBytes(packSize);
         var pack = Package.tryDecodeRaw(data);
-        // console.log("recv: ", pack);
+        if (goplay.debug) console.log("recv: ", pack);
 
         //TODO: remove read data from buffer
         return pack;
@@ -165,7 +167,7 @@ export default class goplay {
 
     public static onmessage(event: MessageEvent) {
         var data = new ByteArray(event.data);
-        // console.log("onmessage-1", event, data, goplay.buffer);
+        if (goplay.debug) console.log("onmessage-1", event, data);
 
         if (!goplay.buffer) {
             goplay.buffer = data;
@@ -181,7 +183,7 @@ export default class goplay {
         var header = pack.header;
         if (header.PackageInfo.Type != GoPlay.Core.Protocols.PackageType.Ping && 
             header.PackageInfo.Type != GoPlay.Core.Protocols.PackageType.Pong) {
-            // console.log("Recv: ", header, data);
+            if (goplay.debug) console.log("Recv: ", header, data);
         }
 
         switch (header.PackageInfo.Type) {
@@ -218,7 +220,8 @@ export default class goplay {
     public static onclose(event: Event) {
         console.log("onclose", event);
         HeartBeat.stop();
-        goplay.disconnectTask.result = true;
+        if (goplay.disconnectTask) goplay.disconnectTask.result = true;
+        if (goplay.connectTask) goplay.connectTask.result = false;
     }
 
     public static getRouteEncoded(route) {
@@ -265,6 +268,9 @@ export default class goplay {
 
         goplay.connectTask.result = true;
         clearTimeout(goplay.connectTimeOutId);
+
+        goplay.connectTask = null;
+        goplay.connectTimeOutId = null;
     }
 
     private static onHeartbeat (p: Package<any>) {
