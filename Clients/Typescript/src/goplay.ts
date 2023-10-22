@@ -167,7 +167,7 @@ export default class goplay {
 
     public static onmessage(event: MessageEvent) {
         var data = new ByteArray(event.data);
-        if (goplay.debug) console.log("onmessage-1", event, data);
+        // if (goplay.debug) console.log("onmessage-1", event, data);
 
         if (!goplay.buffer) {
             goplay.buffer = data;
