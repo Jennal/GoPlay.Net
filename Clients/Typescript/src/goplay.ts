@@ -96,9 +96,10 @@ export default class goplay {
         return true;
     }
 
-    public static async connect(url: string): Promise<boolean> {
+    public static async connect(url?: string): Promise<boolean> {
+        url = url || goplay.url;
+        if (!url) throw new Error("url is empty");
         if (goplay.isConnected && goplay.url == url) return true;
-
         if (goplay.isConnected && goplay.url != url) await goplay.disconnect();
 
         goplay.url = url;
