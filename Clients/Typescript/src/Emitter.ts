@@ -106,6 +106,29 @@ export default class Emitter {
     };
 
     /**
+     * Emit `event` with the given args.
+     *
+     * @param {String} event
+     * @param {Mixed} ...
+     * @return {Emitter}
+     */
+    public async emitAsync(event, ...args: any[]) {
+        var callbacks = this._callbacks[event];
+
+        if (callbacks) {
+            callbacks = callbacks.slice(0);
+            for (var i = 0, len = callbacks.length; i < len; ++i) {
+                let result = callbacks[i].apply(this, args);
+                if (result instanceof Promise) {
+                    await result;
+                }
+            }
+        }
+
+        return this;
+    };
+
+    /**
      * Return array of callbacks for `event`.
      *
      * @param {String} event

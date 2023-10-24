@@ -62,19 +62,23 @@ export default class goplay {
     private static pushMap = {};
     
     public static emit(event: string, ...args: any[]) {
-        goplay.emitter.emit(event, ...args);
+        return goplay.emitter.emit(event, ...args);
+    }
+
+    public static emitAsync(event: string, ...args: any[]) {
+        return goplay.emitter.emitAsync(event, ...args);
     }
 
     public static on(event: string, fn: Function) {
-        goplay.emitter.on(event, fn);
+        return goplay.emitter.on(event, fn);
     }
 
     public static off(...args: any[]) {
-        goplay.emitter.off(...args);
+        return goplay.emitter.off(...args);
     }
 
     public static once(event: string, fn: Function) {
-        goplay.emitter.once(event, fn);
+        return goplay.emitter.once(event, fn);
     }
 
     public static listeners(event: string) {
@@ -86,7 +90,7 @@ export default class goplay {
     }
 
     public static removeAllListeners() {
-        goplay.emitter.removeAllListeners();
+        return goplay.emitter.removeAllListeners();
     }
 
     public static get isConnected(): boolean {
@@ -259,13 +263,13 @@ export default class goplay {
         goplay.send(pack);
     }
 
-    private static onHandshake(p: Package<any>) {
+    private static async onHandshake(p: Package<any>) {
         let pack = p.decodeFromRaw(GoPlay.Core.Protocols.RespHandShake);
         goplay.handShake = pack.data;
         // console.log("onHandshake: ", goplay.handShake);
 
         HeartBeat.start(goplay.handShake.HeartBeatInterval);
-        goplay.emit(Consts.Events.CONNECTED);
+        await goplay.emitAsync(Consts.Events.CONNECTED);
 
         goplay.connectTask.result = true;
         clearTimeout(goplay.connectTimeOutId);

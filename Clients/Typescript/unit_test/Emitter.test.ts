@@ -93,4 +93,27 @@ describe('Emitter', () => {
     
     emitter.emit('event1', 1, 2, 3);
   });
+
+  it('should await all async functions', async () => {
+    const listener = function(...args) {
+      expect(args).toEqual([1, 2, 3]);
+    };
+
+    let count = 0;
+    const listener2 = async function(a, b, c) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(a).toEqual(1);
+      expect(b).toEqual(2);
+      expect(c).toEqual(3);
+
+      count++;
+    };
+    emitter.on('event1', listener);
+    emitter.on('event1', listener2);
+    expect(emitter.hasListeners('event1')).toBe(true);
+    expect(emitter.hasListeners('event2')).toBe(false);
+    
+    await emitter.emitAsync('event1', 1, 2, 3);
+    expect(count).toBe(1);
+  });
 });
