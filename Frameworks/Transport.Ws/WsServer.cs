@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -69,7 +70,15 @@ namespace GoPlay.Core.Transport.Ws
                     ClientIP = ep.Address.ToString();
                 }
             }
-            
+
+            if (ClientIP.Contains(","))
+            {
+                var ipItem = ClientIP.Split(',', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(ipItem))
+                {
+                    ClientIP = ipItem.Trim();
+                }
+            }
             Console.WriteLine($"WebSocket session with Id {Id} connected: {ClientIP}");
         }
 
