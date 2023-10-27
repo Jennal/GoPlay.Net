@@ -1,7 +1,7 @@
 #!/bin/sh -x
 DIR=$(dirname "$0")/..
 PROJ="Server.sln"
-VERSION="0.2.1"
+VERSION="0.2.2"
 rm -f $DIR/packages/*
 cd $DIR
 
