@@ -16,12 +16,17 @@ export default class Package<T> {
         this.rawData = rawData;
     }
 
-    public encode(): ByteArray {
+    public updateContentSize() {
         let encoder = getEncoder(this.header.PackageInfo.EncodingType);
         if (!this.rawData && this.data) {
             this.rawData = encoder.encode(this.data);
         }
         this.header.PackageInfo.ContentSize = this.rawData?.length || 0;
+    }
+
+    public encode(): ByteArray {
+        this.updateContentSize();
+        let encoder = getEncoder(this.header.PackageInfo.EncodingType);
         let headerBytes = encoder.encode(this.header);
         
         let bytes = new ByteArray(2 + headerBytes.length + this.header.PackageInfo.ContentSize);

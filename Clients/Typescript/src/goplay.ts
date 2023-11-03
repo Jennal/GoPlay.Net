@@ -22,14 +22,16 @@ if (typeof window === 'undefined') {
 
 const Consts = {
     Info: {
-        "ClientType": "GoPlay/Javascript",
-        "ClientVersion": "0.1"
+        "ClientVersion" : "GoPlay/Javascript;0.1",
+        "ServerTag"     : GoPlay.Core.Protocols.ServerTag.FrontEnd,
     },
     Events: {
         "CONNECTED"    : "__ON_CONNECTED",
         "DISCONNECTED" : "__ON_DISCONNECTED",
         "ERROR"        : "__ON_ERROR",
-        "KICKED"       : "__ON_KICKED"
+        "KICKED"       : "__ON_KICKED",
+        "BEFORE_SEND"  : "__ON_BEFORE_SEND",
+        "BEFORE_RECV"  : "__ON_BEFORE_RECV",
     },
     TimeOut: {
         "CONNECT"     : 3000,
@@ -100,6 +102,14 @@ export default class goplay {
         return true;
     }
 
+    public static setClientVersion(version: string) {
+        Consts.Info.ClientVersion = version;
+    }
+
+    public static setServerTag(tag: GoPlay.Core.Protocols.ServerTag) {
+        Consts.Info.ServerTag = tag;
+    }
+
     public static async connect(url?: string): Promise<boolean> {
         url = url || goplay.url;
         if (!url) throw new Error("url is empty");
@@ -138,6 +148,7 @@ export default class goplay {
     }
 
     public static send(pack: Package<any>) {
+        goplay.emit(Consts.Events.BEFORE_SEND, pack);
         var data = pack.encode();
         if (goplay.debug) console.log("Send: ", pack, data);
         var buffer = new ByteArray(2 + data.length);
@@ -161,6 +172,7 @@ export default class goplay {
         var pack = Package.tryDecodeRaw(data);
         if (goplay.debug) console.log("recv: ", pack);
 
+        goplay.emit(Consts.Events.BEFORE_RECV, pack);
         //TODO: remove read data from buffer
         return pack;
     }
@@ -257,7 +269,7 @@ export default class goplay {
         var data = new GoPlay.Core.Protocols.ReqHankShake();
 
         data.ClientVersion = Consts.Info.ClientVersion;
-        data.ServerTag = GoPlay.Core.Protocols.ServerTag.FrontEnd;
+        data.ServerTag = Consts.Info.ServerTag;
         
         var pack = Package.createFromData(0, data, GoPlay.Core.Protocols.PackageType.HankShakeReq, goplay.encodingType);
         goplay.send(pack);
