@@ -49,15 +49,16 @@ class Program
             cmd.AddOption(new Option<string>(new []{"-tb", "--template-backend-file"}, () => "", "输出后端扩展的liquid模板文件路径"));
             cmd.AddOption(new Option<string>(new []{"-nf", "--namespace-frontend"}, () => "", "输出前端，增加的using namespace，多个namespace用逗号隔开，例如：System,MyNamespace"));
             cmd.AddOption(new Option<string>(new []{"-nb", "--namespace-backend"}, () => "", "输出前端，增加的using namespace，多个namespace用逗号隔开，例如：System,MyNamespace"));
-            cmd.AddOption(new Option<string>(new []{"-ig", "--ignores"}, () => "", "类名忽略列表，多个用逗号隔开，例如：EchoProcessor,TestProcessor"));
+            cmd.AddOption(new Option<string>(new []{"-igt", "--ignore-types"}, () => "", "类名忽略列表，多个用逗号隔开，例如：EchoProcessor,TestProcessor"));
+            cmd.AddOption(new Option<string>(new []{"-igm", "--ignore-methods"}, () => "", "函数名忽略列表，多个用逗号隔开，例如：EchoProcessor,TestProcessor"));
 
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
-                (string inputSlnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string templateFrontendFile, string templateBackendFile, string namespaceFrontend, string namespaceBackend, string ignores) =>
+                (string inputSlnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string templateFrontendFile, string templateBackendFile, string namespaceFrontend, string namespaceBackend, string ignoreTypes, string ignoreMethods) =>
                 {
                     var watch = new Stopwatch();
                     watch.Start();
-                    Processors2Extension.Generate(inputSlnFolder, outputFrontendFile, outputBackendFile, baseClasses, templateFrontendFile, templateBackendFile, namespaceFrontend, namespaceBackend, ignores).Wait();
+                    Processors2Extension.Generate(inputSlnFolder, outputFrontendFile, outputBackendFile, baseClasses, templateFrontendFile, templateBackendFile, namespaceFrontend, namespaceBackend, ignoreTypes, ignoreMethods).Wait();
                     watch.Stop();
                     Console.WriteLine($"Time Elapsed: {watch.Elapsed}");
                     Console.WriteLine("========== Generate Extension Finished ==========");

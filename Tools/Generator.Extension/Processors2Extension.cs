@@ -40,9 +40,10 @@ namespace GoPlay.Generators.Extension
         private static string _outFrontFile;
         private static string _outBackFile;
         private static string[] _baseClasses;
-        private static string[] _ignores;
+        private static string[] _ignoreTypes;
+        private static string[] _ignoreMethods;
         
-        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="", string ignores="")
+        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="", string ignoreTypes="", string ignoreMethods="")
         {
             _outFrontFile = outputFrontendFile;
             _outBackFile = outputBackendFile;
@@ -64,7 +65,8 @@ namespace GoPlay.Generators.Extension
 
             _frontNs = CreateNs(frontendNs);
             _backNs = CreateNs(backendNs);
-            _ignores = ignores.Split(",", StringSplitOptions.RemoveEmptyEntries);
+            _ignoreTypes = ignoreTypes.Split(",", StringSplitOptions.RemoveEmptyEntries);
+            _ignoreMethods = ignoreMethods.Split(",", StringSplitOptions.RemoveEmptyEntries);
             
             var files = Directory.EnumerateFiles(slnFolder, "*.csproj", SearchOption.AllDirectories);
             foreach (var csprojPath in files)
@@ -134,6 +136,7 @@ namespace GoPlay.Generators.Extension
                 foreach (var method in methods)
                 {
                     var data = GetTemplateData(type, method);
+                    if (!CheckMethod(type, method)) continue;
 
                     var isMethodFrontEnd = MethodIsFrontEnd(method);
                     var isMethodBackEnd = MethodIsBackEnd(method);
@@ -148,11 +151,23 @@ namespace GoPlay.Generators.Extension
             }
         }
 
+        private static bool CheckMethod(INamedTypeSymbol type, MethodDeclarationSyntax method)
+        {
+            if (_ignoreMethods == null) return true;
+            if (_ignoreMethods.Length <= 0) return true;
+
+            var processorName = type.Name;
+            var methodName = method.Identifier.ValueText;
+            
+            var methodFullName = $"{processorName}.{methodName}";
+            return !_ignoreMethods.Contains(methodFullName);
+        }
+
         private static bool CheckType(Compilation compilation, INamedTypeSymbol type)
         {
             if (type.Name == PROCESSOR_BASE) return false;
             if (_baseClasses?.Contains(type.Name) ?? false) return false;
-            if (_ignores?.Contains(type.Name) ?? false) return false;
+            if (_ignoreTypes?.Contains(type.Name) ?? false) return false;
 
             var types = type.DeclaringSyntaxReferences
                 .Select(o => o.GetSyntax() as ClassDeclarationSyntax)
