@@ -125,9 +125,10 @@ namespace GoPlay.Core.Processors
         
         public virtual void Push<T>(string route, uint clientId, T data)
         {
-            if (!m_pushDict.ContainsKey(route)) throw new Exception($"Processor: push route not registered: {route}");
+            var pushDict = GetPushDict();
+            if (!pushDict.ContainsKey(route)) throw new Exception($"Processor: push route not registered: {route}");
             
-            var id = m_pushDict[route];
+            var id = pushDict[route];
             var package = Package.Create(id, data, PackageType.Push, Server.EncodingType);
             package.Header.ClientId = clientId;
             Server.Send(package);
