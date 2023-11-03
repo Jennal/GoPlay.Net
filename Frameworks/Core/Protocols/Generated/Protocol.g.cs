@@ -24,36 +24,34 @@ namespace GoPlay.Core.Protocols {
     static ProtocolReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "Cg5wcm90b2NvbC5wcm90bxIdV2Fob28uU2VydmljZXMuQ29yZS5Qcm90b2Nv",
-            "bHMaGWdvb2dsZS9wcm90b2J1Zi9hbnkucHJvdG8iUgoGU3RhdHVzEjcKBENv",
-            "ZGUYASABKA4yKS5XYWhvby5TZXJ2aWNlcy5Db3JlLlByb3RvY29scy5TdGF0",
-            "dXNDb2RlEg8KB01lc3NhZ2UYAiABKAkioAEKB1Nlc3Npb24SDAoER3VpZBgB",
-            "IAEoCRJCCgZWYWx1ZXMYAiADKAsyMi5XYWhvby5TZXJ2aWNlcy5Db3JlLlBy",
-            "b3RvY29scy5TZXNzaW9uLlZhbHVlc0VudHJ5GkMKC1ZhbHVlc0VudHJ5EgsK",
-            "A2tleRgBIAEoCRIjCgV2YWx1ZRgCIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5B",
-            "bnk6AjgBIroBCgtQYWNrYWdlSW5mbxI4CgRUeXBlGAEgASgOMiouV2Fob28u",
-            "U2VydmljZXMuQ29yZS5Qcm90b2NvbHMuUGFja2FnZVR5cGUSCgoCSWQYAiAB",
-            "KA0SQQoMRW5jb2RpbmdUeXBlGAMgASgOMisuV2Fob28uU2VydmljZXMuQ29y",
-            "ZS5Qcm90b2NvbHMuRW5jb2RpbmdUeXBlEg0KBVJvdXRlGAQgASgNEhMKC0Nv",
-            "bnRlbnRTaXplGAUgASgNIrkBCgZIZWFkZXISNQoGU3RhdHVzGAEgASgLMiUu",
-            "V2Fob28uU2VydmljZXMuQ29yZS5Qcm90b2NvbHMuU3RhdHVzEjcKB1Nlc3Np",
-            "b24YAiABKAsyJi5XYWhvby5TZXJ2aWNlcy5Db3JlLlByb3RvY29scy5TZXNz",
-            "aW9uEj8KC1BhY2thZ2VJbmZvGAMgASgLMiouV2Fob28uU2VydmljZXMuQ29y",
-            "ZS5Qcm90b2NvbHMuUGFja2FnZUluZm8icgoMUmVxSGFua1NoYWtlEhUKDUNs",
-            "aWVudFZlcnNpb24YASABKAkSOwoJU2VydmVyVGFnGAIgASgOMiguV2Fob28u",
-            "U2VydmljZXMuQ29yZS5Qcm90b2NvbHMuU2VydmVyVGFnEg4KBkFwcEtleRgD",
-            "IAEoCSK6AQoNUmVzcEhhbmRTaGFrZRIVCg1TZXJ2ZXJWZXJzaW9uGAEgASgJ",
-            "EhkKEUhlYXJ0QmVhdEludGVydmFsGAIgASgNEkgKBlJvdXRlcxgDIAMoCzI4",
-            "LldhaG9vLlNlcnZpY2VzLkNvcmUuUHJvdG9jb2xzLlJlc3BIYW5kU2hha2Uu",
-            "Um91dGVzRW50cnkaLQoLUm91dGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZh",
-            "bHVlGAIgASgNOgI4ASo9CgpTdGF0dXNDb2RlEgsKB1N1Y2Nlc3MQABIKCgZG",
-            "YWlsZWQQARIJCgVFcnJvchACEgsKB1RpbWVvdXQQAyqBAQoLUGFja2FnZVR5",
-            "cGUSEAoMSGFua1NoYWtlUmVxEAASEQoNSGFua1NoYWtlUmVzcBABEggKBFBp",
-            "bmcQAhIICgRQb25nEAMSCgoGTm90aWZ5EAQSCwoHUmVxdWVzdBAFEgwKCFJl",
-            "c3BvbnNlEAYSCAoEUHVzaBAHEggKBEtpY2sQCComCgxFbmNvZGluZ1R5cGUS",
-            "DAoIUHJvdG9idWYQABIICgRKc29uEAEqOgoJU2VydmVyVGFnEgkKBUVtcHR5",
-            "EAASDAoIRnJvbnRFbmQQARILCgdCYWNrRW5kEAISBwoDQWxsEANiBnByb3Rv",
-            "Mw=="));
+            "Cg5wcm90b2NvbC5wcm90bxIVR29QbGF5LkNvcmUuUHJvdG9jb2xzGhlnb29n",
+            "bGUvcHJvdG9idWYvYW55LnByb3RvIkoKBlN0YXR1cxIvCgRDb2RlGAEgASgO",
+            "MiEuR29QbGF5LkNvcmUuUHJvdG9jb2xzLlN0YXR1c0NvZGUSDwoHTWVzc2Fn",
+            "ZRgCIAEoCSKYAQoHU2Vzc2lvbhIMCgRHdWlkGAEgASgJEjoKBlZhbHVlcxgC",
+            "IAMoCzIqLkdvUGxheS5Db3JlLlByb3RvY29scy5TZXNzaW9uLlZhbHVlc0Vu",
+            "dHJ5GkMKC1ZhbHVlc0VudHJ5EgsKA2tleRgBIAEoCRIjCgV2YWx1ZRgCIAEo",
+            "CzIULmdvb2dsZS5wcm90b2J1Zi5Bbnk6AjgBIqoBCgtQYWNrYWdlSW5mbxIw",
+            "CgRUeXBlGAEgASgOMiIuR29QbGF5LkNvcmUuUHJvdG9jb2xzLlBhY2thZ2VU",
+            "eXBlEgoKAklkGAIgASgNEjkKDEVuY29kaW5nVHlwZRgDIAEoDjIjLkdvUGxh",
+            "eS5Db3JlLlByb3RvY29scy5FbmNvZGluZ1R5cGUSDQoFUm91dGUYBCABKA0S",
+            "EwoLQ29udGVudFNpemUYBSABKA0ioQEKBkhlYWRlchItCgZTdGF0dXMYASAB",
+            "KAsyHS5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU3RhdHVzEi8KB1Nlc3Npb24Y",
+            "AiABKAsyHi5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU2Vzc2lvbhI3CgtQYWNr",
+            "YWdlSW5mbxgDIAEoCzIiLkdvUGxheS5Db3JlLlByb3RvY29scy5QYWNrYWdl",
+            "SW5mbyJqCgxSZXFIYW5rU2hha2USFQoNQ2xpZW50VmVyc2lvbhgBIAEoCRIz",
+            "CglTZXJ2ZXJUYWcYAiABKA4yIC5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU2Vy",
+            "dmVyVGFnEg4KBkFwcEtleRgDIAEoCSKyAQoNUmVzcEhhbmRTaGFrZRIVCg1T",
+            "ZXJ2ZXJWZXJzaW9uGAEgASgJEhkKEUhlYXJ0QmVhdEludGVydmFsGAIgASgN",
+            "EkAKBlJvdXRlcxgDIAMoCzIwLkdvUGxheS5Db3JlLlByb3RvY29scy5SZXNw",
+            "SGFuZFNoYWtlLlJvdXRlc0VudHJ5Gi0KC1JvdXRlc0VudHJ5EgsKA2tleRgB",
+            "IAEoCRINCgV2YWx1ZRgCIAEoDToCOAEqPQoKU3RhdHVzQ29kZRILCgdTdWNj",
+            "ZXNzEAASCgoGRmFpbGVkEAESCQoFRXJyb3IQAhILCgdUaW1lb3V0EAMqgQEK",
+            "C1BhY2thZ2VUeXBlEhAKDEhhbmtTaGFrZVJlcRAAEhEKDUhhbmtTaGFrZVJl",
+            "c3AQARIICgRQaW5nEAISCAoEUG9uZxADEgoKBk5vdGlmeRAEEgsKB1JlcXVl",
+            "c3QQBRIMCghSZXNwb25zZRAGEggKBFB1c2gQBxIICgRLaWNrEAgqJgoMRW5j",
+            "b2RpbmdUeXBlEgwKCFByb3RvYnVmEAASCAoESnNvbhABKjoKCVNlcnZlclRh",
+            "ZxIJCgVFbXB0eRAAEgwKCEZyb250RW5kEAESCwoHQmFja0VuZBACEgcKA0Fs",
+            "bBADYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.AnyReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GoPlay.Core.Protocols.StatusCode), typeof(global::GoPlay.Core.Protocols.PackageType), typeof(global::GoPlay.Core.Protocols.EncodingType), typeof(global::GoPlay.Core.Protocols.ServerTag), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -499,7 +497,7 @@ namespace GoPlay.Core.Protocols {
       if (other.Guid.Length != 0) {
         Guid = other.Guid;
       }
-      values_.Add(other.values_);
+      values_.MergeFrom(other.values_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -1642,7 +1640,7 @@ namespace GoPlay.Core.Protocols {
       if (other.HeartBeatInterval != 0) {
         HeartBeatInterval = other.HeartBeatInterval;
       }
-      routes_.Add(other.routes_);
+      routes_.MergeFrom(other.routes_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
