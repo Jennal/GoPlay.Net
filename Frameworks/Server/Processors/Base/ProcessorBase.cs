@@ -168,7 +168,7 @@ namespace GoPlay.Core.Processors
         {
         }
         
-        public virtual void OnHandShake(Header header, RespHandShake data)
+        public virtual void OnHandShake(Header header, ServerTag data)
         {
         }
 

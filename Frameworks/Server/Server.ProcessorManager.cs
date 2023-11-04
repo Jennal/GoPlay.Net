@@ -50,7 +50,7 @@ namespace GoPlay
         {
             foreach (var processor in Processors)
             {
-                processor.OnHandShake(header, (serverTag & ServerTag.FrontEnd) == ServerTag.FrontEnd ? m_respHandShakeFrontEnd : m_respHandShakeBackEnd);
+                processor.OnHandShake(header, serverTag);
             }
         }
         
