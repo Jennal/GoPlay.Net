@@ -45,6 +45,14 @@ namespace GoPlay
                 processor.OnClientDisconnected(clientId);
             }
         }
+
+        protected virtual void ProcessorOnHandShake(ServerTag serverTag, Header header)
+        {
+            foreach (var processor in Processors)
+            {
+                processor.OnHandShake(header, (serverTag & ServerTag.FrontEnd) == ServerTag.FrontEnd ? m_respHandShakeFrontEnd : m_respHandShakeBackEnd);
+            }
+        }
         
         protected void StartProcessors()
         {

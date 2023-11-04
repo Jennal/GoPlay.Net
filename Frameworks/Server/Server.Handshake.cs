@@ -51,6 +51,8 @@ namespace GoPlay
                 respPack.Header.ClientId = pack.Header.ClientId;
                 Send(respPack);
             }
+
+            ProcessorOnHandShake(request.Data.ServerTag, pack.Header);
         }
     }
 }

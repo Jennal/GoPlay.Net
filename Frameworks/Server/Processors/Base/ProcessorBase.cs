@@ -167,6 +167,10 @@ namespace GoPlay.Core.Processors
         public virtual void OnClientDisconnected(uint clientId)
         {
         }
+        
+        public virtual void OnHandShake(Header header, RespHandShake data)
+        {
+        }
 
         public virtual Package OnPreRecv(Package pack)
         {
