@@ -1,7 +1,10 @@
 ﻿using System;
+using GoPlay;
 using GoPlay.Core.Attributes;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
+using GoPlay.Core.Transport.Ws;
+using GoPlay.Core.Transport.Wss;
 
 namespace Demo.Common;
 
@@ -60,9 +63,19 @@ public class TestProcessor : ProcessorBase
             Value = $"Push: {str.Value} - 1"
         });
 
+        var browser = "unkown";
+        if (Server is Server<WsServer> s)
+        {
+            browser = s.GetClientBrowser(header.ClientId);
+        }
+        else if (Server is Server<WssServer> s2)
+        {
+            browser = s2.GetClientBrowser(header.ClientId);
+        }
+        
         Push("test.push", header, new PbString
         {
-            Value = $"Push: {str.Value} - 2"
+            Value = $"Push: {str.Value} - {browser}"
         });
     }
 }

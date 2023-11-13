@@ -11,4 +11,10 @@ public static class Server_Extensions
     {
         server.Transport.AddStaticContent(path, prefix, filter, timeout);
     }
+    
+    public static string GetClientBrowser<T>(this Server<T> server, uint clientId)
+        where T : TransportServerBase, IGetClientBrowser, new()
+    {
+        return server.Transport.GetClientBrowser(clientId);
+    }
 }

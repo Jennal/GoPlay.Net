@@ -210,7 +210,7 @@ namespace GoPlay.Core.Transport.Ws
         public TimeSpan? timeout = null;
     }
     
-    public class WsServer : TransportServerBase, IAddStaticContent
+    public class WsServer : TransportServerBase, IAddStaticContent, IGetClientBrowser
     {
         private WsPackServer m_server;
         private CancellationTokenSource m_cancelSource;
@@ -292,6 +292,13 @@ namespace GoPlay.Core.Transport.Ws
         internal void OnClientError(uint clientId, Exception err)
         {
             InvokeOnError(clientId, err);
+        }
+
+        public string GetClientBrowser(uint clientId)
+        {
+            if (!m_server.GetSession(clientId, out var session)) return string.Empty;
+            
+            return session.GetHeader("User-Agent");
         }
     }
 }
