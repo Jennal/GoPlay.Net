@@ -102,6 +102,10 @@ export default class goplay {
         return true;
     }
 
+    public static setTimeout(key: string, val: number) {
+        Consts.TimeOut[key] = val;
+    };
+
     public static setClientVersion(version: string) {
         Consts.Info.ClientVersion = version;
     }
