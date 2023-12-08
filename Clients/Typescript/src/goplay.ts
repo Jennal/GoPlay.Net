@@ -174,7 +174,7 @@ export default class goplay {
 
         var data = goplay.buffer.readBytes(packSize);
         var pack = Package.tryDecodeRaw(data);
-        if (goplay.debug) console.log("recv: ", pack);
+        if (goplay.debug) console.log("Recv: ", pack);
 
         goplay.emit(Consts.Events.BEFORE_RECV, pack);
         //TODO: remove read data from buffer
@@ -182,7 +182,7 @@ export default class goplay {
     }
 
     public static onopen(event: Event) {
-        console.log("onopen", event)
+        if (goplay.debug) console.log("onopen", event);
         goplay.sendHandshake();
     }
 
@@ -234,12 +234,12 @@ export default class goplay {
     }
 
     public static onerror(...args: any[]) {
-        console.log("onerror", args);
+        if (goplay.debug) console.log("onerror", args);
         goplay.emit(Consts.Events.ERROR, ...args);
     }
 
     public static onclose(event: Event) {
-        console.log("onclose", event);
+        if (goplay.debug) console.log("onclose", event);
         HeartBeat.stop();
         if (goplay.disconnectTask) goplay.disconnectTask.result = true;
         if (goplay.connectTask) goplay.connectTask.result = false;
@@ -325,10 +325,10 @@ export default class goplay {
         var type = goplay.pushMap[key];
         if (type) {
             let pack = p.decodeFromRaw(type);
-            console.log(`onPush[${key}]: `, pack);
+            if (goplay.debug) console.log(`onPush[${key}]: `, pack);
             goplay.emit(key, pack.data);
         } else {
-            console.log(`onPush[${key}]: `, p);
+            if (goplay.debug) console.log(`onPush[${key}]: `, p);
             goplay.emit(key, p.rawData);
         }
     }
