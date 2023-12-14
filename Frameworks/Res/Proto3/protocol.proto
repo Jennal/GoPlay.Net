@@ -52,6 +52,8 @@ message PackageInfo {
     EncodingType EncodingType = 3;
     uint32 Route = 4;
     uint32 ContentSize = 5;
+    uint32 ChunkCount = 6; //分包总数
+    uint32 ChunkIndex = 7; //分包索引
 }
 
 //协议头部信息

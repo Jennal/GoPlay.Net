@@ -7,13 +7,14 @@ namespace GoPlay.Core
         public static class Package
         {
             public const uint MAX_SIZE = ushort.MaxValue;
+            public const uint MAX_CHUNK_SIZE = ushort.MaxValue - 2048;
         }
 
         public static class HeartBeat
         {
             public static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
             public static readonly TimeSpan Update = TimeSpan.FromSeconds(1);
-            public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(1);
+            public static readonly TimeSpan Timeout = TimeSpan.MaxValue;//TimeSpan.FromSeconds(5);
         }
         
         public static class TimeOut

@@ -30,34 +30,35 @@ namespace GoPlay.Core.Protocols {
             "ZRgCIAEoCSKYAQoHU2Vzc2lvbhIMCgRHdWlkGAEgASgJEjoKBlZhbHVlcxgC",
             "IAMoCzIqLkdvUGxheS5Db3JlLlByb3RvY29scy5TZXNzaW9uLlZhbHVlc0Vu",
             "dHJ5GkMKC1ZhbHVlc0VudHJ5EgsKA2tleRgBIAEoCRIjCgV2YWx1ZRgCIAEo",
-            "CzIULmdvb2dsZS5wcm90b2J1Zi5Bbnk6AjgBIqoBCgtQYWNrYWdlSW5mbxIw",
+            "CzIULmdvb2dsZS5wcm90b2J1Zi5Bbnk6AjgBItIBCgtQYWNrYWdlSW5mbxIw",
             "CgRUeXBlGAEgASgOMiIuR29QbGF5LkNvcmUuUHJvdG9jb2xzLlBhY2thZ2VU",
             "eXBlEgoKAklkGAIgASgNEjkKDEVuY29kaW5nVHlwZRgDIAEoDjIjLkdvUGxh",
             "eS5Db3JlLlByb3RvY29scy5FbmNvZGluZ1R5cGUSDQoFUm91dGUYBCABKA0S",
-            "EwoLQ29udGVudFNpemUYBSABKA0ioQEKBkhlYWRlchItCgZTdGF0dXMYASAB",
-            "KAsyHS5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU3RhdHVzEi8KB1Nlc3Npb24Y",
-            "AiABKAsyHi5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU2Vzc2lvbhI3CgtQYWNr",
-            "YWdlSW5mbxgDIAEoCzIiLkdvUGxheS5Db3JlLlByb3RvY29scy5QYWNrYWdl",
-            "SW5mbyJqCgxSZXFIYW5rU2hha2USFQoNQ2xpZW50VmVyc2lvbhgBIAEoCRIz",
-            "CglTZXJ2ZXJUYWcYAiABKA4yIC5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuU2Vy",
-            "dmVyVGFnEg4KBkFwcEtleRgDIAEoCSKyAQoNUmVzcEhhbmRTaGFrZRIVCg1T",
-            "ZXJ2ZXJWZXJzaW9uGAEgASgJEhkKEUhlYXJ0QmVhdEludGVydmFsGAIgASgN",
-            "EkAKBlJvdXRlcxgDIAMoCzIwLkdvUGxheS5Db3JlLlByb3RvY29scy5SZXNw",
-            "SGFuZFNoYWtlLlJvdXRlc0VudHJ5Gi0KC1JvdXRlc0VudHJ5EgsKA2tleRgB",
-            "IAEoCRINCgV2YWx1ZRgCIAEoDToCOAEqPQoKU3RhdHVzQ29kZRILCgdTdWNj",
-            "ZXNzEAASCgoGRmFpbGVkEAESCQoFRXJyb3IQAhILCgdUaW1lb3V0EAMqgQEK",
-            "C1BhY2thZ2VUeXBlEhAKDEhhbmtTaGFrZVJlcRAAEhEKDUhhbmtTaGFrZVJl",
-            "c3AQARIICgRQaW5nEAISCAoEUG9uZxADEgoKBk5vdGlmeRAEEgsKB1JlcXVl",
-            "c3QQBRIMCghSZXNwb25zZRAGEggKBFB1c2gQBxIICgRLaWNrEAgqJgoMRW5j",
-            "b2RpbmdUeXBlEgwKCFByb3RvYnVmEAASCAoESnNvbhABKjoKCVNlcnZlclRh",
-            "ZxIJCgVFbXB0eRAAEgwKCEZyb250RW5kEAESCwoHQmFja0VuZBACEgcKA0Fs",
-            "bBADYgZwcm90bzM="));
+            "EwoLQ29udGVudFNpemUYBSABKA0SEgoKQ2h1bmtDb3VudBgGIAEoDRISCgpD",
+            "aHVua0luZGV4GAcgASgNIqEBCgZIZWFkZXISLQoGU3RhdHVzGAEgASgLMh0u",
+            "R29QbGF5LkNvcmUuUHJvdG9jb2xzLlN0YXR1cxIvCgdTZXNzaW9uGAIgASgL",
+            "Mh4uR29QbGF5LkNvcmUuUHJvdG9jb2xzLlNlc3Npb24SNwoLUGFja2FnZUlu",
+            "Zm8YAyABKAsyIi5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuUGFja2FnZUluZm8i",
+            "agoMUmVxSGFua1NoYWtlEhUKDUNsaWVudFZlcnNpb24YASABKAkSMwoJU2Vy",
+            "dmVyVGFnGAIgASgOMiAuR29QbGF5LkNvcmUuUHJvdG9jb2xzLlNlcnZlclRh",
+            "ZxIOCgZBcHBLZXkYAyABKAkisgEKDVJlc3BIYW5kU2hha2USFQoNU2VydmVy",
+            "VmVyc2lvbhgBIAEoCRIZChFIZWFydEJlYXRJbnRlcnZhbBgCIAEoDRJACgZS",
+            "b3V0ZXMYAyADKAsyMC5Hb1BsYXkuQ29yZS5Qcm90b2NvbHMuUmVzcEhhbmRT",
+            "aGFrZS5Sb3V0ZXNFbnRyeRotCgtSb3V0ZXNFbnRyeRILCgNrZXkYASABKAkS",
+            "DQoFdmFsdWUYAiABKA06AjgBKj0KClN0YXR1c0NvZGUSCwoHU3VjY2VzcxAA",
+            "EgoKBkZhaWxlZBABEgkKBUVycm9yEAISCwoHVGltZW91dBADKoEBCgtQYWNr",
+            "YWdlVHlwZRIQCgxIYW5rU2hha2VSZXEQABIRCg1IYW5rU2hha2VSZXNwEAES",
+            "CAoEUGluZxACEggKBFBvbmcQAxIKCgZOb3RpZnkQBBILCgdSZXF1ZXN0EAUS",
+            "DAoIUmVzcG9uc2UQBhIICgRQdXNoEAcSCAoES2ljaxAIKiYKDEVuY29kaW5n",
+            "VHlwZRIMCghQcm90b2J1ZhAAEggKBEpzb24QASo6CglTZXJ2ZXJUYWcSCQoF",
+            "RW1wdHkQABIMCghGcm9udEVuZBABEgsKB0JhY2tFbmQQAhIHCgNBbGwQA2IG",
+            "cHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.AnyReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GoPlay.Core.Protocols.StatusCode), typeof(global::GoPlay.Core.Protocols.PackageType), typeof(global::GoPlay.Core.Protocols.EncodingType), typeof(global::GoPlay.Core.Protocols.ServerTag), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Status), global::GoPlay.Core.Protocols.Status.Parser, new[]{ "Code", "Message" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Session), global::GoPlay.Core.Protocols.Session.Parser, new[]{ "Guid", "Values" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PackageInfo), global::GoPlay.Core.Protocols.PackageInfo.Parser, new[]{ "Type", "Id", "EncodingType", "Route", "ContentSize" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.PackageInfo), global::GoPlay.Core.Protocols.PackageInfo.Parser, new[]{ "Type", "Id", "EncodingType", "Route", "ContentSize", "ChunkCount", "ChunkIndex" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.Header), global::GoPlay.Core.Protocols.Header.Parser, new[]{ "Status", "Session", "PackageInfo" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.ReqHankShake), global::GoPlay.Core.Protocols.ReqHankShake.Parser, new[]{ "ClientVersion", "ServerTag", "AppKey" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::GoPlay.Core.Protocols.RespHandShake), global::GoPlay.Core.Protocols.RespHandShake.Parser, new[]{ "ServerVersion", "HeartBeatInterval", "Routes" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, })
@@ -107,7 +108,6 @@ namespace GoPlay.Core.Protocols {
   /// <summary>
   ///服务器返回的状态信息
   /// </summary>
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Status : pb::IMessage<Status>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -334,7 +334,6 @@ namespace GoPlay.Core.Protocols {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Session : pb::IMessage<Session>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -553,7 +552,6 @@ namespace GoPlay.Core.Protocols {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PackageInfo : pb::IMessage<PackageInfo>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -593,6 +591,8 @@ namespace GoPlay.Core.Protocols {
       encodingType_ = other.encodingType_;
       route_ = other.route_;
       contentSize_ = other.contentSize_;
+      chunkCount_ = other.chunkCount_;
+      chunkIndex_ = other.chunkIndex_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -665,6 +665,36 @@ namespace GoPlay.Core.Protocols {
       }
     }
 
+    /// <summary>Field number for the "ChunkCount" field.</summary>
+    public const int ChunkCountFieldNumber = 6;
+    private uint chunkCount_;
+    /// <summary>
+    ///分包总数
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ChunkCount {
+      get { return chunkCount_; }
+      set {
+        chunkCount_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "ChunkIndex" field.</summary>
+    public const int ChunkIndexFieldNumber = 7;
+    private uint chunkIndex_;
+    /// <summary>
+    ///分包索引
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ChunkIndex {
+      get { return chunkIndex_; }
+      set {
+        chunkIndex_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -685,6 +715,8 @@ namespace GoPlay.Core.Protocols {
       if (EncodingType != other.EncodingType) return false;
       if (Route != other.Route) return false;
       if (ContentSize != other.ContentSize) return false;
+      if (ChunkCount != other.ChunkCount) return false;
+      if (ChunkIndex != other.ChunkIndex) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -697,6 +729,8 @@ namespace GoPlay.Core.Protocols {
       if (EncodingType != global::GoPlay.Core.Protocols.EncodingType.Protobuf) hash ^= EncodingType.GetHashCode();
       if (Route != 0) hash ^= Route.GetHashCode();
       if (ContentSize != 0) hash ^= ContentSize.GetHashCode();
+      if (ChunkCount != 0) hash ^= ChunkCount.GetHashCode();
+      if (ChunkIndex != 0) hash ^= ChunkIndex.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -735,6 +769,14 @@ namespace GoPlay.Core.Protocols {
         output.WriteRawTag(40);
         output.WriteUInt32(ContentSize);
       }
+      if (ChunkCount != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(ChunkCount);
+      }
+      if (ChunkIndex != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(ChunkIndex);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -765,6 +807,14 @@ namespace GoPlay.Core.Protocols {
         output.WriteRawTag(40);
         output.WriteUInt32(ContentSize);
       }
+      if (ChunkCount != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(ChunkCount);
+      }
+      if (ChunkIndex != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(ChunkIndex);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -789,6 +839,12 @@ namespace GoPlay.Core.Protocols {
       }
       if (ContentSize != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ContentSize);
+      }
+      if (ChunkCount != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ChunkCount);
+      }
+      if (ChunkIndex != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ChunkIndex);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -816,6 +872,12 @@ namespace GoPlay.Core.Protocols {
       }
       if (other.ContentSize != 0) {
         ContentSize = other.ContentSize;
+      }
+      if (other.ChunkCount != 0) {
+        ChunkCount = other.ChunkCount;
+      }
+      if (other.ChunkIndex != 0) {
+        ChunkIndex = other.ChunkIndex;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -850,6 +912,14 @@ namespace GoPlay.Core.Protocols {
           }
           case 40: {
             ContentSize = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            ChunkCount = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            ChunkIndex = input.ReadUInt32();
             break;
           }
         }
@@ -887,6 +957,14 @@ namespace GoPlay.Core.Protocols {
             ContentSize = input.ReadUInt32();
             break;
           }
+          case 48: {
+            ChunkCount = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            ChunkIndex = input.ReadUInt32();
+            break;
+          }
         }
       }
     }
@@ -897,7 +975,6 @@ namespace GoPlay.Core.Protocols {
   /// <summary>
   ///协议头部信息
   /// </summary>
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Header : pb::IMessage<Header>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -1191,7 +1268,6 @@ namespace GoPlay.Core.Protocols {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ReqHankShake : pb::IMessage<ReqHankShake>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -1455,7 +1531,6 @@ namespace GoPlay.Core.Protocols {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class RespHandShake : pb::IMessage<RespHandShake>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage

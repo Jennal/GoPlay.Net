@@ -306,13 +306,13 @@ namespace GoPlay
                     if (!m_sendQueue.TryTake(out var pack, Consts.TimeOut.Client)) continue;
 
                     //update content size
-                    if (IsBlockSendByFilter(pack)) continue;
+                    if (pack.IsLastChunk && IsBlockSendByFilter(pack)) continue;
                     // Console.WriteLine($" <[C]= {pack}");
 
                     Transport.Send(pack.GetBytes(), m_cancelSource).AsTask().Wait();
                     if (m_cancelSource.Token.IsCancellationRequested) break;
 
-                    PostSendFilter(pack);
+                    if(pack.IsLastChunk) PostSendFilter(pack);
                 }
                 catch (OperationCanceledException)
                 {
@@ -340,6 +340,13 @@ namespace GoPlay
                     
                     var pack = Package.ParseRaw(data);
                     // Console.WriteLine($" =[C]> {pack}");
+                    
+                    if (pack.IsChunk)
+                    {
+                        pack = ResolveChunk(pack);
+                        if (pack.IsChunk) continue;
+                    }
+                    
                     if (IsBlockRecvByFilter(pack)) continue;
 
                     switch (pack.Header.PackageInfo.Type)
@@ -614,7 +621,12 @@ namespace GoPlay
         public void Send(Package pack)
         {
             if (m_cancelSource.Token.IsCancellationRequested) return;
-            m_sendQueue.Add(pack);
+
+            var list = pack.Split();
+            foreach (var p in list)
+            {
+                m_sendQueue.Add(p, m_cancelSource.Token);    
+            }
         }
 
         public override void Dispose()

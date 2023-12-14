@@ -169,11 +169,11 @@ namespace GoPlay
                 try
                 {
                     if (!m_sendQueue.TryTake(out package, Consts.TimeOut.Server)) continue;
-                    if (IsBlockSendByFilter(package)) continue;
+                    if (package.IsLastChunk && IsBlockSendByFilter(package)) continue;
 
                     // Console.WriteLine($" <[S]({package.Header.ClientId})= {package}");
                     Transport.Send(package.Header.ClientId, package.GetBytes());
-                    PostSendFilter(package);
+                    if (package.IsLastChunk) PostSendFilter(package);
                 }
                 catch (OperationCanceledException)
                 {
@@ -200,8 +200,15 @@ namespace GoPlay
                     pack.Header.ClientId = clientId;
                     // Console.WriteLine($" =[S]> {pack}");
 
-                    if (IsBlockRecvByFilter(pack)) continue;
+                    //处理分包
+                    if (pack.IsChunk)
+                    {
+                        pack = ResolveChunk(pack);
+                        if (pack.IsChunk) continue;
+                    }
 
+                    if (IsBlockRecvByFilter(pack)) continue;
+                    
                     switch (pack.Header.PackageInfo.Type)
                     {
                         case PackageType.HankShakeReq:
@@ -241,7 +248,11 @@ namespace GoPlay
                     throw new PushNotSupportedException();
                 }
 
-                m_sendQueue.Add(package, CanelToken);
+                var list = package.Split();
+                foreach (var p in list)
+                {
+                    m_sendQueue.Add(p, CanelToken);    
+                }
             }
             catch (Exception err)
             {

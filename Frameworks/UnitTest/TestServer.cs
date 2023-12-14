@@ -3,14 +3,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnitTest.Processors;
 using GoPlay;
+using GoPlay.Core;
 using GoPlay.Core.Debug;
 using GoPlay.Core.Encodes;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Routers;
+using GoPlay.Core.Transport.NetCoreServer;
 using GoPlay.Core.Transports.TCP;
 
 namespace UnitTest
@@ -27,12 +30,12 @@ namespace UnitTest
             
             if (_server != null) return;
             
-            _server = new Server<TcpServer>();
-            _server.Register(new TestProcessor());
-            _server.Start("127.0.0.1", 8686);
-            
-            _client = new Client<TcpClient>();
-            await _client.Connect("127.0.0.1", 8686);
+            // _server = new Server<TcpServer>();
+            // _server.Register(new TestProcessor());
+            // _server.Start("127.0.0.1", 8686);
+            //
+            // _client = new Client<TcpClient>();
+            // await _client.Connect("127.0.0.1", 8686);
         }
 
         [Test]
@@ -175,6 +178,49 @@ namespace UnitTest
         {
             var test = new TestProcessor();
             // Console.WriteLine(test.GetRouteDict().Dump());
+        }
+
+        [Test]
+        public async Task TestOverflowPackage()
+        {
+            var port = 5560;
+            var server = new Server<NcServer>();
+            server.OnError += (u, exception) =>
+            {
+                Console.WriteLine($"Server.OnError[{u}]: {exception}");
+            };
+            try
+            {
+                var sb = new StringBuilder();
+                for (int i = 0; i < Consts.Package.MAX_CHUNK_SIZE + 100; i++)
+                {
+                    sb.Append((byte)(i % byte.MaxValue));
+                }
+
+                var str = sb.ToString();
+                server.Register(new TestProcessor());
+                var task = server.Start("127.0.0.1", port);
+
+                var client = new Client<NcClient>();
+                client.OnError += (exception) =>
+                {
+                    Console.WriteLine($"Client.OnError: {exception}");
+                };
+                client.RequestTimeout = TimeSpan.MaxValue;
+                client.Connect("127.0.0.1", port).Wait();
+
+                var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
+                {
+                    Value = str
+                });
+                Console.WriteLine($"{status.Code}, {status.Message}");
+                Assert.AreEqual(StatusCode.Success, status.Code);
+                Assert.AreEqual($"[Test] Server reply: {str}", result.Value);
+            }
+            finally
+            {
+                server.Stop();
+            }
         }
     }
 }

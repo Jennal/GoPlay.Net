@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using GoPlay.Core.Encodes.Factory;
 using GoPlay.Core.Debug;
@@ -13,6 +15,9 @@ namespace GoPlay.Core.Protocols
         public Header Header;
         public byte[] RawData;
 
+        public bool IsChunk => Header.PackageInfo.ChunkCount > 1;
+        public bool IsLastChunk => Header.PackageInfo.ChunkIndex >= Header.PackageInfo.ChunkCount - 1;
+        
         public virtual void UpdateContentSize()
         {
             Header.PackageInfo.ContentSize = (uint) (RawData?.Length ?? 0);
@@ -164,6 +169,71 @@ namespace GoPlay.Core.Protocols
         public override string ToString()
         {
             return $"Header: {Header}, RawData: {RawData.Dump()}";
+        }
+
+        public virtual Package Clone()
+        {
+            byte[] rawData = null;
+            if (RawData != null)
+            {
+                using var ms = new MemoryStream(RawData);
+                rawData = ms.ToArray();
+            }
+
+            var h = Header.Clone();
+            h.ClientId = Header.ClientId;
+            return new Package
+            {
+                Header = h,
+                RawData = rawData,
+            };
+        }
+
+        public virtual IEnumerable<Package> Split()
+        {
+            UpdateContentSize();
+            if (Header.PackageInfo.ContentSize <= Consts.Package.MAX_CHUNK_SIZE)
+            {
+                yield return this;
+                yield break;
+            }
+
+            var header = Header.Clone();
+            header.PackageInfo.ChunkCount = (uint) Math.Ceiling(Header.PackageInfo.ContentSize / (float) Consts.Package.MAX_CHUNK_SIZE);
+            var chunkSize = Consts.Package.MAX_CHUNK_SIZE;
+            for (uint start=0, i=0; start < RawData.Length; start += chunkSize, i++)
+            {
+                var chunk = new byte[Math.Min(chunkSize, RawData.Length - start)];
+                Array.Copy(RawData, start, chunk, 0, chunk.Length);
+                header.PackageInfo.ChunkIndex = i;
+                header.PackageInfo.ContentSize = (uint) chunk.Length;
+                var h = header.Clone();
+                h.ClientId = Header.ClientId;
+                yield return new Package
+                {
+                    Header = h,
+                    RawData = chunk
+                };
+            }
+        }
+
+        public static Package Join(IEnumerable<Package> packs)
+        {
+            if (!packs.Any()) throw new Exception("Package.Join: packs is empty!");
+            
+            var p = packs.FirstOrDefault().Clone();
+            
+            using var ms = new MemoryStream();
+            foreach (var chunk in packs.OrderBy(o => o.Header.PackageInfo.ChunkIndex))
+            {
+                ms.Write(chunk.RawData);
+            }
+            p.RawData = ms.ToArray();
+            p.Header.PackageInfo.ChunkCount = 1;
+            p.Header.PackageInfo.ChunkIndex = 0;
+            p.Header.PackageInfo.ContentSize = (uint)p.RawData.Length;
+
+            return p;
         }
     }
 

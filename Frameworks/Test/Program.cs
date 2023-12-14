@@ -9,6 +9,7 @@ using GoPlay.Core.Interfaces;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Utils;
 using GoPlay.Core.Processors;
+using GoPlay.Core.Transport.NetCoreServer;
 using GoPlay.Core.Transports.TCP;
 
 [Processor("test")]
@@ -163,7 +164,7 @@ class Program
 
     static void EchoServer()
     {
-        var server = new Server<TcpServer>();
+        var server = new Server<NcServer>();
         server.OnClientConnected += cid => Console.WriteLine($" ++ Client Connected: {cid}");
         server.OnClientDisconnected += cid => Console.WriteLine($" -- Client Disconnected: {cid}");
         server.OnError += (cid, err) => Console.WriteLine($" -- Client Error[{cid}]: {err}");
@@ -174,7 +175,7 @@ class Program
 
     static async void EchoClient(string host)
     {
-        var client = new Client<TcpClient>();
+        var client = new Client<NcClient>();
         client.OnConnected += () => Console.WriteLine(" => Connected");
         client.OnDisconnected += () => Console.WriteLine(" => Disconnected");
         client.OnKicked += msg => Console.WriteLine($" => Kicked: {msg}");
