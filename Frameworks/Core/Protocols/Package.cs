@@ -16,7 +16,7 @@ namespace GoPlay.Core.Protocols
         public byte[] RawData;
 
         public bool IsChunk => Header.PackageInfo.ChunkCount > 1;
-        public bool IsLastChunk => Header.PackageInfo.ChunkIndex >= Header.PackageInfo.ChunkCount - 1;
+        public bool IsLastChunk => !IsChunk || Header.PackageInfo.ChunkIndex >= Header.PackageInfo.ChunkCount - 1;
         
         public virtual void UpdateContentSize()
         {
