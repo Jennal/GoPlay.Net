@@ -2995,6 +2995,8 @@ $root.GoPlay = (function() {
                  * @property {GoPlay.Core.Protocols.EncodingType|null} [EncodingType] PackageInfo EncodingType
                  * @property {number|null} [Route] PackageInfo Route
                  * @property {number|null} [ContentSize] PackageInfo ContentSize
+                 * @property {number|null} [ChunkCount] PackageInfo ChunkCount
+                 * @property {number|null} [ChunkIndex] PackageInfo ChunkIndex
                  */
 
                 /**
@@ -3053,6 +3055,22 @@ $root.GoPlay = (function() {
                 PackageInfo.prototype.ContentSize = 0;
 
                 /**
+                 * PackageInfo ChunkCount.
+                 * @member {number} ChunkCount
+                 * @memberof GoPlay.Core.Protocols.PackageInfo
+                 * @instance
+                 */
+                PackageInfo.prototype.ChunkCount = 0;
+
+                /**
+                 * PackageInfo ChunkIndex.
+                 * @member {number} ChunkIndex
+                 * @memberof GoPlay.Core.Protocols.PackageInfo
+                 * @instance
+                 */
+                PackageInfo.prototype.ChunkIndex = 0;
+
+                /**
                  * Creates a new PackageInfo instance using the specified properties.
                  * @function create
                  * @memberof GoPlay.Core.Protocols.PackageInfo
@@ -3086,6 +3104,10 @@ $root.GoPlay = (function() {
                         writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.Route);
                     if (message.ContentSize != null && Object.hasOwnProperty.call(message, "ContentSize"))
                         writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.ContentSize);
+                    if (message.ChunkCount != null && Object.hasOwnProperty.call(message, "ChunkCount"))
+                        writer.uint32(/* id 6, wireType 0 =*/48).uint32(message.ChunkCount);
+                    if (message.ChunkIndex != null && Object.hasOwnProperty.call(message, "ChunkIndex"))
+                        writer.uint32(/* id 7, wireType 0 =*/56).uint32(message.ChunkIndex);
                     return writer;
                 };
 
@@ -3138,6 +3160,14 @@ $root.GoPlay = (function() {
                             }
                         case 5: {
                                 message.ContentSize = reader.uint32();
+                                break;
+                            }
+                        case 6: {
+                                message.ChunkCount = reader.uint32();
+                                break;
+                            }
+                        case 7: {
+                                message.ChunkIndex = reader.uint32();
                                 break;
                             }
                         default:
@@ -3207,6 +3237,12 @@ $root.GoPlay = (function() {
                     if (message.ContentSize != null && message.hasOwnProperty("ContentSize"))
                         if (!$util.isInteger(message.ContentSize))
                             return "ContentSize: integer expected";
+                    if (message.ChunkCount != null && message.hasOwnProperty("ChunkCount"))
+                        if (!$util.isInteger(message.ChunkCount))
+                            return "ChunkCount: integer expected";
+                    if (message.ChunkIndex != null && message.hasOwnProperty("ChunkIndex"))
+                        if (!$util.isInteger(message.ChunkIndex))
+                            return "ChunkIndex: integer expected";
                     return null;
                 };
 
@@ -3288,6 +3324,10 @@ $root.GoPlay = (function() {
                         message.Route = object.Route >>> 0;
                     if (object.ContentSize != null)
                         message.ContentSize = object.ContentSize >>> 0;
+                    if (object.ChunkCount != null)
+                        message.ChunkCount = object.ChunkCount >>> 0;
+                    if (object.ChunkIndex != null)
+                        message.ChunkIndex = object.ChunkIndex >>> 0;
                     return message;
                 };
 
@@ -3310,6 +3350,8 @@ $root.GoPlay = (function() {
                         object.EncodingType = options.enums === String ? "Protobuf" : 0;
                         object.Route = 0;
                         object.ContentSize = 0;
+                        object.ChunkCount = 0;
+                        object.ChunkIndex = 0;
                     }
                     if (message.Type != null && message.hasOwnProperty("Type"))
                         object.Type = options.enums === String ? $root.GoPlay.Core.Protocols.PackageType[message.Type] === undefined ? message.Type : $root.GoPlay.Core.Protocols.PackageType[message.Type] : message.Type;
@@ -3321,6 +3363,10 @@ $root.GoPlay = (function() {
                         object.Route = message.Route;
                     if (message.ContentSize != null && message.hasOwnProperty("ContentSize"))
                         object.ContentSize = message.ContentSize;
+                    if (message.ChunkCount != null && message.hasOwnProperty("ChunkCount"))
+                        object.ChunkCount = message.ChunkCount;
+                    if (message.ChunkIndex != null && message.hasOwnProperty("ChunkIndex"))
+                        object.ChunkIndex = message.ChunkIndex;
                     return object;
                 };
 

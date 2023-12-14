@@ -4,6 +4,7 @@ import { ByteArray } from "./ByteArray";
 import IdGen from "./IdGen";
 
 let idGen = new IdGen(255);
+const MAX_CHUNK_SIZE = 65535 - 2048;
 
 export default class Package<T> {
     public header: GoPlay.Core.Protocols.Header;
@@ -43,6 +44,53 @@ export default class Package<T> {
         let encoder = getEncoder(this.header.PackageInfo.EncodingType);
         let data = encoder.decode<T>(type, this.rawData);
         return new Package<T>(this.header, data, this.rawData);
+    }
+
+    public split(): Package<any>[] {
+        this.updateContentSize();
+
+        if (this.header.PackageInfo.ContentSize <= MAX_CHUNK_SIZE)
+        {
+            return [this];
+        }
+
+        let arr = [];
+        let header = JSON.parse(JSON.stringify(this.header)); //clone
+        header.PackageInfo.ChunkCount = Math.ceil(header.PackageInfo.ContentSize / MAX_CHUNK_SIZE);
+        let chunkSize = MAX_CHUNK_SIZE;
+        for (let start=0, i=0; start < this.rawData.length; start += chunkSize, i++)
+        {
+            let size = Math.min(chunkSize, this.rawData.length - start);
+            let chunk = this.rawData.slice(start, start + size);
+            header.PackageInfo.ChunkIndex = i;
+            header.PackageInfo.ContentSize = chunk.length;
+
+            arr.push(Package.createRaw(GoPlay.Core.Protocols.Header.fromObject(header), new ByteArray(chunk)));
+        }
+
+        return arr;
+    }
+
+    public static join(packages: Package<any>[]): Package<any> {
+        if (packages.length <= 0) return null;
+
+        let header = GoPlay.Core.Protocols.Header.create(packages[0].header);
+        let rawData = new ByteArray(packages.reduce((total, pkg) => total + pkg.rawData.length, 0));
+        packages = packages.sort((a, b) => a.header.PackageInfo.ChunkIndex - b.header.PackageInfo.ChunkIndex);
+        for (let i=0; i<packages.length; i++)
+        {
+            let pkg = packages[i];
+            console.log(pkg.header.PackageInfo.ChunkIndex, i);
+            if (pkg.header.PackageInfo.ChunkIndex != i)
+            {
+                return null;
+            }
+            rawData = rawData.writeBytes(pkg.rawData);
+        }
+        header.PackageInfo.ChunkCount = 1;
+        header.PackageInfo.ChunkIndex = 0;
+        header.PackageInfo.ContentSize = rawData.length;
+        return Package.createRaw(header, rawData);
     }
 
     public static tryDecodeRaw(bytes: ByteArray): Package<any> {

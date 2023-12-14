@@ -68,6 +68,23 @@
             console.log("Requst[test.err] => ", status, data);
         }
 
+        async function sendChunkClicked() {
+            var data = "";
+            for (var i = 0; i < 65536*2; i++) {
+                data += "0";
+            }
+            data = PBString.create({"Value":data});
+            // console.log(data);
+
+            var {status, data} = await goplay.request("test.echo", data, PBString);
+            if (status.Code == StatusCode.Success) {
+                writeLn("Requst[test.echo] => ", status, data);
+            } else {
+                writeLn("<span style='color:red'>", "Requst[test.echo] => ", status, data, "</span>");
+            }
+            console.log("Requst[test.echo] => ", status, data);
+        }
+
         goplay.on(goplay.Consts.Events.CONNECTED, function() {
             console.log("websocket connected");
             writeLn("websocket connected");
@@ -98,6 +115,7 @@
             document.getElementById("btnDisconnect").disabled = !goplay.isConnected;
             document.getElementById("btnSend").disabled = !goplay.isConnected;
             document.getElementById("btnError").disabled = !goplay.isConnected;
+            document.getElementById("btnChunk").disabled = !goplay.isConnected;
         }
 
         function disconnect() {
@@ -107,6 +125,7 @@
             document.getElementById("btnDisconnect").disabled = !goplay.isConnected;
             document.getElementById("btnSend").disabled = !goplay.isConnected;
             document.getElementById("btnError").disabled = !goplay.isConnected;
+            document.getElementById("btnChunk").disabled = !goplay.isConnected;
         }
     </script>
 </head>
@@ -121,6 +140,7 @@
         <input id="data" type="text" name="data" />
         <input id="btnSend" type="button" value="Send" onclick="javascript:sendClicked();" disabled />
         <input id="btnError" type="button" value="Test Error" onclick="javascript:requestError();" disabled />
+        <input id="btnChunk" type="button" value="Send Chunk" onclick="javascript:sendChunkClicked();" disabled />
     </div>
     <p id="content">
 

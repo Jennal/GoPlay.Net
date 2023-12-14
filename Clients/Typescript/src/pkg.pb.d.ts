@@ -1334,6 +1334,12 @@ export namespace GoPlay {
 
                 /** PackageInfo ContentSize */
                 ContentSize?: (number|null);
+
+                /** PackageInfo ChunkCount */
+                ChunkCount?: (number|null);
+
+                /** PackageInfo ChunkIndex */
+                ChunkIndex?: (number|null);
             }
 
             /** Represents a PackageInfo. */
@@ -1359,6 +1365,12 @@ export namespace GoPlay {
 
                 /** PackageInfo ContentSize. */
                 public ContentSize: number;
+
+                /** PackageInfo ChunkCount. */
+                public ChunkCount: number;
+
+                /** PackageInfo ChunkIndex. */
+                public ChunkIndex: number;
 
                 /**
                  * Creates a new PackageInfo instance using the specified properties.

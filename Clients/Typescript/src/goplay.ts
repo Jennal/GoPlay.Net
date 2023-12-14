@@ -62,6 +62,7 @@ export default class goplay {
     private static handShake: GoPlay.Core.Protocols.RespHandShake;
     private static requestMap = {};
     private static pushMap = {};
+    private static chunkMap = {};
     
     public static emit(event: string, ...args: any[]) {
         return goplay.emitter.emit(event, ...args);
@@ -153,12 +154,35 @@ export default class goplay {
 
     public static send(pack: Package<any>) {
         goplay.emit(Consts.Events.BEFORE_SEND, pack);
-        var data = pack.encode();
-        if (goplay.debug) console.log("Send: ", pack, data);
-        var buffer = new ByteArray(2 + data.length);
-        buffer.writeUint16(data.length);
-        buffer = buffer.writeBytes(data);
-        goplay.ws.send(buffer.data);
+
+        var packs = pack.split();
+        for (var i = 0; i < packs.length; i++) {
+            var p = packs[i];
+            var data = p.encode();
+            if (goplay.debug) console.log("Send: ", p, data);
+            var buffer = new ByteArray(2 + data.length);
+            buffer.writeUint16(data.length);
+            buffer = buffer.writeBytes(data);
+            goplay.ws.send(buffer.data);
+        }
+    }
+
+    private static getChunkKey(pack: Package<any>): string {
+        return `${pack.header.PackageInfo.Route}_${pack.header.PackageInfo.Id}_${pack.header.PackageInfo.ChunkCount}`;
+    }
+
+    private static resolveChunk(pack: Package<any>): Package<any> {
+        var key = this.getChunkKey(pack);
+        if (!goplay.chunkMap.hasOwnProperty(key)) {
+            goplay.chunkMap[key] = [];
+        }
+
+        goplay.chunkMap[key].push(pack);
+        if (goplay.chunkMap[key].length < pack.header.PackageInfo.ChunkCount) return pack;
+
+        var packages = goplay.chunkMap[key];
+        delete goplay.chunkMap[key];
+        return Package.join(packages);
     }
 
     private static recv(): Package<any> {
@@ -175,6 +199,12 @@ export default class goplay {
         var data = goplay.buffer.readBytes(packSize);
         var pack = Package.tryDecodeRaw(data);
         if (goplay.debug) console.log("Recv: ", pack);
+
+        if (!pack) return null;
+        if (pack.header.PackageInfo.ChunkCount > 1) {
+            pack = goplay.resolveChunk(pack);
+            if (pack.header.PackageInfo.ChunkCount > 1) return null;
+        }
 
         goplay.emit(Consts.Events.BEFORE_RECV, pack);
         //TODO: remove read data from buffer

@@ -100,4 +100,37 @@ describe('Package', () => {
     expect(packageObj.header.PackageInfo.Id).toBe(header.PackageInfo.Id);
     expect(packageObj.rawData).toEqual(rawData);
   });
+
+  it('should split a package correctly', () => {
+    // Create a test package
+    const header = new GoPlay.Core.Protocols.Header();
+    header.PackageInfo = new GoPlay.Core.Protocols.PackageInfo();
+    header.PackageInfo.Route = 1;
+    header.PackageInfo.EncodingType = GoPlay.Core.Protocols.EncodingType.Protobuf;
+    header.PackageInfo.Type = GoPlay.Core.Protocols.PackageType.Request;
+    header.PackageInfo.Id = 123;
+    let rawData = new ByteArray(65535 * 2);
+    for (let i = 0; i < 65535 * 2; i++) {
+      rawData = rawData.writeUint8(i % 0xff);
+    }
+    // console.log(rawData.length, rawData.data);
+    const packageObj = Package.createRaw(header, rawData);
+
+    // Split the package
+    const splitPackages = packageObj.split();
+
+    // Verify that the split packages match the original package
+    expect(splitPackages.length).toBe(3);
+    for (let i = 0; i < splitPackages.length; i++) {
+      expect(splitPackages[i].header.PackageInfo.ChunkIndex).toBe(i);
+      expect(splitPackages[i].header.PackageInfo.Route).toBe(header.PackageInfo.Route);
+      expect(splitPackages[i].header.PackageInfo.EncodingType).toBe(header.PackageInfo.EncodingType);
+      expect(splitPackages[i].header.PackageInfo.Type).toBe(header.PackageInfo.Type);
+      expect(splitPackages[i].header.PackageInfo.Id).toBe(header.PackageInfo.Id);
+    }
+
+    const pack2 = Package.join(splitPackages);
+    console.log(pack2.rawData.length, pack2.rawData.data);
+    expect(pack2.rawData).toEqual(rawData);
+  });
 });
