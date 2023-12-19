@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using OfficeOpenXml;
 
 namespace GoPlay.Generators.Config
@@ -163,6 +164,17 @@ namespace GoPlay.Generators.Config
         {
             long result = 0;
             if (long.TryParse(val, out result))
+            {
+                return result;
+            }
+
+            throw new Exception(ErrFormat(tableName, name, type, row, val));
+        }
+        
+        public static BigInteger ConvertBigInteger(string tableName, string name, string type, int row, string val)
+        {
+            BigInteger result = 0;
+            if (BigInteger.TryParse(val, out result))
             {
                 return result;
             }

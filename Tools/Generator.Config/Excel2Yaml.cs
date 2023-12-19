@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using DotLiquid;
 using Generator.Core;
+using GoPlay.Generators.Config.CustomYamlConverter;
 using OfficeOpenXml;
 using YamlDotNet.Serialization;
 
@@ -31,7 +32,7 @@ public class Excel2Yaml
         PrepareResolvers();
 
         var cache = ExportCache.Load(_xlsFolder, platform);
-        _serializer = new SerializerBuilder().Build();
+        _serializer = BuildSerializer();
         _finishList = new Dictionary<string, ConfValues>();
 
         if (!Directory.Exists(xlsFolder))
@@ -75,6 +76,16 @@ public class Excel2Yaml
 
         cache.RefreshExportScriptableObject(_xlsFolder, platform, files);
         ExporterUtils.Info("Export Complete!");
+    }
+
+    private static ISerializer BuildSerializer()
+    {
+        var bigIntegerConverter = new BigIntegerConverter();
+        var builder = new SerializerBuilder()
+            .WithTypeConverter(bigIntegerConverter);
+
+        bigIntegerConverter.ValueSerializer = builder.BuildValueSerializer();
+        return builder.Build();
     }
 
     private static void PrepareResolvers()
