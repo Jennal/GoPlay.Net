@@ -83,10 +83,11 @@ class Program
             cmd.AddOption(new Option<bool>(new[] {"-c", "--clear-old"}, () => false, "删除旧脚本和数据"));
             cmd.AddOption(new Option<string>(new[] {"-tc", "--template-conf"}, () => "", "Conf代码模板的liquid文件路径"));
             cmd.AddOption(new Option<string>(new[] {"-tm", "--template-manager"}, () => "", "Manager代码模板的liquid文件路径"));
+            cmd.AddOption(new Option<string>(new[] {"-te", "--template-enum"}, () => "", "Enum代码模板的liquid文件路径"));
 
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
-                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager) =>
+                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum) =>
                 {
                     var watch = new Stopwatch();
                     watch.Start();
@@ -105,12 +106,12 @@ class Program
 
                         if (!string.IsNullOrEmpty(outCodeFolder))
                         {
-                            Excel2Enum.Generate(inFolder, outCodeFolder, false);
+                            Excel2Enum.Generate(inFolder, outCodeFolder, false, templateEnum);
                             Excel2Script.Generate(inFolder, outCodeFolder, platform, templateConf, templateManager);
                         }
                         else
                         {
-                            Excel2Enum.Generate(inFolder, outCodeFolder, true);
+                            Excel2Enum.Generate(inFolder, outCodeFolder, true, templateEnum);
                         }
 
                         Excel2Yaml.Generate(inFolder, outDataFolder, platform);

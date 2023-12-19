@@ -12,7 +12,7 @@ public class Excel2Enum
     
     private static string CLASS_TEMPLETE = GeneratorUtils.GetTpl("tpl_class_enum");
     
-    public static void Generate(string xlsFolder, string csFolder, bool isDryRun)
+    public static void Generate(string xlsFolder, string csFolder, bool isDryRun, string tplPath="")
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
@@ -24,6 +24,7 @@ public class Excel2Enum
 
         if (!CheckConflictNames(xlsFolder)) return;
 
+        var tpl = string.IsNullOrEmpty(tplPath) ? CLASS_TEMPLETE : File.ReadAllText(tplPath);
         var files = Directory.EnumerateFiles(xlsFolder, "*.*")
             .Where(p => ExporterConsts.extensionPattern.Any(p.EndsWith))
             .Where(xls => !xls.EndsWith(".converting") &&
@@ -49,7 +50,7 @@ public class Excel2Enum
 //                            Debug.Log($"{xls} => {name}");   
                         ExporterUtils.Info(
                             $"正在导出 {Path.GetFileNameWithoutExtension(xls)} => {name.Substring(ExporterConsts.exportPrefix.Length)} ...");
-                        ConvertToEnum(csFolder, xls, sheet, isDryRun);
+                        ConvertToEnum(csFolder, xls, sheet, isDryRun, tpl);
                     }
                 }
             }
@@ -110,7 +111,7 @@ public class Excel2Enum
         return true;
     }
 
-    static void ConvertToEnum(string enumFolder, string xls, ExcelWorksheet table, bool isDryRun)
+    static void ConvertToEnum(string enumFolder, string xls, ExcelWorksheet table, bool isDryRun, string tpl)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
         if (string.IsNullOrEmpty(tableName))
@@ -120,10 +121,10 @@ public class Excel2Enum
         }
 
         var rowColumns = ExporterUtils.GetRowColumn(table);
-        ConvertTable(enumFolder, xls, table, rowColumns, isDryRun);
+        ConvertTable(enumFolder, xls, table, rowColumns, isDryRun, tpl);
     }
 
-    static void ConvertTable(string enumFolder, string xls, ExcelWorksheet table, Vector2Int rowColumn, bool isDryRun)
+    static void ConvertTable(string enumFolder, string xls, ExcelWorksheet table, Vector2Int rowColumn, bool isDryRun, string tpl)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
         if (rowColumn.x <= 0 || rowColumn.y <= 0) return;
@@ -174,7 +175,7 @@ public class Excel2Enum
 
         if (!isDryRun)
         {
-            var content = GeneratorUtils.RenderTpl(CLASS_TEMPLETE, new { data = tplData });
+            var content = GeneratorUtils.RenderTpl(tpl, new { data = tplData });
             WriteEntityFile(enumFolder, entityName, content);
         }
     }
