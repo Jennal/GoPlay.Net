@@ -120,6 +120,7 @@ export default class goplay {
         if (!url) throw new Error("url is empty");
         if (goplay.isConnected && goplay.url == url) return true;
         if (goplay.isConnected && goplay.url != url) await goplay.disconnect();
+        if (goplay.connectTask) return goplay.connectTask.promise;
 
         goplay.url = url;
         let ws = new WebSocket(url);
@@ -136,6 +137,8 @@ export default class goplay {
             if (!goplay.connectTask) return;
 
             goplay.connectTask.result = false;
+            goplay.connectTask = null;
+            goplay.connectTimeOutId = null;
         }, Consts.TimeOut.CONNECT);
 
         return goplay.connectTask.promise;
