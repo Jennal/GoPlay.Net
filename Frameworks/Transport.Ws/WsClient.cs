@@ -3,8 +3,6 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using GoPlay.Core.Transports;
@@ -122,7 +120,9 @@ namespace GoPlay.Core.Transport.Ws
 
         protected virtual string KeyPath => "client.pfx";
         protected virtual string KeyPass => "qwerty";
-        
+
+        public override bool IsConnected => m_client?.IsConnected ?? false;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_cancelSource = new CancellationTokenSource();

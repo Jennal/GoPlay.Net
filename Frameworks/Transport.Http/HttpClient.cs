@@ -14,6 +14,8 @@ namespace GoPlay.Core.Transport.Http
         private CancellationTokenSource m_cancelSource;
         private BlockingCollection<byte[]> m_responseChannel = new BlockingCollection<byte[]>(byte.MaxValue);
 
+        public override bool IsConnected => m_client?.IsConnected ?? false;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_cancelSource = new CancellationTokenSource();

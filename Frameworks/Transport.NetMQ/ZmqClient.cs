@@ -11,11 +11,15 @@ namespace GoPlay.Core.Transports.ZMQ
         protected string m_connectionString;
         protected ClientSocket m_socket;
 
+        private bool m_connected;
+        public override bool IsConnected => m_socket != null && m_connected;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_connectionString = $"tcp://{host}:{port}";
             m_socket = new ClientSocket();
             m_socket.Connect(m_connectionString);
+            m_connected = true;
         }
 
         public override void Disconnect()
@@ -24,6 +28,7 @@ namespace GoPlay.Core.Transports.ZMQ
             m_socket.Close();
             m_socket.Dispose();
             m_socket = null;
+            m_connected = false;
         }
 
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)

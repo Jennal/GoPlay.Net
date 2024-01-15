@@ -14,7 +14,9 @@ namespace GoPlay.Core.Transports.TCP
         protected System.Net.Sockets.TcpClient m_client = null;
         protected byte[] m_readBuffer = new byte[Consts.Buffer.ReadSize];
         protected byte[] m_readSizeBuffer = new byte[2];
-        
+
+        public override bool IsConnected => m_client?.Connected ?? false;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             if (m_client != null) Disconnect();

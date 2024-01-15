@@ -7,7 +7,9 @@ namespace GoPlay.Core.Transports
     public abstract class TransportClientBase : IDisposable
     {
         public event Action OnConnected;
-        public event Action OnDisconnected; 
+        public event Action OnDisconnected;
+
+        public abstract bool IsConnected { get; }
 
         public virtual void Connect(string host, int port)
         {

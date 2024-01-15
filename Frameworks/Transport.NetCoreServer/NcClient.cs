@@ -83,7 +83,9 @@ namespace GoPlay.Core.Transport.NetCoreServer
     {
         private PackClient m_client;
         private CancellationTokenSource m_cancelSource;
-        
+
+        public override bool IsConnected => m_client?.IsConnected ?? false;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_cancelSource = new CancellationTokenSource();

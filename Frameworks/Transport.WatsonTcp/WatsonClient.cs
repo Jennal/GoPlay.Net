@@ -14,7 +14,9 @@ namespace GoPlay.Core.Transports.Watson
 
         protected TaskCompletionSource<bool> m_connectTask;
         protected TaskCompletionSource<bool> m_disconnectTask;
-        
+
+        public override bool IsConnected => m_client?.Connected ?? false;
+
         public override void Connect(string host, int port, TimeSpan timeout)
         {
             m_readChannel = new BlockingCollection<byte[]>();

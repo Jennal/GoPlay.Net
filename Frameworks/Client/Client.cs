@@ -32,7 +32,8 @@ namespace GoPlay
         
         protected CancellationTokenSource m_cancelSource = new CancellationTokenSource();
         protected ClientStatus m_status;
-        public bool IsConnected => m_status == ClientStatus.Connected;
+        public abstract bool IsConnected { get; }
+
         public ClientStatus Status => m_status;
 
         public string ClientVersion;
@@ -155,6 +156,8 @@ namespace GoPlay
                 OnDisconnectedEvent();
             }
         }
+
+        public override bool IsConnected => m_status == ClientStatus.Connected && Transport.IsConnected;
 
         public override async Task<bool> Connect(string host, int port, TimeSpan timeout)
         {
