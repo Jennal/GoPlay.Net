@@ -99,6 +99,7 @@ export default class goplay {
     public static get isConnected(): boolean {
         if (!goplay.ws) return false;
         if (goplay.ws.readyState > 1) return false;
+        if (!goplay.handShake) return false;
 
         return true;
     }
@@ -145,12 +146,15 @@ export default class goplay {
     }
     
     public static async disconnect(): Promise<boolean> {
-        if (!goplay.ws) return true;
+        if (goplay.connectTask) await goplay.connectTask.promise;
+        if (!goplay.isConnected) return true;
 
         goplay.disconnectTask = new TaskCompletionSource<boolean>();
         if (goplay.ws.readyState <= 1) goplay.ws.close();
         else goplay.disconnectTask.result = true;
         goplay.ws = null;
+        goplay.handShake = null;
+        goplay.buffer = null;
         goplay.emit(Consts.Events.DISCONNECTED);
         return goplay.disconnectTask.promise;
     }

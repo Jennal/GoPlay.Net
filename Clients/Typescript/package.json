@@ -1,6 +1,6 @@
 {
   "name": "goplay-ws",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Websocket client for GoPlay.Net (https://github.com/jennal/goplay.net)",
   "main": "src/goplay.ts",
   "scripts": {
