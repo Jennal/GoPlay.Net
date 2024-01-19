@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\Processors.Admin\Processors.Admin.csproj" />
+    <ProjectReference Include="..\Processors.DbSaver\Processors.DbSaver.csproj" />
+    <ProjectReference Include="..\Processors.Logic\Processors.Logic.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Colorful.Console" Version="1.2.15" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="GoPlay.Core.Transport.NetCoreServer" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="0.2.9" />
+  </ItemGroup>
+
+</Project>
