@@ -1,0 +1,10 @@
+{
+    "Host": "*:9102",
+    "MySql": "Server=mysql;Port=3306;Database=test;User=root;Password=password;TreatTinyAsBoolean=true;CharacterSet=utf8mb4;",
+    "Redis": {
+        "Host": "redis",
+        "Port": 6379,
+        "Pool": 100,
+        "Db": 0
+    }
+}

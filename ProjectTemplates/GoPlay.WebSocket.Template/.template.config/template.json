@@ -1,0 +1,14 @@
+{
+    "author": "Jennal",
+    "classifications": [ "GoPlay.Net", "WebSocket", "Template" ],
+    "name": "GoPlay.Net WebSocket Server Project Template",
+    "identity": "GoPlay.Template.WebSocket",
+    "shortName": "GoPlay.Template.WebSocket",
+    "defaultName": "GoPlayWebSocketServer",
+    "tags": {
+        "language": "C#",
+        "type": "solution"
+    },
+    "sourceName": "GoPlay.Template.WebSocket",
+    "preferNameDirectory": true
+  }

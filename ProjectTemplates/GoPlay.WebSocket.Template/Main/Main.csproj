@@ -20,6 +20,8 @@
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="GoPlay.Core.Transport.NetCoreServer" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="0.2.9" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,8 @@
 using System.CommandLine.NamingConventionBinder;
 using GoPlay;
 using GoPlay.Common;
-using GoPlay.Core.Transport.NetCoreServer;
+using GoPlay.Core.Transport.Ws;
+using GoPlay.Core.Transport.Wss;
 using GoPlayProj.Processors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -70,7 +71,7 @@ public static partial class Program
 
 internal class GoPlayProjService : IHostedService
 {
-    private Server<NcServer> _server;
+    private Server<WsServer> _server;
     private Task _serverTask;
     
     private string _host;
@@ -82,9 +83,9 @@ internal class GoPlayProjService : IHostedService
         _port = port;
     }
 
-    public Server<NcServer> InitServer()
+    public Server<WsServer> InitServer()
     {
-        _server = new Server<NcServer>();
+        _server = new Server<WsServer>();
         Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff)}] Server<{_server.TransportType.Name}> starting: {_host}:{_port}");
 
         _server.RegisterFilter(new LoggerFilter());

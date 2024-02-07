@@ -4,7 +4,7 @@
     "name": "GoPlay.Net Tcp Server Project Template",
     "identity": "GoPlay.Template.Tcp",
     "shortName": "GoPlay.Template.Tcp",
-    "defaultName": "GoPlayTcpServer1",
+    "defaultName": "GoPlayTcpServer",
     "tags": {
         "language": "C#",
         "type": "solution"

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GoPlay.Client" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="0.2.9" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\Processors.Logic\Processors.Logic.csproj" />
+    <ProjectReference Include="..\ProcessorsBase\ProcessorsBase.csproj" />
+  </ItemGroup>
+
+</Project>
