@@ -173,8 +173,13 @@ namespace GoPlay.Generators.Config
         
         public static BigInteger ConvertBigInteger(string tableName, string name, string type, int row, string val)
         {
-            BigInteger result = 0;
-            if (BigInteger.TryParse(val, out result))
+            if (val.Contains("E"))
+            {
+                var bi = ParseExtended(val);
+                return bi;
+            }
+            
+            if (BigInteger.TryParse(val, out var result))
             {
                 return result;
             }
@@ -182,6 +187,24 @@ namespace GoPlay.Generators.Config
             throw new Exception(ErrFormat(tableName, name, type, row, val));
         }
 
+        public static (decimal multiplier, int exponent) Decompose(string value)
+        {
+            var split = value.Split("eE".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            return (decimal.Parse(split[0]), int.Parse(split[1]));
+        }
+        public static int GetDecimalPlaces(decimal value) 
+            => BitConverter.GetBytes(decimal.GetBits(value)[3])[2];
+
+        public static BigInteger ParseExtended(string value)
+        {
+            var (multiplier, exponent) = Decompose(value);
+
+            var decimalPlaces = GetDecimalPlaces(multiplier);
+            var power = (long) Math.Pow(10, decimalPlaces);
+
+            return (BigInteger.Pow(10, exponent) * (long) (multiplier * power)) / power;
+        }
+        
         /// <summary>
         /// 1, 2, 3, 4
         /// </summary>

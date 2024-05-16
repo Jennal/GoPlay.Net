@@ -6,7 +6,28 @@ namespace GoPlay.Generators.Config
     public class BigIntegerResolver : TypeResolverBase<BigInteger>
     {
         public override string TypeName => "BigInteger";
-        
+
+        public override bool RecognizeType(string typeName)
+        {
+            var typeNames = new[]
+            {
+                "BigInt",
+                "BigInteger",
+                "ObscuredBigInteger",
+                "ObscuredBigInt",
+            };
+
+            foreach (var tn in typeNames)
+            {
+                if (string.Equals(typeName, tn, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public override string GetScriptClone(string fieldName)
         {
             return fieldName;
