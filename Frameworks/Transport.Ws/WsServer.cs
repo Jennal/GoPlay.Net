@@ -275,8 +275,8 @@ namespace GoPlay.Core.Transport.Ws
 
         public override void DisconnectClient(uint clientId, Exception err)
         {
-            //TODO:
-            //DO NOTHING ?
+            if (!m_server.GetSession(clientId, out var session)) return;
+            session.Close(0);
         }
 
         internal void OnConnected(uint clientId)
