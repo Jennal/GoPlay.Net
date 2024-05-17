@@ -5,13 +5,14 @@
     <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
     <title>Goplay Client Websocket Test</title>
     <script src="../../protobuf.min.js"></script>
+    <script src="../../long_umd_v5.2.3.js"></script>
     <script src="../../pb.helpers.js"></script>
-    <script src="../../basic.pb.js"></script>
-    <script src="../../protocol.pb.js"></script>
+    <script src="../../pkg.pb.js"></script>
     <script src="../../goplay.client.js"></script>
     <script src="echo.pb.js"></script>
     <script>
         var PBString = protobuf.roots["default"].proto.String;
+        var PBLong = protobuf.roots["default"].proto.Long;
 
         function writeLn(line) {
             var content = document.getElementById("content");
@@ -63,7 +64,7 @@
             console.log("echo.push: ", data)
             writeLn("echo.push: " + data);
         })
-        goplay.connect("localhost", 1234)
+        goplay.connect("localhost", 8888)
     </script>
 </head>
 

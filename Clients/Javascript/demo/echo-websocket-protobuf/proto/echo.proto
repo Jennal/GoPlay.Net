@@ -4,3 +4,7 @@ package proto;
 message String {
     string Value = 1;
 }
+
+message Long {
+    int64 Value = 1;
+}

@@ -20,6 +20,15 @@ public class TestProcessor : ProcessorBase
 
     public string Prefix = "Test";
     
+    [Request("inc")]
+    public PbLong Inc(Header header, PbLong value)
+    {
+        return new PbLong
+        {
+            Value = value.Value + 1
+        };
+    }
+    
     [Request("echo")]
     public PbString Echo(Header header, PbString str)
     {

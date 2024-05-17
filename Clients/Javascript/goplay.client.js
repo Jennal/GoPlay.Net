@@ -1,4 +1,6 @@
-const { encodeStatusCode } = require("./protocol.pb");
+const encodeStatusCode = $root.GoPlay.Core.Protocols.StatusCode;
+const encodePackageType = $root.GoPlay.Core.Protocols.PackageType;
+const encodeEncodingType = $root.GoPlay.Core.Protocols.EncodingType;
 
 (function (exports, ByteArray) {
     /* defines */
