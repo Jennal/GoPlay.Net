@@ -97,9 +97,9 @@ namespace GoPlay.Generators.Extension
             {
                 var content = GeneratorUtils.RenderTpl(tpl, new
                 {
-                    data = data,
-                    pushes = pushes,
-                    namespaces = ns,
+                    data = data.OrderBy(o => o.route).ToList(),
+                    pushes = pushes.OrderBy(o => o.route).ToList(),
+                    namespaces = ns.Distinct().OrderBy(o => o).ToList(),
                 });
                 File.WriteAllText(outFile, content);
             }
