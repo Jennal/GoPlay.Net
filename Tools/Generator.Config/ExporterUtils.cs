@@ -178,7 +178,9 @@ namespace GoPlay.Generators.Config
                 var bi = ParseExtended(val);
                 return bi;
             }
-            
+         
+            val = val.Replace(",", "");
+            if (val.Contains(".")) val = val.Substring(0, val.IndexOf('.'));
             if (BigInteger.TryParse(val, out var result))
             {
                 return result;
