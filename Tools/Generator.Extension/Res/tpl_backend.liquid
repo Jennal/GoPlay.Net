@@ -40,7 +40,7 @@ namespace GoPlay.Extension.Backend
                     {%- capture generic_param -%}{{item.param_type}}{% endcapture %} 
                 {%- endif -%} 
             {%- endif -%}
-            {%- if item.return_type != "void" -%} 
+            {%- if item.return_type != "void" and item.return_type != "Task" -%} 
                 {%- capture return_type -%}Task<{{return_generic_param}}>{%- endcapture %} 
                 {%- capture method -%}Request<{{generic_param}}>{%- endcapture %} 
                 {%- assign return = "return " -%} 
