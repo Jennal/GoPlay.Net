@@ -86,6 +86,7 @@ namespace GoPlay
 
         public abstract void ErrorFilter(uint clientId, Exception err);
         public abstract Task<Status> Request<T>(string route, T data);
+        public abstract Task<Status> Request(string route);
         public abstract Task<(Status, RT)> Request<T, RT>(string route, T data);
         public abstract Task<(Status, RT)> Request<RT>(string route);
         public abstract void Notify<T>(string route, T data);
@@ -523,6 +524,18 @@ namespace GoPlay
         {
             var routeId = GetRouteId(route);
             var pack = Package.Create(routeId, data, PackageType.Request, EncodingType);
+            
+            var task = new TaskCompletionSource<Status>(TaskCreationOptions.RunContinuationsAsynchronously);
+            m_requestCallbacks[pack.Header.PackageInfo.Id] = (DateTime.UtcNow, task);
+            
+            Send(pack);
+            return task.Task;
+        }
+
+        public override Task<Status> Request(string route)
+        {
+            var routeId = GetRouteId(route);
+            var pack = Package.Create(routeId, PackageType.Request, EncodingType);
             
             var task = new TaskCompletionSource<Status>(TaskCreationOptions.RunContinuationsAsynchronously);
             m_requestCallbacks[pack.Header.PackageInfo.Id] = (DateTime.UtcNow, task);
