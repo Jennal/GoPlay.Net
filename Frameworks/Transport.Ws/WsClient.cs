@@ -54,12 +54,14 @@ namespace GoPlay.Core.Transport.Ws
         {
             // Console.WriteLine($"WebSocket client connected a new session with Id {Id}");
             m_wsConnected = true;
+            m_client.InvokeOnConnected();
         }
 
         public override void OnWsDisconnected()
         {
             // Console.WriteLine($"WebSocket client disconnected a session with Id {Id}");
             m_wsConnected = false;
+            m_client.InvokeOnDisconnected();
         }
         
         public override void OnWsReceived(byte[] buffer, long offset, long size)
@@ -201,6 +203,16 @@ namespace GoPlay.Core.Transport.Ws
         {
             m_cancelSource?.Dispose();
             m_client?.Dispose();
+        }
+        
+        internal new void InvokeOnConnected()
+        {
+            base.InvokeOnConnected();
+        }
+
+        internal new void InvokeOnDisconnected()
+        {
+            base.InvokeOnDisconnected();
         }
     }
 }

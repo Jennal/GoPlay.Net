@@ -12,15 +12,28 @@ namespace GoPlay.Core.Transport.NetCoreServer
 {
     class PackClient : TcpClient
     {
+        private NcClient m_client;
+        
         public BlockingCollection<byte[]> RecvChannel = new BlockingCollection<byte[]>(byte.MaxValue);
         public SocketError LastError;
 
         private CancellationToken m_token;
         private byte[] m_buffer;
         
-        public PackClient(IPAddress address, int port, CancellationToken token) : base(address, port)
+        public PackClient(NcClient client, IPAddress address, int port, CancellationToken token) : base(address, port)
         {
+            m_client = client;
             m_token = token;
+        }
+
+        protected override void OnConnected()
+        {
+            m_client.InvokeOnConnected();
+        }
+
+        protected override void OnDisconnected()
+        {
+            m_client.InvokeOnDisconnected();
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
@@ -98,7 +111,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
                 
                 try
                 {
-                    m_client = new PackClient(address, port, m_cancelSource.Token);
+                    m_client = new PackClient(this, address, port, m_cancelSource.Token);
 
                     m_client.ConnectAsync();
                     var startTime = DateTime.UtcNow;
@@ -162,6 +175,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
         {
             m_client?.Dispose();
             m_cancelSource?.Dispose();
+        }
+        
+        internal new void InvokeOnConnected()
+        {
+            base.InvokeOnConnected();
+        }
+
+        internal new void InvokeOnDisconnected()
+        {
+            base.InvokeOnDisconnected();
         }
     }
 }
