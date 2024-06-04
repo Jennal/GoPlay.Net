@@ -154,6 +154,7 @@ namespace GoPlay
         {
             if (m_status != ClientStatus.Disconnecting && m_status != ClientStatus.Disconnected)
             {
+                m_status = ClientStatus.Disconnected;
                 OnDisconnectedEvent();
             }
         }
