@@ -45,7 +45,10 @@ namespace GoPlay.Core.Transport.Wss
         
         public string GetHeader(string key)
         {
-            if (Headers.TryGetValue(key, out var value)) return value;
+            foreach (var item in Headers)
+            {
+                if (string.Equals(key, item.Key, StringComparison.OrdinalIgnoreCase)) return item.Value;
+            }
             return string.Empty;
         }
         
@@ -212,7 +215,7 @@ namespace GoPlay.Core.Transport.Wss
         public TimeSpan? timeout = null;
     }
     
-    public class WssServer : TransportServerBase, IAddStaticContent, IGetClientBrowser
+    public class WssServer : TransportServerBase, IAddStaticContent, IGetClientBrowser, IGetHttpHeader
     {
         private WssPackServer m_server;
         private CancellationTokenSource m_cancelSource;
@@ -302,6 +305,24 @@ namespace GoPlay.Core.Transport.Wss
             if (!m_server.GetSession(clientId, out var session)) return string.Empty;
             
             return session.GetHeader("User-Agent");
+        }
+
+        public Dictionary<string, string> GetHttpHeaders(uint clientId)
+        {
+            if (!m_server.GetSession(clientId, out var session)) return null;
+            return session.Headers;
+        }
+
+        public string GetHttpHeader(uint clientId, string header)
+        {
+            if (!m_server.GetSession(clientId, out var session)) return string.Empty;
+            return session.GetHeader(header);
+        }
+
+        public bool HasHttpHeader(uint clientId, string header)
+        {
+            if (!m_server.GetSession(clientId, out var session)) return false;
+            return session.HasHeader(header);
         }
     }
 }

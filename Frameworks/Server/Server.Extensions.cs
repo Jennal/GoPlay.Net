@@ -17,4 +17,22 @@ public static class Server_Extensions
     {
         return server.Transport.GetClientBrowser(clientId);
     }
+    
+    public static Dictionary<string, string> GetHttpHeaders<T>(this Server<T> server, uint clientId)
+        where T : TransportServerBase, IGetHttpHeader, new()
+    {
+        return server.Transport.GetHttpHeaders(clientId);
+    }
+    
+    public static string GetHttpHeader<T>(this Server<T> server, uint clientId, string key)
+        where T : TransportServerBase, IGetHttpHeader, new()
+    {
+        return server.Transport.GetHttpHeader(clientId, key);
+    }
+    
+    public static bool HasHttpHeader<T>(this Server<T> server, uint clientId, string key)
+        where T : TransportServerBase, IGetHttpHeader, new()
+    {
+        return server.Transport.HasHttpHeader(clientId, key);
+    }
 }
