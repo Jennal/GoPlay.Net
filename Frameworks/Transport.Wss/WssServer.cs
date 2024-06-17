@@ -40,7 +40,11 @@ namespace GoPlay.Core.Transport.Wss
 
         public bool HasHeader(string key)
         {
-            return Headers.ContainsKey(key);
+            foreach (var item in Headers)
+            {
+                if (string.Equals(key, item.Key, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
         }
         
         public string GetHeader(string key)
