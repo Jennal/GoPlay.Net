@@ -129,6 +129,7 @@ namespace GoPlay
                     {
                         Send(result);
                         processor.OnPostSendResult(result);
+                        processor.DoDeferCalls().Wait(cancelToken);
                         continue;
                     }
 
@@ -141,6 +142,7 @@ namespace GoPlay
                     {
                         Send(result);
                         processor.OnPostSendResult(result);
+                        processor.DoDeferCalls().Wait(cancelToken);
                     }
                 }
                 catch (OperationCanceledException)

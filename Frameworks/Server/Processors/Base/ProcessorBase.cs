@@ -13,6 +13,7 @@ namespace GoPlay.Core.Processors
         protected List<Route> m_routes;
         protected Dictionary<string, uint> m_pushDict;
         protected List<(string, uint, ServerTag)> m_routeIdDict;
+        protected Queue<Func<Task>> m_deferTasks;
 
         public DateTime LastUpdate = DateTime.UtcNow;
         
@@ -118,6 +119,23 @@ namespace GoPlay.Core.Processors
             return await route!.Invoke(pack);
         }
 
+        public virtual void DeferCall(Func<Task> func)
+        {
+            if (m_deferTasks == null) m_deferTasks = new Queue<Func<Task>>();
+            m_deferTasks.Enqueue(func);
+        }
+        
+        public virtual async Task DoDeferCalls()
+        {
+            if (m_deferTasks == null || m_deferTasks.Count <= 0) return;
+
+            while (m_deferTasks.Count > 0)
+            {
+                var func = m_deferTasks.Dequeue();
+                await func();
+            }
+        }
+        
         public virtual void Push<T>(string route, Header header, T data)
         {
             Push(route, header.ClientId, data);

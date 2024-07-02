@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using GoPlay.Core.Attributes;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
@@ -22,6 +23,25 @@ class TestProcessor : ProcessorBase
     {
         // Console.WriteLine($">>>> Server.Echo Recv: {str.Value}");
         // Console.WriteLine(Server.SessionManager.Get<ReqHankShake>(header.ClientId, nameof(ReqHankShake)));
+        return new PbString
+        {
+            Value = $"[{Prefix}] Server reply: {str.Value}"
+        };
+    }
+    
+    [Request("echo.defer")]
+    public PbString EchoDefer(Header header, PbString str)
+    {
+        // Console.WriteLine($">>>> Server.Echo Recv: {str.Value}");
+        // Console.WriteLine(Server.SessionManager.Get<ReqHankShake>(header.ClientId, nameof(ReqHankShake)));
+        DeferCall(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Push("test.push", header, new PbString
+            {
+                Value = "Delay Push"
+            });
+        });
         return new PbString
         {
             Value = $"[{Prefix}] Server reply: {str.Value}"
