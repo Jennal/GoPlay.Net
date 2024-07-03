@@ -5,6 +5,7 @@ using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transport.Ws;
 using GoPlay.Core.Transport.Wss;
+using GoPlay.Exceptions;
 
 namespace Demo.Common;
 
@@ -41,26 +42,9 @@ public class TestProcessor : ProcessorBase
     }
         
     [Request("err")]
-    public object Error(Header header, PbString str)
+    public PbString Error(Header header, PbString str)
     {
-        // Console.WriteLine(Server.SessionManager.Get<ReqHankShake>(header.ClientId, nameof(ReqHankShake)));
-        
-        m_count++;
-        if (m_count % 2 == 0)
-        {
-            return new PbString
-            {
-                Value = $"Server reply: {str.Value}"
-            };
-        }
-        else
-        {
-            return new Status
-            {
-                Code = StatusCode.Error,
-                Message = "SYSTEM_ERR"
-            };
-        }
+        throw new ProcessorMethodException(StatusCode.Failed, "Test Error");
     }
     
     [Notify("notify")]
@@ -69,22 +53,7 @@ public class TestProcessor : ProcessorBase
         // Console.WriteLine($">>>> Server.Notify Recv: {str.Value}");
         Push("test.push", header, new PbString
         {
-            Value = $"Push: {str.Value} - 1"
-        });
-
-        var browser = "unkown";
-        if (Server is Server<WsServer> s)
-        {
-            browser = s.GetClientBrowser(header.ClientId);
-        }
-        else if (Server is Server<WssServer> s2)
-        {
-            browser = s2.GetClientBrowser(header.ClientId);
-        }
-        
-        Push("test.push", header, new PbString
-        {
-            Value = $"Push: {str.Value} - {browser}"
+            Value = $"Push: {str.Value}"
         });
     }
 }
