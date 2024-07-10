@@ -2,6 +2,7 @@
 using System.CommandLine.NamingConventionBinder;
 using GoPlay;
 using Demo.Common;
+using Demo.WsServer.Processors;
 using GoPlay.Core.Transport.NetCoreServer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -86,6 +87,7 @@ internal class GoPlayService : IHostedService
         _server.RegisterFilter(new LoggerFilter());
                     
         _server.Register(new TestProcessor());
+        _server.Register(new ChatProcessor());
         
         _serverTask = _server.Start(_host, _port);
         return Task.CompletedTask;
