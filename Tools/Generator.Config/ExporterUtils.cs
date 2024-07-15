@@ -218,10 +218,10 @@ namespace GoPlay.Generators.Config
         /// <param name="separator"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static int[] ConvertInt32Array(string tableName, string name, string type, int row, string val, string separator=",|")
+        public static int[] ConvertInt32Array(string tableName, string name, string type, int row, string val)
         {
             var result = new List<int>();
-            var arr = val.Split(separator.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             foreach (var item in arr)
             {
                 var v = -1;
@@ -231,6 +231,40 @@ namespace GoPlay.Generators.Config
                 }
 
                 result.Add(v);
+            }
+
+            return result.ToArray();
+        }
+        
+        /// <summary>
+        /// 1, 2, 3, 4
+        /// </summary>
+        /// <param name="tableName"></param>
+        /// <param name="name"></param>
+        /// <param name="type"></param>
+        /// <param name="row"></param>
+        /// <param name="val"></param>
+        /// <param name="separator"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        public static int[][] ConvertInt32Array2(string tableName, string name, string type, int row, string val)
+        {
+            var result = new List<int[]>();
+            var arr = val.Split(ExporterConsts.splitOuter.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            foreach (var item in arr)
+            {
+                var innerArr = item.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                var list = new List<int>();
+                foreach (var innerItem in innerArr)
+                {
+                    if (!int.TryParse(innerItem.Trim(), out var v))
+                    {
+                        throw new Exception(ErrFormat(tableName, name, type, row, $"{val} => '{innerItem}'"));
+                    }
+                    list.Add(v);
+                }
+
+                result.Add(list.ToArray());
             }
 
             return result.ToArray();
@@ -247,10 +281,10 @@ namespace GoPlay.Generators.Config
         /// <param name="separator"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static float[] ConvertFloatArray(string tableName, string name, string type, int row, string val, string separator=",|")
+        public static float[] ConvertFloatArray(string tableName, string name, string type, int row, string val)
         {
             var result = new List<float>();
-            var arr = val.Split(separator.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             foreach (var item in arr)
             {
                 if (!float.TryParse(item.Trim(), out var v))
@@ -274,10 +308,10 @@ namespace GoPlay.Generators.Config
         /// <param name="val"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static string[] ConvertStringArray(string tableName, string name, string type, int row, string val, string sep=",|")
+        public static string[] ConvertStringArray(string tableName, string name, string type, int row, string val)
         {
             var result = new List<string>();
-            var arr = val.Split(sep.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             foreach (var item in arr)
             {
                 result.Add(item.Trim());
@@ -299,7 +333,7 @@ namespace GoPlay.Generators.Config
         public static Vector2 ConvertVector2(string tableName, string name, string type, int row, string val)
         {
             var result = new Vector2();
-            var arr = val.Split(ExporterConsts.splitOutter.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (arr.Length != 2) throw new Exception(ErrFormat(tableName, name, type, row, val));
 
             for (var i = 0; i < arr.Length; i++)
@@ -327,10 +361,10 @@ namespace GoPlay.Generators.Config
         /// <param name="val"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static Vector2Int ConvertVector2Int(string tableName, string name, string type, int row, string val, string sep="|")
+        public static Vector2Int ConvertVector2Int(string tableName, string name, string type, int row, string val)
         {
             var result = new Vector2Int();
-            var arr = val.Split(sep.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (arr.Length != 2) throw new Exception(ErrFormat(tableName, name, type, row, val));
 
             for (var i = 0; i < arr.Length; i++)
@@ -361,7 +395,7 @@ namespace GoPlay.Generators.Config
         public static Vector3 ConvertVector3(string tableName, string name, string type, int row, string val)
         {
             var result = new Vector3();
-            var arr = val.Split(ExporterConsts.splitOutter.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (arr.Length != 3) throw new Exception(ErrFormat(tableName, name, type, row, val));
 
             for (var i = 0; i < arr.Length; i++)
@@ -389,10 +423,10 @@ namespace GoPlay.Generators.Config
         /// <param name="val"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static Vector3Int ConvertVector3Int(string tableName, string name, string type, int row, string val, string sep="|")
+        public static Vector3Int ConvertVector3Int(string tableName, string name, string type, int row, string val)
         {
             var result = new Vector3Int();
-            var arr = val.Split(sep.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = val.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (arr.Length != 3) throw new Exception(ErrFormat(tableName, name, type, row, val));
 
             for (var i = 0; i < arr.Length; i++)
@@ -438,9 +472,9 @@ namespace GoPlay.Generators.Config
             throw new Exception(ErrFormat(tableName, name, type, row, val));
         }
 
-        public static (int, float, int) ConvertIFI(string sheetName, string columnName, string typeName, int endRow, string value, string split="")
+        public static (int, float, int) ConvertIFI(string sheetName, string columnName, string typeName, int endRow, string value)
         {
-            var arr = value.Split(split.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = value.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             return (
                 ConvertInt32(sheetName, columnName, typeName, endRow, arr[0]),
                 ConvertFloat(sheetName, columnName, typeName, endRow, arr[1]),
@@ -448,9 +482,9 @@ namespace GoPlay.Generators.Config
             );
         }
         
-        public static (int, float, float, float) ConvertIFFF(string sheetName, string columnName, string typeName, int endRow, string value, string split="")
+        public static (int, float, float, float) ConvertIFFF(string sheetName, string columnName, string typeName, int endRow, string value)
         {
-            var arr = value.Split(split.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var arr = value.Split(ExporterConsts.splitInner.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             return (
                 ConvertInt32(sheetName, columnName, typeName, endRow, arr[0]),
                 ConvertFloat(sheetName, columnName, typeName, endRow, arr[1]),

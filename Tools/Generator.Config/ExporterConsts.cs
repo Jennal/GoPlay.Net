@@ -1,3 +1,5 @@
+using GoPlay.Common.Data;
+
 namespace GoPlay.Generators.Config
 {
     public static class ExporterConsts
@@ -5,8 +7,8 @@ namespace GoPlay.Generators.Config
         public const string exportPrefix = "#";
         public static readonly string[] exportEnumPrefix = new string[]{"&", "%"};
 
-        public const string splitOutter = "|";
-        public const string splitInner = ";";
+        public static string splitOuter => RunArgs.Config.ArraySplitOuter;
+        public static string splitInner => RunArgs.Config.ArraySplitter;
         
         public const string exportVariantSplit = "@";
         public const string defaultVariant = "zh_cn";

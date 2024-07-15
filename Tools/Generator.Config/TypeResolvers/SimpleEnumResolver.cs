@@ -84,7 +84,7 @@ namespace GoPlay.Generators.Config {
                 var val = value.GetValue<string>();
                 if (_isArray)
                 {
-                    var arr = val.Split(ExporterConsts.splitOutter.ToCharArray());
+                    var arr = val.Split(ExporterConsts.splitInner.ToCharArray());
                     var result = new int[arr.Length];
                     for (var i = 0; i < arr.Length; i++)
                     {
@@ -115,7 +115,7 @@ namespace GoPlay.Generators.Config {
 
             if (_isArray)
             {
-                var arr = value.Value.ToString().Split(ExporterConsts.splitOutter.ToCharArray());
+                var arr = value.Value.ToString().Split(ExporterConsts.splitInner.ToCharArray());
                 var result = Array.CreateInstance(_enumType, arr.Length);
                 for (var i = 0; i < arr.Length; i++)
                 {

@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
 using System.Diagnostics;
+using GoPlay.Common.Data;
 using GoPlay.Generators.Config;
 using GoPlay.Generators.Extension;
 
@@ -85,11 +86,16 @@ class Program
             cmd.AddOption(new Option<string>(new[] {"-tm", "--template-manager"}, () => "", "Manager代码模板的liquid文件路径"));
             cmd.AddOption(new Option<string>(new[] {"-te", "--template-enum"}, () => "", "Enum代码模板的liquid文件路径"));
             cmd.AddOption(new Option<string>(new[] {"-t", "--type"}, () => "yaml", "数据类型：yaml | json，默认：yaml"));
+            cmd.AddOption(new Option<string>(new[] {"-s", "--splitter"}, () => ",|", "数组分隔符，可配置多个，默认：\",|\""));
+            cmd.AddOption(new Option<string>(new[] {"-s2", "--splitter-outer"}, () => ":", "数组外层分隔符，可配置多个，默认：\":\""));
 
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
-                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type) =>
+                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type, string splitter, string splitterOuter) =>
                 {
+                    RunArgs.Config.ArraySplitter = splitter;
+                    RunArgs.Config.ArraySplitOuter = splitterOuter;
+                    
                     var watch = new Stopwatch();
                     watch.Start();
                     {
