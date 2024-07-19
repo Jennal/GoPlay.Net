@@ -144,6 +144,12 @@ public class Excel2Enum
 
         for (var i = 3; i <= rowColumn.y; i++)
         {
+            //忽略注释行
+            if (ExporterUtils.IsCommentLine(table, i)) continue;
+
+            //忽略空行
+            if (ExporterUtils.IsEmptyLine(table, i, rowColumn.x)) continue;
+            
             var val = table.Cells[i, 1].GetValue<string>();
             var name = table.Cells[i, 2].GetValue<string>();
             var comment = table.Cells[i, 3].GetValue<string>();
