@@ -16,6 +16,7 @@ class Program
             rootCommand.AddCommand(CreateInfoCommand());
             rootCommand.AddCommand(CreateConfigCommand());
             rootCommand.AddCommand(CreateGenExtension());
+            rootCommand.AddCommand(CreateProtoEnumCommand());
         }
         await rootCommand.InvokeAsync(args);
     }
@@ -88,7 +89,8 @@ class Program
             cmd.AddOption(new Option<string>(new[] {"-t", "--type"}, () => "yaml", "数据类型：yaml | json，默认：yaml"));
             cmd.AddOption(new Option<string>(new[] {"-s", "--splitter"}, () => ",|", "数组分隔符，可配置多个，默认：\",|\""));
             cmd.AddOption(new Option<string>(new[] {"-s2", "--splitter-outer"}, () => ":", "数组外层分隔符，可配置多个，默认：\":\""));
-
+            
+            
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
                 (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type, string splitter, string splitterOuter) =>
@@ -129,6 +131,44 @@ class Program
                         {
                             Excel2Yaml.Generate(inFolder, outDataFolder, platform);
                         }
+                    }
+                    watch.Stop();
+                    Console.WriteLine($"Time Elapsed: {watch.Elapsed}");
+                    Console.WriteLine("========== Generate Config Finished ==========");
+                });
+        }
+        return cmd;
+    }
+    
+    #endregion
+
+    #region Excel to proto enum
+
+    private static Command CreateProtoEnumCommand()
+    {
+        var cmd = new Command("excel2proto", "将Excel导出成Proto数据");
+        {
+            cmd.AddOption(new Option<string>(new[] {"-i", "--in-folder"}, () => "../../Excels", "Excel目录"));
+            cmd.AddOption(new Option<string>(new[] {"-oc", "--out-code-folder"}, () => "", "代码保存项目目录"));
+            cmd.AddOption(new Option<bool>(new[] {"-f", "--force"}, () => false, "强制重新导出"));
+            cmd.AddOption(new Option<bool>(new[] {"-c", "--clear-old"}, () => false, "删除旧脚本和数据"));
+            
+            //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
+            cmd.Handler = CommandHandler.Create(
+                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type, string splitter, string splitterOuter) =>
+                {
+                    RunArgs.Config.ArraySplitter = splitter;
+                    RunArgs.Config.ArraySplitOuter = splitterOuter;
+                    
+                    var watch = new Stopwatch();
+                    watch.Start();
+                    {
+                        if (force) ExportCache.Remove(inFolder, platform);
+                        if (clearOld)
+                        {
+                            Excel2ProtoEnum.Clear(outCodeFolder);
+                        }
+                        Excel2ProtoEnum.Generate(inFolder, outCodeFolder, false, templateEnum);
                     }
                     watch.Stop();
                     Console.WriteLine($"Time Elapsed: {watch.Elapsed}");
