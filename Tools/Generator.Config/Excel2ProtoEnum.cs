@@ -56,7 +56,7 @@ public class Excel2ProtoEnum
                         var tplData = ConvertToEnum(csFolder, xls, sheet, isDryRun, tpl);
                         tplDataList.Add(tplData);
                     }
-                    if (!isDryRun)
+                    if (!isDryRun && tplDataList.Count > 0)
                     {
                         var content = GeneratorUtils.RenderTpl(tpl, new { data = tplDataList });
                         WriteEntityFile(csFolder, "BaseEnum", content);
