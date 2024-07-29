@@ -120,6 +120,7 @@ namespace GoPlay
             {
                 Update(processor);
                 ResolveBroadCast(processor, broadcastQueue);
+                processor.DoDeferCalls().Wait(cancelToken);
 
                 if (!queue.TryTake(out var pack, Consts.TimeOut.Server)) continue;
                 try
@@ -129,7 +130,6 @@ namespace GoPlay
                     {
                         Send(result);
                         processor.OnPostSendResult(result);
-                        processor.DoDeferCalls().Wait(cancelToken);
                         continue;
                     }
 
@@ -142,7 +142,6 @@ namespace GoPlay
                     {
                         Send(result);
                         processor.OnPostSendResult(result);
-                        processor.DoDeferCalls().Wait(cancelToken);
                     }
                 }
                 catch (OperationCanceledException)

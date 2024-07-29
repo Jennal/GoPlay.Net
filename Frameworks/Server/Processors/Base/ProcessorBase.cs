@@ -131,8 +131,19 @@ namespace GoPlay.Core.Processors
 
             while (m_deferTasks.Count > 0)
             {
-                var func = m_deferTasks.Dequeue();
-                await func();
+                try
+                {
+                    var func = m_deferTasks.Dequeue();
+                    await func();
+                }
+                catch (OperationCanceledException)
+                {
+                    //IGNORE ERR
+                }
+                catch (Exception err)
+                {
+                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
             }
         }
         
