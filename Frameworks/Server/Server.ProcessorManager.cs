@@ -121,6 +121,7 @@ namespace GoPlay
                 Update(processor);
                 ResolveBroadCast(processor, broadcastQueue);
                 processor.DoDeferCalls().Wait(cancelToken);
+                processor.DoDelayCalls().Wait(cancelToken);
 
                 if (!queue.TryTake(out var pack, Consts.TimeOut.Server)) continue;
                 try

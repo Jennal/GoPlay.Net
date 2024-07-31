@@ -47,6 +47,24 @@ class TestProcessor : ProcessorBase
             Value = $"[{Prefix}] Server reply: {str.Value}"
         };
     }
+    
+    [Request("echo.delay")]
+    public PbString EchoDelay(Header header, PbString str)
+    {
+        Console.WriteLine($"EchoDelay-1: {DateTime.UtcNow:HH:mm:ss.fff}");
+        DelayCall(TimeSpan.FromSeconds(1), async () =>
+        {
+            Console.WriteLine($"EchoDelay-2: {DateTime.UtcNow:HH:mm:ss.fff}");
+            Push("test.push", header, new PbString
+            {
+                Value = "Delay Push"
+            });
+        });
+        return new PbString
+        {
+            Value = $"[{Prefix}] Server reply: {str.Value}"
+        };
+    }
         
     [Request("err")]
     public object Error(Header header, PbString str)

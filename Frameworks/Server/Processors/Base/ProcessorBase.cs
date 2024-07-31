@@ -14,6 +14,7 @@ namespace GoPlay.Core.Processors
         protected Dictionary<string, uint> m_pushDict;
         protected List<(string, uint, ServerTag)> m_routeIdDict;
         protected Queue<Func<Task>> m_deferTasks;
+        protected List<(DateTime, Func<Task>)> m_delayTasks;
 
         public DateTime LastUpdate = DateTime.UtcNow;
         
@@ -135,6 +136,39 @@ namespace GoPlay.Core.Processors
                 {
                     var func = m_deferTasks.Dequeue();
                     await func();
+                }
+                catch (OperationCanceledException)
+                {
+                    //IGNORE ERR
+                }
+                catch (Exception err)
+                {
+                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+            }
+        }
+        
+        public virtual void DelayCall(TimeSpan delay, Func<Task> func)
+        {
+            if (m_delayTasks == null) m_delayTasks = new ();
+
+            var time = DateTime.UtcNow.Add(delay);
+            m_delayTasks.Add((time, func));
+        }
+        
+        public virtual async Task DoDelayCalls()
+        {
+            if (m_delayTasks == null || m_delayTasks.Count <= 0) return;
+
+            for (int i = m_delayTasks.Count-1; i >= 0; i--)
+            {
+                var (time, func) = m_delayTasks[i];
+                if (time > DateTime.UtcNow) continue;
+                
+                try
+                {
+                    await func();
+                    m_delayTasks.RemoveAt(i);
                 }
                 catch (OperationCanceledException)
                 {
