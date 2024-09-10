@@ -95,6 +95,11 @@
             writeLn("websocket disconnected");
         });
 
+        goplay.on(goplay.Consts.Events.ERROR, function(err) {
+            console.log("goplay.onError: ", err);
+            writeLn("goplay.onError: " + err);
+        });
+
         goplay.on("test.push", function (data) {
             console.log("on[test.push]: ", data);
             writeLn("on[test.push]: ", data);

@@ -170,7 +170,8 @@ export default class goplay {
             var buffer = new ByteArray(2 + data.length);
             buffer.writeUint16(data.length);
             buffer = buffer.writeBytes(data);
-            goplay.ws.send(buffer.data);
+            // console.log("goplay.send: ", buffer.data);
+            goplay.ws.send(buffer.data.buffer);
         }
     }
 
