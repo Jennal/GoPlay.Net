@@ -151,11 +151,13 @@ export default class goplay {
 
         goplay.disconnectTask = new TaskCompletionSource<boolean>();
         if (goplay.ws.readyState <= 1) goplay.ws.close();
-        else goplay.disconnectTask.result = true;
-        goplay.ws = null;
-        goplay.handShake = null;
-        goplay.buffer = null;
-        goplay.emit(Consts.Events.DISCONNECTED);
+        else {
+            goplay.disconnectTask.result = true;
+            goplay.ws = null;
+            goplay.handShake = null;
+            goplay.buffer = null;
+            goplay.emit(Consts.Events.DISCONNECTED);
+        }
         return goplay.disconnectTask.promise;
     }
 
@@ -281,6 +283,11 @@ export default class goplay {
         HeartBeat.stop();
         if (goplay.disconnectTask) goplay.disconnectTask.result = true;
         if (goplay.connectTask) goplay.connectTask.result = false;
+
+        goplay.ws = null;
+        goplay.handShake = null;
+        goplay.buffer = null;
+        goplay.emit(Consts.Events.DISCONNECTED);
     }
 
     public static getRouteEncoded(route) {
