@@ -118,12 +118,19 @@ namespace GoPlay
             var broadcastQueue = m_broadcastQueues[name];
             while (IsStarted && !cancelToken.IsCancellationRequested)
             {
-                Update(processor);
-                ResolveBroadCast(processor, broadcastQueue);
+                Update(processor).Wait(cancelToken);
+                ResolveBroadCast(processor, broadcastQueue).Wait(cancelToken);
                 processor.DoDeferCalls().Wait(cancelToken);
                 processor.DoDelayCalls().Wait(cancelToken);
 
-                if (!queue.TryTake(out var pack, Consts.TimeOut.Server)) continue;
+                //Only for update
+                if (processor.IsOnlyUpdate)
+                {
+                    Task.Delay(processor.UpdateDeltaTime, cancelToken).Wait(cancelToken);
+                    continue;
+                }
+                
+                if (!queue.TryTake(out var pack, (int)processor.RecvTimeout.TotalMilliseconds, cancelToken)) continue;
                 try
                 {
                     var result = processor.OnPreRecv(pack!);
@@ -156,13 +163,13 @@ namespace GoPlay
             }
         }
 
-        protected void ResolveBroadCast(ProcessorBase processor, BlockingCollection<(uint, int, object)> queue)
+        protected async Task ResolveBroadCast(ProcessorBase processor, BlockingCollection<(uint, int, object)> queue)
         {
             if (!queue.TryTake(out var tuple)) return;
             var (clientId, eventId, data) = tuple;
             try
             {
-                processor.OnBroadcast(clientId, eventId, data);
+                await processor.OnBroadcast(clientId, eventId, data);
             }
             catch (Exception err)
             {
@@ -170,18 +177,18 @@ namespace GoPlay
             }
         }
         
-        protected void Update(ProcessorBase processor)
+        protected async Task Update(ProcessorBase processor)
         {
             var updater = processor as IUpdate;
             if (updater == null) return;
             
             var ts = DateTime.UtcNow.Subtract(processor.LastUpdate);
-            if (ts < Consts.TimeOut.Update) return;
+            if (ts < processor.UpdateDeltaTime) return;
 
             processor.LastUpdate = DateTime.UtcNow;
             try
             {
-                updater.OnUpdate();
+                await updater.OnUpdate();
             }
             catch (Exception err)
             {

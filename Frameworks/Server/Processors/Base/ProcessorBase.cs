@@ -16,7 +16,10 @@ namespace GoPlay.Core.Processors
         protected Queue<Func<Task>> m_deferTasks;
         protected List<(DateTime, Func<Task>)> m_delayTasks;
 
-        public DateTime LastUpdate = DateTime.UtcNow;
+        internal DateTime LastUpdate = DateTime.UtcNow;
+        internal virtual TimeSpan UpdateDeltaTime => Consts.TimeOut.Update;
+        internal virtual TimeSpan RecvTimeout => Consts.TimeOut.Recv;
+        internal virtual bool IsOnlyUpdate => false;
         
         public Server Server;
         public ISessionManager SessionManager => Server.SessionManager;
@@ -244,8 +247,9 @@ namespace GoPlay.Core.Processors
         {
         }
 
-        public virtual void OnBroadcast(uint clientId, int eventId, object data)
+        public virtual Task OnBroadcast(uint clientId, int eventId, object data)
         {
+            return Task.CompletedTask;
         }
     }
 }

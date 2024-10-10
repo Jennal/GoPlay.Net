@@ -2,5 +2,5 @@
 
 public interface IUpdate
 {
-    void OnUpdate();
+    Task OnUpdate();
 }
