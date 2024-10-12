@@ -15,11 +15,11 @@ namespace GoPlay.Core.Processors
         protected List<(string, uint, ServerTag)> m_routeIdDict;
         protected Queue<Func<Task>> m_deferTasks;
         protected List<(DateTime, Func<Task>)> m_delayTasks;
-
+        
         internal DateTime LastUpdate = DateTime.UtcNow;
-        internal virtual TimeSpan UpdateDeltaTime => Consts.TimeOut.Update;
-        internal virtual TimeSpan RecvTimeout => Consts.TimeOut.Recv;
-        internal virtual bool IsOnlyUpdate => false;
+        public virtual TimeSpan UpdateDeltaTime => Consts.TimeOut.Update;
+        public virtual TimeSpan RecvTimeout => Consts.TimeOut.Recv;
+        public virtual bool IsOnlyUpdate => false;
         
         public Server Server;
         public ISessionManager SessionManager => Server.SessionManager;
