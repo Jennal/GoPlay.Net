@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Collections.Concurrent;
 using GoPlay;
 using GoPlay.Core.Attributes;
 using GoPlay.Core.Debug;
@@ -11,9 +8,10 @@ using GoPlay.Core.Utils;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Transport.NetCoreServer;
 using GoPlay.Core.Transports.TCP;
+using GoPlay.Interfaces;
 
 [Processor("test")]
-class TestProcessor : ProcessorBase
+class TestProcessor : ProcessorBase, IStart, IUpdate, IStop
 {
     private ConcurrentDictionary<uint, bool> m_clients = new ConcurrentDictionary<uint, bool>();
 
@@ -76,6 +74,22 @@ class TestProcessor : ProcessorBase
         str.Value = $"Push: {str.Value}";
         Push("test.push", header, str);
         Push("test.push", header, str);
+    }
+
+    public void OnStart()
+    {
+        Console.WriteLine("TestProcessor.OnStart");
+    }
+
+    public Task OnUpdate()
+    {
+        Console.WriteLine($"TestProcessor.OnUpdate => {DateTime.Now:hh:mm:ss.fff}");
+        return Task.CompletedTask;
+    }
+
+    public void OnStop()
+    {
+        Console.WriteLine("TestProcessor.OnStop");
     }
 }
 

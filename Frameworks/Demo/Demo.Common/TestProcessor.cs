@@ -1,16 +1,13 @@
-﻿using System;
-using GoPlay;
-using GoPlay.Core.Attributes;
+﻿using GoPlay.Core.Attributes;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
-using GoPlay.Core.Transport.Ws;
-using GoPlay.Core.Transport.Wss;
 using GoPlay.Exceptions;
+using GoPlay.Interfaces;
 
 namespace Demo.Common;
 
 [Processor("test")]
-public class TestProcessor : ProcessorBase
+public class TestProcessor : ProcessorBase, IStart, IStop, IUpdate
 {
     private int m_count = -1;
         
@@ -55,5 +52,24 @@ public class TestProcessor : ProcessorBase
         {
             Value = $"Push: {str.Value}"
         });
+    }
+
+    public void OnStart()
+    {
+        Console.WriteLine("TestProcessor.OnStart");
+    }
+
+    public void OnStop()
+    {
+        Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] TestProcessor.OnStop-1");
+        Task.Delay(1000).Wait();
+        Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] TestProcessor.OnStop-2");
+    }
+
+    public Task OnUpdate()
+    {
+        m_count++;
+        Console.WriteLine($"TestProcessor.OnUpdate[{m_count}] => {DateTime.Now:hh:mm:ss.fff}");
+        return Task.CompletedTask;
     }
 }

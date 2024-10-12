@@ -134,9 +134,9 @@ namespace GoPlay
             IsStarted = false;
             AppDomain.CurrentDomain.UnhandledException -= CurrentDomainOnUnhandledException;
             
-            StopProcessors();
             m_cancelSource.Cancel();
-
+            StopProcessors();
+            
             try
             {
                 Task.WaitAll(m_recvTask, m_sendTask);

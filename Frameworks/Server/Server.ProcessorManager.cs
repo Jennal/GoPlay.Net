@@ -94,8 +94,22 @@ namespace GoPlay
         
         protected void StopProcessors()
         {
-            m_cancelSource.Cancel();
-            Task.WaitAll(m_tasks.Values.ToArray());
+            foreach (var task in m_tasks)
+            {
+                try
+                {
+                    task.Value.Wait();
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+                catch (Exception err)
+                {
+                    OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+            }
         }
         
         protected virtual void OnRecv(Package packRaw)
