@@ -92,6 +92,8 @@ namespace GoPlay
         public abstract void Notify<T>(string route, T data);
         public abstract void Notify(string route);
 
+        public abstract string GetRoute(Package pack);
+        
         /// <summary>
         /// T 支持
         /// - 任意Protobuf类型
@@ -337,22 +339,26 @@ namespace GoPlay
             {
                 try
                 {
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-1");
                     var dataTask = Transport.Recv(m_cancelSource);
                     dataTask.AsTask().Wait(m_cancelSource.Token);
                     var data = dataTask.Result;
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-2");
 
                     if (m_cancelSource.Token.IsCancellationRequested) break;
-                    
+
                     var pack = Package.ParseRaw(data);
                     // Console.WriteLine($" =[C]> {pack}");
-                    
+
                     if (pack.IsChunk)
                     {
                         pack = ResolveChunk(pack);
                         if (pack.IsChunk) continue;
                     }
-                    
+
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-3");
                     if (IsBlockRecvByFilter(pack)) continue;
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-4");
 
                     switch (pack.Header.PackageInfo.Type)
                     {
@@ -364,6 +370,7 @@ namespace GoPlay
                                 m_connectionTask.SetResult(false);
                                 break;
                             }
+
                             ResolveHandShake(pack);
                             if (m_connectionTask != null && !m_connectionTask.Task.IsCompleted)
                             {
@@ -373,6 +380,7 @@ namespace GoPlay
                                 FilterOnClientConnect(0);
                                 m_connectionTask.SetResult(true);
                             }
+
                             break;
                         case PackageType.Ping:
                             ResolvePing(pack);
@@ -393,7 +401,9 @@ namespace GoPlay
                             throw new ArgumentOutOfRangeException();
                     }
 
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-5");
                     PostRecvFilter(pack);
+                    // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] RecvLoop-6");
                 }
                 catch (OperationCanceledException)
                 {
@@ -420,17 +430,21 @@ namespace GoPlay
 
         private void ResolveCallbacks(Package pack)
         {
+            // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ResolveCallbacks-1");
             var routeId = pack.Header.PackageInfo.Route;
             var route = GetRouteById(routeId);
             if (!m_callbacks.ContainsKey(route)) return;
 
+            // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ResolveCallbacks-2");
             if (!m_callbacks.TryGetValue(route, out var list)) return;
             if (list.Count <= 0) return;
 
+            // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ResolveCallbacks-3");
             foreach (var item in list.ToArray())
             {
                 OnCallback(item, pack);
             }
+            // Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ResolveCallbacks-4 => {list.Count}");
         }
 
         private void ResolveKick(string reason)

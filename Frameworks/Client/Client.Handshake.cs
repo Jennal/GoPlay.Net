@@ -33,6 +33,12 @@ namespace GoPlay
             return item.Key;
         }
 
+        public override string GetRoute(Package pack)
+        {
+            var routeId = pack.Header.PackageInfo.Route;
+            return GetRouteById(routeId);
+        }
+        
         private void ResolveHandShake(Package packRaw)
         {
             var pack = Package.ParseFromRaw<RespHandShake>(packRaw);

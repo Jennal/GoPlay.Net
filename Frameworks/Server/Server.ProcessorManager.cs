@@ -28,7 +28,7 @@ namespace GoPlay
         
         private Dictionary<string, Task> m_tasks = new Dictionary<string, Task>();
         private Dictionary<string, BlockingCollection<Package>> m_packageQueues = new Dictionary<string, BlockingCollection<Package>>();
-        private Dictionary<string, BlockingCollection<(uint, int, object)>> m_broadcastQueues = new Dictionary<string, BlockingCollection<(uint, int, object)>>();
+        private Dictionary<string, ConcurrentQueue<(uint, int, object)>> m_broadcastQueues = new Dictionary<string, ConcurrentQueue<(uint, int, object)>>();
 
         protected virtual void ProcessorOnClientConnect(uint clientId)
         {
@@ -71,7 +71,7 @@ namespace GoPlay
             {   
                 var name = processor.GetName();
                 m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
-                m_broadcastQueues[name] = new BlockingCollection<(uint, int, object)>(byte.MaxValue);
+                m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
                 m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token), m_cancelSource.Token);
             }
         }
@@ -177,17 +177,19 @@ namespace GoPlay
             }
         }
 
-        protected async Task ResolveBroadCast(ProcessorBase processor, BlockingCollection<(uint, int, object)> queue)
+        protected async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
         {
-            if (!queue.TryTake(out var tuple)) return;
-            var (clientId, eventId, data) = tuple;
-            try
+            while (queue.TryDequeue(out var tuple))
             {
-                await processor.OnBroadcast(clientId, eventId, data);
-            }
-            catch (Exception err)
-            {
-                OnErrorEvent(clientId, err);
+                var (clientId, eventId, data) = tuple;
+                try
+                {
+                    await processor.OnBroadcast(clientId, eventId, data);
+                }
+                catch (Exception err)
+                {
+                    OnErrorEvent(clientId, err);
+                }
             }
         }
         
@@ -218,7 +220,7 @@ namespace GoPlay
                 {
                     var name = processor.GetName();
                     var queue = m_broadcastQueues[name];
-                    queue.Add((clientId, eventId, data), CanelToken);
+                    queue.Enqueue((clientId, eventId, data));
                 }
                 catch (OperationCanceledException)
                 {
