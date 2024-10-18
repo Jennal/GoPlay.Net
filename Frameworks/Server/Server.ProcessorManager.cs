@@ -62,17 +62,18 @@ namespace GoPlay
             m_starters = Processors.OfType<IStart>().ToList();
             m_stoppers = Processors.OfType<IStop>().ToList();
 
-            foreach (var starter in m_starters)
-            {
-                starter.OnStart();
-            }
-            
             //init data
             foreach (var processor in Processors)
             {   
                 var name = processor.GetName();
                 m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
                 m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
+            }
+            
+            //do start
+            foreach (var starter in m_starters)
+            {
+                starter.OnStart();
             }
             
             //init thread
