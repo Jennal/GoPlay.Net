@@ -67,11 +67,18 @@ namespace GoPlay
                 starter.OnStart();
             }
             
+            //init data
             foreach (var processor in Processors)
             {   
                 var name = processor.GetName();
                 m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
                 m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
+            }
+            
+            //init thread
+            foreach (var processor in Processors)
+            {   
+                var name = processor.GetName();
                 m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token), m_cancelSource.Token);
             }
         }
