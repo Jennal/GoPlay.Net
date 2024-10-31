@@ -139,7 +139,18 @@ namespace GoPlay.Core.Transport.Wss
                 
                 try
                 {
-                    var context = new SslContext(SslProtocols.Tls12, new X509Certificate2(KeyPath, KeyPass), (sender, certificate, chain, sslPolicyErrors) => true);
+                    SslContext context;
+                    if (KeyPath.EndsWith(".pfx"))
+                    {
+                        context = new SslContext(SslProtocols.Tls12, new X509Certificate2(KeyPath, KeyPass),
+                            (sender, certificate, chain, sslPolicyErrors) => true);
+                    }
+                    else
+                    {
+                        context = new SslContext(SslProtocols.Tls12, new X509Certificate2(KeyPath),
+                            (sender, certificate, chain, sslPolicyErrors) => true);
+                    }
+
                     m_client = new PackClient(this, context, host, address, port, m_cancelSource.Token);
 
                     m_client.ConnectAsync();
