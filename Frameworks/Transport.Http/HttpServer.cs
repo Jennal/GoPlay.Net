@@ -161,6 +161,12 @@ namespace GoPlay.Core.Transport.Http
             return session.ClientIP;
         }
 
+        public override bool IsOnline(uint clientId)
+        {
+            //Not possible to check if a client is online in HTTP
+            return true;
+        }
+
         public override void DisconnectClient(uint clientId, Exception err)
         {
             //TODO:

@@ -43,7 +43,7 @@ namespace GoPlay
         public T Transport = new T();
         public IEncoder Encoder = EncoderFactory.Create(EncodingType.Protobuf); //Init instance
 
-        protected BlockingCollection<Package> m_sendQueue;
+        protected ConcurrentQueue<Package> m_sendQueue;
 
         protected Task m_sendTask;
         protected Task m_recvTask;
@@ -111,7 +111,7 @@ namespace GoPlay
             IsStarted = true;
             OnStarted?.Invoke();
 
-            m_sendQueue = new BlockingCollection<Package>(ushort.MaxValue);
+            m_sendQueue = new ConcurrentQueue<Package>();
             
             m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
             m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
@@ -140,7 +140,7 @@ namespace GoPlay
             try
             {
                 Task.WaitAll(m_recvTask, m_sendTask);
-                m_sendQueue.Dispose();
+                m_sendQueue.Clear();
             }
             catch
             {
@@ -162,18 +162,43 @@ namespace GoPlay
 
         protected void SendLoop()
         {
+            var tasks = new List<Task>();
             var token = m_cancelSource.Token;
             while (IsStarted && !token.IsCancellationRequested)
             {
                 Package package = null;
                 try
                 {
-                    if (!m_sendQueue.TryTake(out package, Consts.TimeOut.Server)) continue;
-                    if (package.IsLastChunk && IsBlockSendByFilter(package)) continue;
+                    tasks.Clear();
+                    // for (var i = 0; i < Consts.Server.MaxSendTask; i++)
+                    // {
+                        // Console.WriteLine($"m_sendQueue.Count => {m_sendQueue.Count}");
+                        if (m_sendQueue.Count > 100) ProfileUtils.SummarizePackQueue(m_respHandShakeFrontEnd, m_sendQueue);
+                        if (!m_sendQueue.TryDequeue(out package))
+                        {
+                            Thread.Yield();
+                            continue;
+                        }
 
-                    // Console.WriteLine($" <[S]({package.Header.ClientId})= {package}");
-                    Transport.Send(package.Header.ClientId, package.GetBytes());
-                    if (package.IsLastChunk) PostSendFilter(package);
+                        //ignore not online
+                        if (!Transport.IsOnline(package.Header.ClientId)) continue;
+                        
+                        //ignore by filter
+                        if (package.IsLastChunk && IsBlockSendByFilter(package)) continue;
+
+                        // Console.WriteLine($" <[S]({package.Header.ClientId})= {package}");
+                        // var task = Task.Factory.StartNew(p =>
+                        // {
+                            // var pkg = p as Package;
+                            // Transport.Send(pkg.Header.ClientId, pkg.GetBytes());
+                        // }, package, token);
+                        // tasks.Add(task);
+                        Transport.Send(package.Header.ClientId, package.GetBytes());
+                        
+                        if (package.IsLastChunk) PostSendFilter(package);                        
+                    // }
+
+                    if (tasks.Count > 0) Task.WaitAll(tasks.ToArray());
                 }
                 catch (OperationCanceledException)
                 {
@@ -265,7 +290,7 @@ namespace GoPlay
                 var list = package.Split();
                 foreach (var p in list)
                 {
-                    m_sendQueue.Add(p, CanelToken);    
+                    m_sendQueue.Enqueue(p);    
                 }
             }
             catch (Exception err)
@@ -279,7 +304,7 @@ namespace GoPlay
             var package = Package.Create(0, PackageType.Kick, EncodingType);
             package.Header.ClientId = clientId;
             package.Header.Status.Message = reason;
-            m_sendQueue.Add(package, CanelToken);
+            m_sendQueue.Enqueue(package);
 
             TaskUtil.DelayRun(Consts.TimeOut.KickDelayDisconnect, () =>
             {
@@ -295,7 +320,7 @@ namespace GoPlay
         public override void Dispose()
         {
             Stop();
-            m_sendQueue?.Dispose();
+            m_sendQueue?.Clear();
             m_cancelSource?.Dispose();
         }
 

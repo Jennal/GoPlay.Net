@@ -84,6 +84,11 @@ namespace GoPlay.Core.Transports.Watson
             return arr[0];
         }
 
+        public override bool IsOnline(uint clientId)
+        {
+            return m_clientMap.ContainsKey(clientId);
+        }
+
         public override void DisconnectClient(uint clientId, Exception err)
         {
             throw new NotImplementedException();

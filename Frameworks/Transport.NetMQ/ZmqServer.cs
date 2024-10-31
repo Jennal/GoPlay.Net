@@ -40,6 +40,11 @@ namespace GoPlay.Core.Transports.ZMQ
             return string.Empty;
         }
 
+        public override bool IsOnline(uint clientId)
+        {
+            return true;
+        }
+
         public override void DisconnectClient(uint clientId, Exception err)
         {
             throw new NotImplementedException();

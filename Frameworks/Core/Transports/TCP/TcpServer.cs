@@ -260,6 +260,11 @@ namespace GoPlay.Core.Transports.TCP
             return ep.Address.ToString();
         }
 
+        public override bool IsOnline(uint clientId)
+        {
+            return m_clientDict.ContainsKey(clientId);
+        }
+
         public override void DisconnectClient(uint clientId, Exception err)
         {
             if (!m_clientDict.TryRemove(clientId, out var client)) return;

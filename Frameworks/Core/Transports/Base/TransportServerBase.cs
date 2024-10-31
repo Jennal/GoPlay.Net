@@ -18,6 +18,7 @@ namespace GoPlay.Core.Transports
         public abstract void Send(uint clientId, byte[] data);
 
         public abstract string GetClientIp(uint clientId);
+        public abstract bool IsOnline(uint clientId);
 
         public abstract void DisconnectClient(uint clientId, Exception err);
         

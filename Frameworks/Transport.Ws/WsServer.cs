@@ -280,6 +280,11 @@ namespace GoPlay.Core.Transport.Ws
             return session.ClientIP;
         }
 
+        public override bool IsOnline(uint clientId)
+        {
+            return m_server.GetSession(clientId, out _);
+        }
+
         public override void DisconnectClient(uint clientId, Exception err)
         {
             if (!m_server.GetSession(clientId, out var session)) return;

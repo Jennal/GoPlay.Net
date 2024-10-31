@@ -35,5 +35,10 @@ namespace GoPlay.Core
             public const int ReadSize = 4096;
             public const int WriteSize = 4096;
         }
+
+        public static class Server
+        {
+            public const int MaxSendTask = 100;
+        }
     }
 }
