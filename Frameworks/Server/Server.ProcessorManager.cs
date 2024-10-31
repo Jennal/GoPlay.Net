@@ -111,6 +111,7 @@ namespace GoPlay
                 catch (AggregateException err)
                 {
                     if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
                     OnErrorEvent(IdLoopGenerator.INVALID, err);
                 }
                 catch (Exception err)
@@ -178,6 +179,13 @@ namespace GoPlay
                 {
                     //IGNORE ERR
                 }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    OnErrorEvent(pack.Header.ClientId, err);
+                }
                 catch (Exception err)
                 {
                     OnErrorEvent(pack.Header.ClientId, err);
@@ -233,6 +241,13 @@ namespace GoPlay
                 catch (OperationCanceledException)
                 {
                     /* IGNORE */
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    OnErrorEvent(clientId, err);
                 }
                 catch (Exception err)
                 {

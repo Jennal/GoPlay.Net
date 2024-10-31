@@ -144,6 +144,13 @@ namespace GoPlay.Core.Processors
                 {
                     //IGNORE ERR
                 }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
                 catch (Exception err)
                 {
                     Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
@@ -176,6 +183,13 @@ namespace GoPlay.Core.Processors
                 catch (OperationCanceledException)
                 {
                     //IGNORE ERR
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
                 }
                 catch (Exception err)
                 {

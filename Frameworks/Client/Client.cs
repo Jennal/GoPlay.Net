@@ -296,6 +296,14 @@ namespace GoPlay
                 {
                     //IGNORE ERR
                 }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    OnErrorEvent(err);
+                    DisconnectAsync().ConfigureAwait(false);
+                }
                 catch (Exception err)
                 {
                     OnErrorEvent(err);
@@ -324,6 +332,14 @@ namespace GoPlay
                 catch (OperationCanceledException)
                 {
                     //IGNORE ERR
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    OnErrorEvent(err);
+                    DisconnectAsync().ConfigureAwait(false);
                 }
                 catch (Exception err)
                 {
@@ -408,6 +424,14 @@ namespace GoPlay
                 catch (OperationCanceledException)
                 {
                     //IGNORE ERR
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    
+                    OnErrorEvent(err);
+                    DisconnectAsync().ConfigureAwait(false);
                 }
                 catch (Exception err)
                 {
