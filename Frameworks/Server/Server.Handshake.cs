@@ -16,6 +16,9 @@ namespace GoPlay
 
         private RespHandShake GetHandShake(ServerTag serverTag)
         {
+            if (serverTag == ServerTag.FrontEnd && m_respHandShakeFrontEnd != null) return m_respHandShakeFrontEnd;
+            if (serverTag == ServerTag.BackEnd && m_respHandShakeBackEnd != null) return m_respHandShakeBackEnd;
+            
             var resp = new RespHandShake
             {
                 ServerVersion = "GoPlay Service/0.1",

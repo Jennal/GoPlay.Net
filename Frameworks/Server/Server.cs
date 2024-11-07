@@ -26,6 +26,7 @@ namespace GoPlay
         public abstract void Send(Package package);
         public abstract void Kick(uint clientId, string reason);
         public abstract uint ToRouteId(string route);
+        public abstract string ToRouteName(ServerTag serverTag, uint route);
         public abstract string GetClientIp(uint clientId);
         public abstract void Dispose();
         public abstract void RegisterFilter(IFilter filter);
@@ -35,6 +36,10 @@ namespace GoPlay
         public abstract void PostRecvFilter(Package pack);
         public abstract void PostSendFilter(Package pack);
         public abstract void ErrorFilter(uint clientId, Exception err);
+        
+        public abstract bool IsSendQueueFull { get; }
+        
+        public abstract List<Package> GetAllSendQueue();
     }
     
     public partial class Server<T> : Server
@@ -313,6 +318,24 @@ namespace GoPlay
             }
 
             return ProcessorBase.UNKOWN_ROUTE_ID;
+        }
+
+        public override string ToRouteName(ServerTag serverTag, uint routeId)
+        {
+            var resp = GetHandShake(serverTag);
+            if (resp != null)
+            {
+                var item = resp.Routes.FirstOrDefault(o => o.Value == routeId);
+                if (!string.IsNullOrEmpty(item.Key)) return item.Key;
+            }
+
+            return $"UNKNOWN_ROUTE({routeId})";
+        }
+
+        public override bool IsSendQueueFull => m_sendQueue.Count >= m_sendQueue.BoundedCapacity;
+        public override List<Package> GetAllSendQueue()
+        {
+            return m_sendQueue.ToList();
         }
     }
 }
