@@ -68,7 +68,11 @@ namespace GoPlay
         public event Action OnStarted;
         public event Action OnStopped;
 
-        public event Action<uint> OnClientConnected;
+        public event Action<uint> OnClientConnected
+        {
+            add => Transport.OnClientConnected += value;
+            remove => Transport.OnClientConnected -= value;
+        }
         public event Action<uint> OnClientDisconnected
         {
             add => Transport.OnClientDisconnected += value;
