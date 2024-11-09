@@ -56,6 +56,7 @@ namespace GoPlay
             }
 
             ProcessorOnHandShake(request.Data.ServerTag, pack.Header);
+            OnClientConnected?.Invoke(pack.Header.ClientId);
         }
     }
 }
