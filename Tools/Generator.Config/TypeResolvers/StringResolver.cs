@@ -6,7 +6,9 @@ namespace GoPlay.Generators.Config
     public class StringResolver : TypeResolverBase<string>
     {
         public override string TypeName => "string";
-        
+
+        public override object Default => string.Empty;
+
         public override string GetScriptClone(string fieldName)
         {
             return fieldName;

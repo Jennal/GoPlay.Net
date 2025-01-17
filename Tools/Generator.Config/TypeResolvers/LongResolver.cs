@@ -5,7 +5,9 @@ namespace GoPlay.Generators.Config
     public class LongResolver : TypeResolverBase<long>
     {
         public override string TypeName => "long";
-        
+
+        public override object Default => 0L;
+
         public override string GetScriptClone(string fieldName)
         {
             return fieldName;

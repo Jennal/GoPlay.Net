@@ -6,6 +6,7 @@ namespace GoPlay.Generators.Config
     public class IntResolver : TypeResolverBase<int>
     {
         public override string TypeName => "int";
+        public override object Default => 0;
 
         public override string GetScriptClone(string fieldName)
         {

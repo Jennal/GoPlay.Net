@@ -5,7 +5,9 @@ namespace GoPlay.Generators.Config
     public class FloatResolver : TypeResolverBase<float>
     {
         public override string TypeName => "float";
-        
+
+        public override object Default => 0f;
+
         public override string GetScriptClone(string fieldName)
         {
             return fieldName;
