@@ -88,6 +88,7 @@ internal class GoPlayService : IHostedService
                     
         _server.Register(new TestProcessor());
         _server.Register(new ChatProcessor());
+        _server.Register(new AriPlaneProcessor());
         
         _serverTask = _server.Start(_host, _port);
         return Task.CompletedTask;

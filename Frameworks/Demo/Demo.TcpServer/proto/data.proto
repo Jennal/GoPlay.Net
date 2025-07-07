@@ -7,3 +7,23 @@ message ChatData {
   string Name = 1;
   string Content = 2;
 }
+
+message RegisterAccount{
+  string name = 1;
+}
+
+message GameData {
+  repeated PlayerData playerData = 1;
+  PlayerData curPlayerData = 2;
+}
+
+message PlayerData {
+  uint64 humanId = 1;
+  string name = 2;
+  DVector2 dVector2 = 3;
+}
+
+message DVector2 {
+  float xPos = 1;
+  float yPos = 2;
+}

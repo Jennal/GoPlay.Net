@@ -69,7 +69,7 @@ public class TestProcessor : ProcessorBase, IStart, IStop, IUpdate
     public Task OnUpdate()
     {
         m_count++;
-        Console.WriteLine($"TestProcessor.OnUpdate[{m_count}] => {DateTime.Now:hh:mm:ss.fff}");
+        // Console.WriteLine($"TestProcessor.OnUpdate[{m_count}] => {DateTime.Now:hh:mm:ss.fff}");
         return Task.CompletedTask;
     }
 }
