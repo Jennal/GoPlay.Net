@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package GoPlay.Demo;
+
+message RegisterAccount{
+  string Name = 1;
+}
+
+message GameData {
+  repeated PlayerData PlayerList = 1;
+  PlayerData CurPlayer = 2;
+}
+
+message PlayerData {
+  uint32 Id = 1;
+  string Name = 2;
+  Vector2 Pos = 3;
+}
+
+message Vector2 {
+  float X = 1;
+  float Y = 2;
+}
