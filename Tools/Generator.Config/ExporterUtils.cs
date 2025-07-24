@@ -454,6 +454,17 @@ namespace GoPlay.Generators.Config
 
             throw new Exception(ErrFormat(tableName, name, type, row, val));
         }
+        
+        public static decimal ConvertDecimal(string tableName, string name, string type, int row, string val)
+        {
+            decimal result = 0;
+            if (decimal.TryParse(val, out result))
+            {
+                return result;
+            }
+
+            throw new Exception(ErrFormat(tableName, name, type, row, val));
+        }
 
         public static bool ConvertBool(string tableName, string name, string type, int row, string val)
         {
