@@ -40,6 +40,8 @@ namespace GoPlay
         public abstract bool IsSendQueueFull { get; }
         
         public abstract List<Package> GetAllSendQueue();
+        
+        public abstract string GetRoute(Package pack);
     }
     
     public partial class Server<T> : Server

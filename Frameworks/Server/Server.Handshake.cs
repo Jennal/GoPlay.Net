@@ -57,5 +57,24 @@ namespace GoPlay
 
             ProcessorOnHandShake(request.Data.ServerTag, pack.Header);
         }
+        
+        public override string GetRoute(Package pack)
+        {
+            if (pack == null || pack.Header == null || pack.Header.PackageInfo == null) return string.Empty;
+            
+            if (m_respHandShakeFrontEnd != null)
+            {
+                var item = m_respHandShakeFrontEnd.Routes.FirstOrDefault(o => o.Value == pack.Header.PackageInfo.Route);
+                if (!string.IsNullOrEmpty(item.Key)) return item.Key;
+            }
+            
+            if (m_respHandShakeBackEnd != null)
+            {
+                var item = m_respHandShakeBackEnd.Routes.FirstOrDefault(o => o.Value == pack.Header.PackageInfo.Route);
+                if (!string.IsNullOrEmpty(item.Key)) return item.Key;
+            }
+
+            return string.Empty;
+        }
     }
 }
