@@ -234,6 +234,8 @@ namespace GoPlay
             {
                 try
                 {
+                    if (!processor.IsRecognizeBroadcastEvent(eventId)) continue;
+                    
                     var name = processor.GetName();
                     var queue = m_broadcastQueues[name];
                     queue.Enqueue((clientId, eventId, data));

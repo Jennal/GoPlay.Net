@@ -261,6 +261,11 @@ namespace GoPlay.Core.Processors
         {
         }
 
+        public virtual bool IsRecognizeBroadcastEvent(int eventId)
+        {
+            return true;
+        }
+        
         public virtual Task OnBroadcast(uint clientId, int eventId, object data)
         {
             return Task.CompletedTask;
