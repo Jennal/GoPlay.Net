@@ -141,59 +141,11 @@ namespace GoPlay
             var broadcastQueue = m_broadcastQueues[name];
             while (IsStarted && !cancelToken.IsCancellationRequested)
             {
-                Update(processor).Wait(cancelToken);
-                ResolveBroadCast(processor, broadcastQueue).Wait(cancelToken);
-                processor.DoDeferCalls().Wait(cancelToken);
-                processor.DoDelayCalls().Wait(cancelToken);
-
-                //Only for update
-                if (processor.IsOnlyUpdate)
-                {
-                    Task.Delay(processor.UpdateDeltaTime, cancelToken).Wait(cancelToken);
-                    continue;
-                }
-                
-                if (!queue.TryTake(out var pack, (int)processor.RecvTimeout.TotalMilliseconds, cancelToken)) continue;
-                try
-                {
-                    var result = processor.OnPreRecv(pack!);
-                    if (result != null)
-                    {
-                        Send(result);
-                        processor.OnPostSendResult(result);
-                        continue;
-                    }
-
-                    var task = processor.Invoke(pack!);
-                    task.Wait(cancelToken);
-                    if (task.IsCanceled) return;
-                    
-                    result = task.Result;
-                    if (result != null)
-                    {
-                        Send(result);
-                        processor.OnPostSendResult(result);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    
-                    OnErrorEvent(pack.Header.ClientId, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(pack.Header.ClientId, err);
-                }
+                if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) return;
             }
         }
 
-        protected async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
+        public override async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
         {
             while (queue.TryDequeue(out var tuple))
             {
@@ -209,7 +161,7 @@ namespace GoPlay
             }
         }
         
-        protected async Task Update(ProcessorBase processor)
+        public override async Task Update(ProcessorBase processor)
         {
             var updater = processor as IUpdate;
             if (updater == null) return;

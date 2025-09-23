@@ -42,6 +42,8 @@ namespace GoPlay
         public abstract List<Package> GetAllSendQueue();
         
         public abstract string GetRoute(Package pack);
+        public abstract Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue);
+        public abstract Task Update(ProcessorBase processor);
     }
     
     public partial class Server<T> : Server

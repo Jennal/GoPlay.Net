@@ -1,4 +1,5 @@
-﻿using GoPlay.Core.Protocols;
+﻿using System.Collections.Concurrent;
+using GoPlay.Core.Protocols;
 using GoPlay.Core.Routers;
 using GoPlay.Core.Utils;
 
@@ -121,6 +122,66 @@ namespace GoPlay.Core.Processors
             var routes = GetRoutes();
             var route = routes.FirstOrDefault(o => o.RouteId == pack.Header.PackageInfo.Route);
             return await route!.Invoke(pack);
+        }
+
+        public virtual bool PackageLoopFrame(BlockingCollection<Package> packQueue, ConcurrentQueue<(uint, int, object)> broadcastQueue, CancellationToken cancelToken)
+        {
+            Server.Update(this).Wait(cancelToken);
+            Server.ResolveBroadCast(this, broadcastQueue).Wait(cancelToken);
+            DoDeferCalls().Wait(cancelToken);
+            DoDelayCalls().Wait(cancelToken);
+
+            //Only for update
+            if (IsOnlyUpdate)
+            {
+                Task.Delay(UpdateDeltaTime, cancelToken).Wait(cancelToken);
+                return true;
+            }
+                
+            return ResolvePackageQueue(packQueue, cancelToken);
+        }
+
+        protected virtual bool ResolvePackageQueue(BlockingCollection<Package> packQueue, CancellationToken cancelToken)
+        {
+            if (!packQueue.TryTake(out var pack, (int)RecvTimeout.TotalMilliseconds, cancelToken)) return true;
+            try
+            {
+                var result = OnPreRecv(pack!);
+                if (result != null)
+                {
+                    Server.Send(result);
+                    OnPostSendResult(result);
+                    return true;
+                }
+
+                var task = Invoke(pack!);
+                task.Wait(cancelToken);
+                if (task.IsCanceled) return false;
+                    
+                result = task.Result;
+                if (result != null)
+                {
+                    Server.Send(result);
+                    OnPostSendResult(result);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                //IGNORE ERR
+            }
+            catch (AggregateException err)
+            {
+                if (err.InnerException is OperationCanceledException) return true;
+                if (err.InnerException is TaskCanceledException) return true;
+                    
+                Server.OnErrorEvent(pack.Header.ClientId, err);
+            }
+            catch (Exception err)
+            {
+                Server.OnErrorEvent(pack.Header.ClientId, err);
+            }
+
+            return true;
         }
 
         public virtual void DeferCall(Func<Task> func)
