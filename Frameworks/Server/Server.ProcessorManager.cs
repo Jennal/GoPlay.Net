@@ -121,7 +121,7 @@ namespace GoPlay
             }
         }
         
-        protected virtual void OnRecv(Package packRaw)
+        protected virtual void OnDataReceived(Package packRaw)
         {
             var processor = Processors.FirstOrDefault(o => o.IsRecognizeRoute(packRaw.Header.PackageInfo.Route));
             if (processor == null)

@@ -19,7 +19,7 @@ namespace GoPlay.Core.Transports.TCP
 
         protected ConcurrentDictionary<uint, MemoryStream> m_readBufferDict = new ConcurrentDictionary<uint, MemoryStream>();
 
-        protected BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
+        // protected BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
         protected BlockingCollection<(uint, byte[])> m_writeChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
         
         protected IdLoopGenerator m_idGen = new IdLoopGenerator(uint.MaxValue);
@@ -171,7 +171,8 @@ namespace GoPlay.Core.Transports.TCP
                     ms.CopyTo(nms);
                     if (!m_readBufferDict.TryUpdate(clientId, nms, ms)) return;
                         
-                    m_readChannel.Add((clientId, packBuffer));
+                    // m_readChannel.Add((clientId, packBuffer));
+                    InvokeOnDataReceived(clientId, packBuffer);
                 }
             }
             catch (Exception err)
@@ -241,10 +242,10 @@ namespace GoPlay.Core.Transports.TCP
             
         }
 
-        public override (uint, byte[]) Recv()
-        {
-            return m_readChannel.Take(m_cancelSource.Token);
-        }
+        // public override (uint, byte[]) Recv()
+        // {
+        //     return m_readChannel.Take(m_cancelSource.Token);
+        // }
 
         public override void Send(uint clientId, byte[] data)
         {

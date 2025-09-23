@@ -8,13 +8,14 @@ namespace GoPlay.Core.Transports
         public event Action<uint> OnClientConnected;
         public event Action<uint> OnClientDisconnected;
         public event Action<uint, Exception> OnError;
+        public event Action<(uint, byte[])> OnDataReceived;
 
         public virtual bool SupportPush => true;
         
         public abstract void Start(string host, int port, CancellationTokenSource cancelSource=null);
         public abstract void Stop();
 
-        public abstract (uint, byte[]) Recv();
+        // public abstract (uint, byte[]) Recv();
         public abstract void Send(uint clientId, byte[] data);
 
         public abstract string GetClientIp(uint clientId);
@@ -34,6 +35,11 @@ namespace GoPlay.Core.Transports
         protected void InvokeOnError(uint clientId, Exception err)
         {
             OnError?.Invoke(clientId, err);
+        }
+        
+        public void InvokeOnDataReceived(uint clientId, byte[] data)
+        {
+            OnDataReceived?.Invoke((clientId, data));
         }
     }
 }

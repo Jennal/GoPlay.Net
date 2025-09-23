@@ -152,7 +152,7 @@ namespace GoPlay.Core.Transport.Wss
         internal WssServer m_server;
         private IdLoopGenerator m_idGen = new IdLoopGenerator(uint.MaxValue);
         private ConcurrentDictionary<uint, WssPackSession> m_sessions = new ConcurrentDictionary<uint, WssPackSession>();
-        private BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
+        // private BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
 
         public WssPackServer(WssServer server, SslContext context, IPAddress address, int port) : base(context, address, port)
         {
@@ -181,13 +181,14 @@ namespace GoPlay.Core.Transport.Wss
         internal void OnRecv(SslSession session, byte[] data)
         {
             if (session is WssPackSession packSession == false) return;
-            m_readChannel.Add((packSession.ClientId, data), m_server.CancellationToken);
+            m_server.InvokeOnDataReceived(packSession.ClientId, data);
+            // m_readChannel.Add((packSession.ClientId, data), m_server.CancellationToken);
         }
 
-        public (uint, byte[]) Recv()
-        {
-            return m_readChannel.Take(m_server.CancellationToken);
-        }
+        // public (uint, byte[]) Recv()
+        // {
+        //     return m_readChannel.Take(m_server.CancellationToken);
+        // }
 
         public void Send(uint clientId, byte[] data)
         {
@@ -266,10 +267,10 @@ namespace GoPlay.Core.Transport.Wss
             });
         }
         
-        public override (uint, byte[]) Recv()
-        {
-            return m_server.Recv();
-        }
+        // public override (uint, byte[]) Recv()
+        // {
+        //     return m_server.Recv();
+        // }
 
         public override void Send(uint clientId, byte[] data)
         {

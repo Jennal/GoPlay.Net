@@ -55,7 +55,7 @@ namespace GoPlay
         protected BlockingCollection<Package> m_sendQueue;
 
         protected Task m_sendTask;
-        protected Task m_recvTask;
+        // protected Task m_recvTask;
         // protected Task m_updateTask;
 
         public override Type TransportType => typeof(T);
@@ -88,6 +88,7 @@ namespace GoPlay
             OnClientConnected += OnClientConnectEvent;
             OnClientDisconnected += OnClientDisconnectEvent;
             Transport.OnError += OnErrorEvent;
+            Transport.OnDataReceived += OnDataReceived;
         }
 
         protected virtual void OnClientConnectEvent(uint clientId)
@@ -122,13 +123,14 @@ namespace GoPlay
 
             m_sendQueue = new BlockingCollection<Package>(ushort.MaxValue);
             
-            m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
+            // m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
             m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
             // m_updateTask = TaskUtil.LongRun(UpdateLoop, m_cancelSource.Token);
 
             StartProcessors();
             
-            return Task.WhenAll(m_recvTask, m_sendTask);
+            // return Task.WhenAll(m_recvTask, m_sendTask);
+            return Task.WhenAll(m_sendTask);
         }
 
         private void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -148,7 +150,8 @@ namespace GoPlay
             
             try
             {
-                Task.WaitAll(m_recvTask, m_sendTask);
+                // Task.WaitAll(m_recvTask, m_sendTask);
+                Task.WaitAll(m_sendTask);
                 m_sendQueue.Dispose();
             }
             catch
@@ -202,63 +205,117 @@ namespace GoPlay
             }
         }
 
-        protected void RecvLoop()
+        // protected void RecvLoop()
+        // {
+        //     var token = m_cancelSource.Token;
+        //     while (IsStarted && !token.IsCancellationRequested)
+        //     {
+        //         uint clientId = 0;
+        //         byte[] data = null;
+        //         try
+        //         {
+        //             (clientId, data) = Transport.Recv();
+        //             var pack = Package.ParseRaw(data);
+        //             pack.Header.ClientId = clientId;
+        //             // Console.WriteLine($" =[S]> {pack}");
+        //
+        //             //处理分包
+        //             if (pack.IsChunk)
+        //             {
+        //                 pack = ResolveChunk(pack);
+        //                 if (pack.IsChunk) return;
+        //             }
+        //
+        //             if (IsBlockRecvByFilter(pack)) return;
+        //             
+        //             switch (pack.Header.PackageInfo.Type)
+        //             {
+        //                 case PackageType.HankShakeReq:
+        //                     OnHandShake(pack);
+        //                     break;
+        //                 case PackageType.Ping:
+        //                     OnPing(pack);
+        //                     break;
+        //                 case PackageType.Pong:
+        //                     OnPong(pack);
+        //                     break;
+        //                 case PackageType.Notify:
+        //                 case PackageType.Request:
+        //                     OnDataReceived(pack);
+        //                     break;
+        //             }
+        //
+        //             PostRecvFilter(pack);
+        //         }
+        //         catch (OperationCanceledException)
+        //         {
+        //             //IGNORE ERR
+        //         }
+        //         catch (AggregateException err)
+        //         {
+        //             if (err.InnerException is OperationCanceledException) return;
+        //             if (err.InnerException is TaskCanceledException) return;
+        //             
+        //             OnErrorEvent(clientId, err);
+        //         }
+        //         catch (Exception err)
+        //         {
+        //             OnErrorEvent(clientId, err);
+        //         }
+        //     }
+        // }
+
+        private void OnDataReceived(ValueTuple<uint, byte[]> val)
         {
-            var token = m_cancelSource.Token;
-            while (IsStarted && !token.IsCancellationRequested)
+            var (clientId, data) = val;
+            try
             {
-                uint clientId = 0;
-                byte[] data;
-                try
+                var pack = Package.ParseRaw(data);
+                pack.Header.ClientId = clientId;
+                // Console.WriteLine($" =[S]> {pack}");
+
+                //处理分包
+                if (pack.IsChunk)
                 {
-                    (clientId, data) = Transport.Recv();
-                    var pack = Package.ParseRaw(data);
-                    pack.Header.ClientId = clientId;
-                    // Console.WriteLine($" =[S]> {pack}");
+                    pack = ResolveChunk(pack);
+                    if (pack.IsChunk) return;
+                }
 
-                    //处理分包
-                    if (pack.IsChunk)
-                    {
-                        pack = ResolveChunk(pack);
-                        if (pack.IsChunk) continue;
-                    }
-
-                    if (IsBlockRecvByFilter(pack)) continue;
+                if (IsBlockRecvByFilter(pack)) return;
                     
-                    switch (pack.Header.PackageInfo.Type)
-                    {
-                        case PackageType.HankShakeReq:
-                            OnHandShake(pack);
-                            break;
-                        case PackageType.Ping:
-                            OnPing(pack);
-                            break;
-                        case PackageType.Pong:
-                            OnPong(pack);
-                            break;
-                        case PackageType.Notify:
-                        case PackageType.Request:
-                            OnRecv(pack);
-                            break;
-                    }
+                switch (pack.Header.PackageInfo.Type)
+                {
+                    case PackageType.HankShakeReq:
+                        OnHandShake(pack);
+                        break;
+                    case PackageType.Ping:
+                        OnPing(pack);
+                        break;
+                    case PackageType.Pong:
+                        OnPong(pack);
+                        break;
+                    case PackageType.Notify:
+                    case PackageType.Request:
+                        OnDataReceived(pack);
+                        break;
+                }
 
-                    PostRecvFilter(pack);
-                }
-                catch (OperationCanceledException)
-                {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
+                PostRecvFilter(pack);
+            }
+            catch (OperationCanceledException)
+            {
+                //IGNORE ERR
+            }
+            catch (AggregateException err)
+            {
+                if (err.InnerException is OperationCanceledException) return;
+                if (err.InnerException is TaskCanceledException) return;
                     
-                    OnErrorEvent(clientId, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(clientId, err);
-                }
+                OnErrorEvent(clientId, err);
+            }
+            catch (Exception err)
+            {
+                OnErrorEvent(clientId, err);
             }
         }
 
