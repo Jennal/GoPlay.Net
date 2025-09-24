@@ -55,7 +55,7 @@ namespace GoPlay
                 Send(respPack);
             }
 
-            ProcessorOnHandShake(request.Data.ServerTag, pack.Header);
+            ProcessorOnHandShake(request.Data.ServerTag, request);
         }
         
         public override string GetRoute(Package pack)

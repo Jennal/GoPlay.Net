@@ -46,11 +46,11 @@ namespace GoPlay
             }
         }
 
-        protected virtual void ProcessorOnHandShake(ServerTag serverTag, Header header)
+        protected virtual void ProcessorOnHandShake(ServerTag serverTag, Package<ReqHankShake> pack)
         {
             foreach (var processor in Processors)
             {
-                processor.OnHandShake(header, serverTag);
+                processor.OnHandShake(pack, serverTag);
             }
         }
         

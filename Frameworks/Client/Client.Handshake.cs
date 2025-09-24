@@ -15,8 +15,9 @@ namespace GoPlay
             {
                 ClientVersion = string.IsNullOrEmpty(ClientVersion) ? "GoPlay Client/0.1" : ClientVersion,
                 ServerTag = ServerTag,
-                AppKey = string.Empty, //TODO:
+                AppKey = string.Empty,
             }, PackageType.HankShakeReq, EncodingType);
+            PreSendHandShakeFilter(pack);
             Send(pack);
             m_sendHandshakeTime = DateTime.UtcNow;
         }

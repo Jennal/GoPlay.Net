@@ -309,7 +309,7 @@ namespace GoPlay.Core.Processors
         {
         }
         
-        public virtual void OnHandShake(Header header, ServerTag data)
+        public virtual void OnHandShake(Package<ReqHankShake> pack, ServerTag data)
         {
         }
 

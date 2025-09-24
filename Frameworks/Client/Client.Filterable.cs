@@ -58,6 +58,14 @@ namespace GoPlay
             return result;
         }
         
+        public void PreSendHandShakeFilter(Package pack) 
+        {
+            foreach (var filter in m_filters)
+            {
+                filter.OnPreSend(pack);
+            }
+        }
+        
         public void PostRecvFilter(Package pack)
         {
             foreach (var filter in m_filters)
