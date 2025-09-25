@@ -7,6 +7,7 @@ using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
 using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
+using GoPlay.Statistics;
 
 namespace GoPlay
 {
@@ -40,6 +41,7 @@ namespace GoPlay
         public abstract bool IsSendQueueFull { get; }
         
         public abstract List<Package> GetAllSendQueue();
+        public abstract IEnumerable<ProcessorQueueStatus> GetProcessorQueueStatus();
         
         public abstract string GetRoute(Package pack);
         public abstract Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue);

@@ -5,6 +5,7 @@ using GoPlay.Core.Protocols;
 using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
 using GoPlay.Interfaces;
+using GoPlay.Statistics;
 
 namespace GoPlay
 {
@@ -207,6 +208,23 @@ namespace GoPlay
                 {
                     OnErrorEvent(clientId, err);
                 }
+            }
+        }
+        
+        public override IEnumerable<ProcessorQueueStatus> GetProcessorQueueStatus()
+        {
+            foreach (var processor in m_processors)
+            {
+                var name = processor.GetName();
+                var packageQueue = m_packageQueues[name];
+                var broadcastQueue = m_broadcastQueues[name];
+
+                yield return new ProcessorQueueStatus
+                {
+                    Name = name,
+                    PackageQueueCount = packageQueue.Count,
+                    BroadcastQueueCount = broadcastQueue.Count,
+                };
             }
         }
     }
