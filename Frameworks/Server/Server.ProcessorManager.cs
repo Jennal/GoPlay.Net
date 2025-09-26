@@ -142,7 +142,24 @@ namespace GoPlay
             var broadcastQueue = m_broadcastQueues[name];
             while (IsStarted && !cancelToken.IsCancellationRequested)
             {
-                if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) return;
+                try
+                {
+                    if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
+                }
+                catch (OperationCanceledException)
+                {
+                    //IGNORE ERR
+                }
+                catch (AggregateException err)
+                {
+                    if (err.InnerException is OperationCanceledException) continue;
+                    if (err.InnerException is TaskCanceledException) continue;
+                    OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+                catch (Exception err)
+                {
+                    OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
             }
         }
 
@@ -211,17 +228,19 @@ namespace GoPlay
             }
         }
         
-        public override IEnumerable<ProcessorQueueStatus> GetProcessorQueueStatus()
+        public override IEnumerable<ProcessorStatus> GetProcessorQueueStatus()
         {
             foreach (var processor in m_processors)
             {
                 var name = processor.GetName();
                 var packageQueue = m_packageQueues[name];
                 var broadcastQueue = m_broadcastQueues[name];
-
-                yield return new ProcessorQueueStatus
+                var task = m_tasks[name];
+                
+                yield return new ProcessorStatus
                 {
                     Name = name,
+                    Status = task.Status,
                     PackageQueueCount = packageQueue.Count,
                     BroadcastQueueCount = broadcastQueue.Count,
                 };
