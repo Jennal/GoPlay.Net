@@ -39,6 +39,7 @@ namespace GoPlay
         public abstract void ErrorFilter(uint clientId, Exception err);
         
         public abstract bool IsSendQueueFull { get; }
+        public abstract int SendQueueCount { get; }
         
         public abstract List<Package> GetAllSendQueue();
         public abstract IEnumerable<ProcessorStatus> GetProcessorQueueStatus();
@@ -396,6 +397,8 @@ namespace GoPlay
         }
 
         public override bool IsSendQueueFull => m_sendQueue.Count >= m_sendQueue.BoundedCapacity;
+        public override int SendQueueCount => m_sendQueue.Count;
+
         public override List<Package> GetAllSendQueue()
         {
             return m_sendQueue.ToList();
