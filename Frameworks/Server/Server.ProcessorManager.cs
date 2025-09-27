@@ -142,24 +142,7 @@ namespace GoPlay
             var broadcastQueue = m_broadcastQueues[name];
             while (IsStarted && !cancelToken.IsCancellationRequested)
             {
-                try
-                {
-                    if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
-                }
-                catch (OperationCanceledException)
-                {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
+                if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
             }
         }
 
