@@ -96,7 +96,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
         private NcServer m_ncServer;
         private IdLoopGenerator m_idGen = new IdLoopGenerator(uint.MaxValue);
         private ConcurrentDictionary<uint, PackSession> m_sessions = new ConcurrentDictionary<uint, PackSession>();
-        private BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
+        // private BlockingCollection<(uint, byte[])> m_readChannel = new BlockingCollection<(uint, byte[])>(ushort.MaxValue);
 
         public PackServer(NcServer server, IPAddress address, int port) : base(address, port)
         {
@@ -123,13 +123,14 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         internal void OnRecv(PackSession session, byte[] data)
         {
-            m_readChannel.Add((session.ClientId, data), m_ncServer.CancellationToken);
+            m_ncServer.InvokeOnDataReceived(session.ClientId, data);
+            // m_readChannel.Add((session.ClientId, data), m_ncServer.CancellationToken);
         }
 
-        public (uint, byte[]) Recv()
-        {
-            return m_readChannel.Take(m_ncServer.CancellationToken);
-        }
+        // public (uint, byte[]) Recv()
+        // {
+        //     return m_readChannel.Take(m_ncServer.CancellationToken);
+        // }
 
         public void Send(uint clientId, byte[] data)
         {
@@ -177,10 +178,10 @@ namespace GoPlay.Core.Transport.NetCoreServer
             m_server = null;
         }
 
-        public override (uint, byte[]) Recv()
-        {
-            return m_server.Recv();
-        }
+        // public override (uint, byte[]) Recv()
+        // {
+        //     return m_server.Recv();
+        // }
 
         public override void Send(uint clientId, byte[] data)
         {
