@@ -238,8 +238,8 @@ namespace GoPlay.Core.Processors
                 
                 try
                 {
-                    await func();
                     m_delayTasks.RemoveAt(i);
+                    await func();
                 }
                 catch (OperationCanceledException)
                 {
