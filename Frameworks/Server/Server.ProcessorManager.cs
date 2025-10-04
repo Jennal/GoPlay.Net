@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using GoPlay.Core;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Utils;
@@ -17,6 +16,8 @@ namespace GoPlay
         public abstract void Register(ProcessorBase processor);
         public abstract T GetProcessor<T>() where T : ProcessorBase;
         public abstract void Broadcast(uint clientId, int eventId, object data);
+        
+        public abstract Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false);
     }
     
     /// <summary>
@@ -28,6 +29,7 @@ namespace GoPlay
         protected List<IStop> m_stoppers;
         
         private Dictionary<string, Task> m_tasks = new Dictionary<string, Task>();
+        private Dictionary<string, CancellationTokenSource> m_restartProcessorTokenSources = new Dictionary<string, CancellationTokenSource>();
         private Dictionary<string, BlockingCollection<Package>> m_packageQueues = new Dictionary<string, BlockingCollection<Package>>();
         private Dictionary<string, ConcurrentQueue<(uint, int, object)>> m_broadcastQueues = new Dictionary<string, ConcurrentQueue<(uint, int, object)>>();
 
@@ -59,6 +61,7 @@ namespace GoPlay
         {
             m_packageQueues.Clear();
             m_tasks.Clear();
+            m_restartProcessorTokenSources.Clear();
 
             m_starters = Processors.OfType<IStart>().ToList();
             m_stoppers = Processors.OfType<IStop>().ToList();
@@ -69,6 +72,7 @@ namespace GoPlay
                 var name = processor.GetName();
                 m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
                 m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
+                m_restartProcessorTokenSources[name] = new CancellationTokenSource();
             }
             
             //do start
@@ -81,7 +85,8 @@ namespace GoPlay
             foreach (var processor in Processors)
             {   
                 var name = processor.GetName();
-                m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token), m_cancelSource.Token);
+                var source = m_restartProcessorTokenSources[name];
+                m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token, source.Token), source.Token);
             }
         }
 
@@ -135,14 +140,21 @@ namespace GoPlay
             m_packageQueues[name].Add(packRaw);
         }
 
-        protected void PackageLoop(ProcessorBase processor, CancellationToken cancelToken)
+        protected void PackageLoop(ProcessorBase processor, CancellationToken cancelToken, CancellationToken restartToken)
         {
             var name = processor.GetName();
             var queue = m_packageQueues[name];
             var broadcastQueue = m_broadcastQueues[name];
-            while (IsStarted && !cancelToken.IsCancellationRequested)
+            while (IsStarted && !cancelToken.IsCancellationRequested && !restartToken.IsCancellationRequested)
             {
-                if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
+                try
+                {
+                    if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
             }
         }
 
@@ -228,6 +240,31 @@ namespace GoPlay
                     BroadcastQueueCount = broadcastQueue.Count,
                 };
             }
+        }
+
+        public override async Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false)
+        {
+            var name = processor.GetName();
+            m_restartProcessorTokenSources[name].Cancel();
+            await m_tasks[name];
+
+            if (clearPackageQueue)
+            {
+                m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
+            }
+            
+            if (clearBroadcastQueue)
+            {
+                m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
+            }
+            
+            if (processor is IStart starter)
+            {
+                starter.OnStart();
+            }
+            
+            m_restartProcessorTokenSources[name] = new CancellationTokenSource();
+            m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token, m_restartProcessorTokenSources[name].Token), m_restartProcessorTokenSources[name].Token);
         }
     }
 }
