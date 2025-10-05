@@ -1,20 +1,16 @@
-﻿using GoPlay.Core.Protocols;
+﻿using System.Collections.Concurrent;
+using GoPlay.Core.Protocols;
 
 namespace GoPlay
 {
     public partial class Server<T>
     {
-        /// <summary>
-        /// 由于ResolveChunk不会在多线程执行，不需要使用ConcurrentDictionary
-        /// </summary>
-        protected Dictionary<string, List<Package>> chunkCache = new Dictionary<string, List<Package>>();
+        protected ConcurrentDictionary<string, List<Package>> chunkCache = new ConcurrentDictionary<string, List<Package>>();
         
         public virtual Package ResolveChunk(Package pack)
         {
             var key = GetChunkKey(pack);
-            if (!chunkCache.ContainsKey(key)) chunkCache[key] = new List<Package>();
-
-            var list = chunkCache[key];
+            var list = chunkCache.GetOrAdd(key, _ => new List<Package>());
             list.Add(pack);
             
             //未接收完全
@@ -25,7 +21,7 @@ namespace GoPlay
             
             //清理缓存
             list.Clear();
-            chunkCache.Remove(key);
+            chunkCache.TryRemove(key, out _);
             
             return p;
         }

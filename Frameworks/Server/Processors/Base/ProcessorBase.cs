@@ -2,6 +2,7 @@
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Routers;
 using GoPlay.Core.Utils;
+using GoPlay.Statistics;
 
 namespace GoPlay.Core.Processors
 {
@@ -16,6 +17,12 @@ namespace GoPlay.Core.Processors
         protected List<(string, uint, ServerTag)> m_routeIdDict;
         protected Queue<Func<Task>> m_deferTasks;
         protected List<(DateTime, Func<Task>)> m_delayTasks;
+
+        internal IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasks ?? Enumerable.Empty<(DateTime, Func<Task>)>();
+        
+        protected Task m_task;
+        protected BlockingCollection<Package> m_packageQueue;
+        protected ConcurrentQueue<(uint, int, object)> m_broadcastQueue;
         
         internal DateTime LastUpdate = DateTime.UtcNow;
         public virtual TimeSpan UpdateDeltaTime => Consts.TimeOut.Update;
@@ -27,6 +34,72 @@ namespace GoPlay.Core.Processors
         
         public abstract string[] Pushes { get; }
 
+        public virtual void StartThread()
+        {
+            m_packageQueue = new BlockingCollection<Package>(ushort.MaxValue);
+            m_broadcastQueue = new ConcurrentQueue<(uint, int, object)>();
+            m_task = TaskUtil.LongRun(() => PackageLoop(Server.CancelSource.Token), Server.CancelSource.Token);
+        }
+
+        public virtual async Task StopThread()
+        {
+            if (m_task == null) return;
+            
+            try
+            {
+                await m_task;
+            }
+            catch (AggregateException err)
+            {
+                if (err.InnerException is OperationCanceledException) return;
+                if (err.InnerException is TaskCanceledException) return;
+                Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+            }
+            catch (Exception err)
+            {
+                Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+            }
+        }
+        
+        protected virtual void PackageLoop(CancellationToken cancelToken)
+        {
+            while (Server.IsStarted && !cancelToken.IsCancellationRequested)
+            {
+                if (!PackageLoopFrame(m_packageQueue, m_broadcastQueue, cancelToken)) break;
+            }
+        }
+
+        public virtual void OnPackageReceived(Package packRaw)
+        {
+            m_packageQueue.Add(packRaw);
+        }
+
+        public virtual void OnBroadcastReceived(uint clientId, int eventId, object data)
+        {
+            m_broadcastQueue.Enqueue((clientId, eventId, data));
+        }
+
+        public virtual void OnUpdateReceived()
+        {
+            /* DO NOTHING */
+        }
+        
+        public virtual void OnDelayCallReceived(DateTime time, Func<Task> action)
+        {
+            /* DO NOTHING */
+        }
+        
+        public virtual ProcessorStatus GetStatus()
+        {
+            return new ProcessorStatus
+            {
+                Name = GetName(),
+                Status = m_task?.Status ?? TaskStatus.WaitingToRun,
+                PackageQueueCount = m_packageQueue?.Count ?? 0,
+                BroadcastQueueCount = m_broadcastQueue?.Count ?? 0,
+            };
+        }
+        
         public virtual string GetName()
         {
             return GetType().GetProcessorName().ToLower();
@@ -144,6 +217,11 @@ namespace GoPlay.Core.Processors
         protected virtual bool ResolvePackageQueue(BlockingCollection<Package> packQueue, CancellationToken cancelToken)
         {
             if (!packQueue.TryTake(out var pack, (int)RecvTimeout.TotalMilliseconds, cancelToken)) return true;
+            return ResolvePackage(pack, cancelToken);
+        }
+
+        protected virtual bool ResolvePackage(Package pack, CancellationToken cancelToken)
+        {
             try
             {
                 var result = OnPreRecv(pack!);

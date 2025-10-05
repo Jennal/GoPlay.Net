@@ -19,6 +19,12 @@ namespace GoPlay
         public EncodingType EncodingType = EncodingType.Protobuf;
 
         public abstract Type TransportType { get; }
+     
+        public virtual bool IsStarted
+        {
+            get;
+            protected set;
+        }
         
         public abstract Task Start(string host, int port);
         public abstract void Stop();
@@ -58,16 +64,11 @@ namespace GoPlay
         protected BlockingCollection<Package> m_sendQueue;
 
         protected Task m_sendTask;
+        protected Task m_timerTask;
         // protected Task m_recvTask;
         // protected Task m_updateTask;
 
         public override Type TransportType => typeof(T);
-        
-        public bool IsStarted
-        {
-            get;
-            private set;
-        }
 
         public CancellationToken CanelToken => m_cancelSource.Token;
         
@@ -128,12 +129,13 @@ namespace GoPlay
             
             // m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
             m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
+            m_timerTask = TaskUtil.LongRun(TimerLoop, m_cancelSource.Token);
             // m_updateTask = TaskUtil.LongRun(UpdateLoop, m_cancelSource.Token);
 
             StartProcessors();
             
-            // return Task.WhenAll(m_recvTask, m_sendTask);
-            return Task.WhenAll(m_sendTask);
+            // return Task.WhenAll(m_recvTask, m_sendTask, m_timerTask);
+            return Task.WhenAll(m_sendTask, m_timerTask);
         }
 
         private void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -153,22 +155,29 @@ namespace GoPlay
             
             try
             {
-                // Task.WaitAll(m_recvTask, m_sendTask);
-                Task.WaitAll(m_sendTask);
+                // Task.WaitAll(m_recvTask, m_sendTask, m_timerTask);
+                Task.WaitAll(m_sendTask, m_timerTask);
                 m_sendQueue.Dispose();
+                
+                Transport.Stop();
             }
             catch
             {
                 /* DO NOTHING */
             }
 
-            Transport.Stop();
-
             if (m_stoppers?.Count > 0)
             {
                 foreach (var stopper in m_stoppers)
                 {
-                    stopper.OnStop();
+                    try
+                    {
+                        stopper.OnStop();
+                    }
+                    catch(Exception e)
+                    {
+                        OnErrorEvent(IdLoopGenerator.INVALID, e);
+                    }
                 }
             }
 

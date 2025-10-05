@@ -1,8 +1,6 @@
 ﻿using System.Collections.Concurrent;
-using GoPlay.Core;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
-using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
 using GoPlay.Interfaces;
 using GoPlay.Statistics;
@@ -27,10 +25,6 @@ namespace GoPlay
         protected List<IStart> m_starters;
         protected List<IStop> m_stoppers;
         
-        private Dictionary<string, Task> m_tasks = new Dictionary<string, Task>();
-        private Dictionary<string, BlockingCollection<Package>> m_packageQueues = new Dictionary<string, BlockingCollection<Package>>();
-        private Dictionary<string, ConcurrentQueue<(uint, int, object)>> m_broadcastQueues = new Dictionary<string, ConcurrentQueue<(uint, int, object)>>();
-
         protected virtual void ProcessorOnClientConnect(uint clientId)
         {
             foreach (var processor in Processors)
@@ -57,31 +51,19 @@ namespace GoPlay
         
         protected void StartProcessors()
         {
-            m_packageQueues.Clear();
-            m_tasks.Clear();
-
             m_starters = Processors.OfType<IStart>().ToList();
             m_stoppers = Processors.OfType<IStop>().ToList();
-
-            //init data
-            foreach (var processor in Processors)
-            {   
-                var name = processor.GetName();
-                m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
-                m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
-            }
-            
-            //do start
-            foreach (var starter in m_starters)
-            {
-                starter.OnStart();
-            }
             
             //init thread
             foreach (var processor in Processors)
             {   
-                var name = processor.GetName();
-                m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token), m_cancelSource.Token);
+                processor.StartThread();
+            }
+   
+            //do start
+            foreach (var starter in m_starters)
+            {
+                starter.OnStart();
             }
         }
 
@@ -103,23 +85,14 @@ namespace GoPlay
         
         protected void StopProcessors()
         {
-            foreach (var task in m_tasks)
+            var tasks = new List<Task>();
+            foreach (var processor in m_processors)
             {
-                try
-                {
-                    task.Value.Wait();
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
+                var task = processor.StopThread();
+                tasks.Add(task);
             }
+            
+            Task.WaitAll(tasks.ToArray());
         }
         
         protected virtual void OnDataReceived(Package packRaw)
@@ -131,19 +104,7 @@ namespace GoPlay
                 return;
             }
 
-            var name = processor.GetName();
-            m_packageQueues[name].Add(packRaw);
-        }
-
-        protected void PackageLoop(ProcessorBase processor, CancellationToken cancelToken)
-        {
-            var name = processor.GetName();
-            var queue = m_packageQueues[name];
-            var broadcastQueue = m_broadcastQueues[name];
-            while (IsStarted && !cancelToken.IsCancellationRequested)
-            {
-                if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
-            }
+            processor.OnPackageReceived(packRaw);
         }
 
         public override async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
@@ -189,9 +150,7 @@ namespace GoPlay
                 {
                     if (!processor.IsRecognizeBroadcastEvent(eventId)) continue;
                     
-                    var name = processor.GetName();
-                    var queue = m_broadcastQueues[name];
-                    queue.Enqueue((clientId, eventId, data));
+                    processor.OnBroadcastReceived(clientId, eventId, data);
                 }
                 catch (OperationCanceledException)
                 {
@@ -215,18 +174,7 @@ namespace GoPlay
         {
             foreach (var processor in m_processors)
             {
-                var name = processor.GetName();
-                var packageQueue = m_packageQueues[name];
-                var broadcastQueue = m_broadcastQueues[name];
-                var task = m_tasks[name];
-                
-                yield return new ProcessorStatus
-                {
-                    Name = name,
-                    Status = task.Status,
-                    PackageQueueCount = packageQueue.Count,
-                    BroadcastQueueCount = broadcastQueue.Count,
-                };
+                yield return processor.GetStatus();
             }
         }
     }
