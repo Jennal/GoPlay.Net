@@ -66,7 +66,7 @@ namespace GoPlay.Core.Processors
         
         protected virtual void PackageLoop(CancellationToken cancelToken)
         {
-            while (Server.IsStarted && !cancelToken.IsCancellationRequested)
+            while (Server.IsStarted && !cancelToken.IsCancellationRequested && !m_restartTokenSource.IsCancellationRequested)
             {
                 if (!PackageLoopFrame(m_packageQueue, m_broadcastQueue, cancelToken)) break;
             }
