@@ -113,10 +113,11 @@ namespace GoPlay.Core.Processors
             await data.Action.Invoke();
         }
 
-        protected virtual async Task ResolveFallback(DataFlowItemBase arg)
+        protected virtual Task ResolveFallback(DataFlowItemBase arg)
         {
             Server.OnErrorEvent(IdLoopGenerator.INVALID,
                 new Exception($"ProcessorTplBase: unhandled dataflow item type: {arg.GetType().Name}"));
+            return Task.CompletedTask;
         }
 
         public override async Task StopThread()

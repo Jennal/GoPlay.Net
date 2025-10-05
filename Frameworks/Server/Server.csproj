@@ -9,7 +9,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>GoPlay.Server</AssemblyName>
     <RootNamespace>GoPlay.Server</RootNamespace>
-    <TargetFrameworks>net6.0;net7.0</TargetFrameworks>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <Title>GoPlay.Server</Title>
     <Authors>Jennal</Authors>
     <Description>GoPlay.Server
