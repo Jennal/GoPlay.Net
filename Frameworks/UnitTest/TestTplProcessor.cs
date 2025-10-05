@@ -159,6 +159,30 @@ namespace UnitTest
         }
         
         [Test]
+        public async Task BenchmarkMultiClientConnect()
+        {
+            var clientCount = 1000;
+
+            var server = new Server<NcServer>();
+            server.Register(new TestProcessorTpl());
+            var task = server.Start("127.0.0.1", 5557);
+
+            for (int i = 0; i < clientCount; i++)
+            {
+                var clientId = i;
+                var profilerKey = $"Connect_{clientId}";
+                var client = new Client<NcClient>();
+                client.RequestTimeout = TimeSpan.MaxValue;
+                Profiler.Begin(profilerKey);
+                var ok = await client.Connect("127.0.0.1", 5557);
+                Profiler.End(profilerKey);
+                Assert.IsTrue(ok);
+            }
+
+            Console.WriteLine(Profiler.StatisPrefix("Connect_"));
+        }
+        
+        [Test]
         public async Task TestAddListenerOnce()
         {
             var server = new Server<NcServer>();
