@@ -17,11 +17,13 @@ namespace GoPlay
                     foreach (var processor in m_processors)
                     {
                         //检查Update
-                        if (processor is IUpdate)
+                        if (processor is IUpdate && processor.LastUpdate < DateTime.UtcNow)
                         {
                             var targetTime = processor.LastUpdate.Add(processor.UpdateDeltaTime);
                             if (targetTime <= DateTime.UtcNow)
                             {
+                                //设为最大值避免重复执行
+                                processor.LastUpdate = DateTime.MaxValue;
                                 processor.OnUpdateReceived();
                             }
                             else

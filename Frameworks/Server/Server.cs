@@ -129,11 +129,12 @@ namespace GoPlay
             
             // m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
             m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
+            
+            StartProcessors();
+            
             m_timerTask = TaskUtil.LongRun(TimerLoop, m_cancelSource.Token);
             // m_updateTask = TaskUtil.LongRun(UpdateLoop, m_cancelSource.Token);
 
-            StartProcessors();
-            
             // return Task.WhenAll(m_recvTask, m_sendTask, m_timerTask);
             return Task.WhenAll(m_sendTask, m_timerTask);
         }

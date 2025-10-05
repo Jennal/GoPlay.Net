@@ -95,6 +95,7 @@ namespace GoPlay.Core.Processors
         {
             if (this is IUpdate updater)
             {
+                LastUpdate = DateTime.UtcNow;
                 await updater.OnUpdate();
             }
         }
