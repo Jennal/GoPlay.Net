@@ -11,8 +11,10 @@ namespace GoPlay.Core.Processors
     public abstract class ProcessorTplBase : ProcessorBase
     {
         protected ConcurrentDictionary<Func<Task>, DateTime> m_delayTasksThreadSafe;
-        internal override IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasksThreadSafe?.Select(o => (o.Value, o.Key)).ToArray() ?? Array.Empty<(DateTime, Func<Task>)>();
-        
+
+        internal override IEnumerable<(DateTime, Func<Task>)> DelayTasks =>
+            m_delayTasksThreadSafe?.Select(o => (o.Value, o.Key)).ToArray() ?? Array.Empty<(DateTime, Func<Task>)>();
+
         protected BufferBlock<DataFlowItemBase> m_bufferBlock;
         protected ActionBlock<DataFlowItemBase> m_packageBlock;
         protected ActionBlock<DataFlowItemBase> m_broadcastBlock;
@@ -21,17 +23,9 @@ namespace GoPlay.Core.Processors
         protected ActionBlock<DataFlowItemBase> m_deferBlock;
         protected ActionBlock<DataFlowItemBase> m_fallbackBlock;
 
-        public override void StartThread()
+        public override void StartThread(bool newPackageQueue = false, bool newBroadcastQueue = false)
         {
-            m_delayTasksThreadSafe = new ();
-            
-            m_bufferBlock = new BufferBlock<DataFlowItemBase>(new DataflowBlockOptions
-            {
-                BoundedCapacity = ushort.MaxValue,
-                CancellationToken = Server.CancelSource.Token,
-                EnsureOrdered = true,
-                MaxMessagesPerTask = 1,
-            });
+            m_delayTasksThreadSafe = new();
 
             m_packageBlock = new ActionBlock<DataFlowItemBase>(ResolvePackage);
             m_broadcastBlock = new ActionBlock<DataFlowItemBase>(ResolveBroadcast);
@@ -40,39 +34,49 @@ namespace GoPlay.Core.Processors
             m_deferBlock = new ActionBlock<DataFlowItemBase>(ResolveDeferCall);
             m_fallbackBlock = new ActionBlock<DataFlowItemBase>(ResolveFallback);
 
-            m_bufferBlock.LinkTo(m_packageBlock, new DataflowLinkOptions
+            if (m_bufferBlock == null || newPackageQueue || newBroadcastQueue)
             {
-                PropagateCompletion = true,
-            }, data => data is PackageItem);
+                m_bufferBlock = new BufferBlock<DataFlowItemBase>(new DataflowBlockOptions
+                {
+                    BoundedCapacity = ushort.MaxValue,
+                    CancellationToken = Server.CancelSource.Token,
+                    EnsureOrdered = true,
+                    MaxMessagesPerTask = 1,
+                });
+                m_bufferBlock.LinkTo(m_packageBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is PackageItem);
 
-            m_bufferBlock.LinkTo(m_broadcastBlock, new DataflowLinkOptions
-            {
-                PropagateCompletion = true,
-            }, data => data is BroadcastItem);
+                m_bufferBlock.LinkTo(m_broadcastBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is BroadcastItem);
 
-            m_bufferBlock.LinkTo(m_updateBlock, new DataflowLinkOptions
-            {
-                PropagateCompletion = true,
-            }, data => data is UpdateItem);
+                m_bufferBlock.LinkTo(m_updateBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is UpdateItem);
 
-            m_bufferBlock.LinkTo(m_delayBlock, new DataflowLinkOptions
-            {
-                PropagateCompletion = true,
-            }, data => data is DelayCallItem);
+                m_bufferBlock.LinkTo(m_delayBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is DelayCallItem);
 
-            m_bufferBlock.LinkTo(m_deferBlock, new DataflowLinkOptions
-            {
-                PropagateCompletion = true,
-            }, data => data is DeferCallItem);
+                m_bufferBlock.LinkTo(m_deferBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is DeferCallItem);
 
-            m_bufferBlock.LinkTo(m_fallbackBlock, new DataflowLinkOptions
-            {
-                PropagateCompletion = true,
-            }, data => data is not PackageItem &&
-                       data is not BroadcastItem &&
-                       data is not UpdateItem &&
-                       data is not DelayCallItem &&
-                       data is not DeferCallItem);
+                m_bufferBlock.LinkTo(m_fallbackBlock, new DataflowLinkOptions
+                {
+                    PropagateCompletion = true,
+                }, data => data is not PackageItem &&
+                           data is not BroadcastItem &&
+                           data is not UpdateItem &&
+                           data is not DelayCallItem &&
+                           data is not DeferCallItem);
+            }
         }
 
         protected virtual void ResolvePackage(DataFlowItemBase arg)
@@ -98,7 +102,7 @@ namespace GoPlay.Core.Processors
         protected virtual async Task ResolveDelayCall(DataFlowItemBase arg)
         {
             var data = arg as DelayCallItem;
-            
+
             m_delayTasksThreadSafe.TryRemove(data.Action, out _);
             await data.Action.Invoke();
         }
@@ -200,10 +204,10 @@ namespace GoPlay.Core.Processors
                 Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
             }
         }
-        
+
         public override void DelayCall(TimeSpan delay, Func<Task> func)
         {
-            if (m_delayTasksThreadSafe == null) m_delayTasksThreadSafe = new ();
+            if (m_delayTasksThreadSafe == null) m_delayTasksThreadSafe = new();
 
             var time = DateTime.UtcNow.Add(delay);
             m_delayTasksThreadSafe.AddOrUpdate(func, time, (_, _) => time);

@@ -20,6 +20,7 @@ namespace GoPlay.Core.Processors
 
         internal virtual IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasks ?? Enumerable.Empty<(DateTime, Func<Task>)>();
         
+        protected CancellationTokenSource m_restartTokenSource;
         protected Task m_task;
         protected BlockingCollection<Package> m_packageQueue;
         protected ConcurrentQueue<(uint, int, object)> m_broadcastQueue;
@@ -34,11 +35,12 @@ namespace GoPlay.Core.Processors
         
         public abstract string[] Pushes { get; }
 
-        public virtual void StartThread()
+        public virtual void StartThread(bool newPackageQueue = false, bool newBroadcastQueue = false)
         {
-            m_packageQueue = new BlockingCollection<Package>(ushort.MaxValue);
-            m_broadcastQueue = new ConcurrentQueue<(uint, int, object)>();
-            m_task = TaskUtil.LongRun(() => PackageLoop(Server.CancelSource.Token), Server.CancelSource.Token);
+            if (m_packageQueue == null || newPackageQueue) m_packageQueue = new BlockingCollection<Package>(ushort.MaxValue);
+            if (m_broadcastQueue == null || newBroadcastQueue) m_broadcastQueue = new ConcurrentQueue<(uint, int, object)>();
+            m_restartTokenSource = new CancellationTokenSource();
+            m_task = TaskUtil.LongRun(() => PackageLoop(Server.CancelSource.Token), m_restartTokenSource.Token);
         }
 
         public virtual async Task StopThread()
@@ -47,6 +49,7 @@ namespace GoPlay.Core.Processors
             
             try
             {
+                m_restartTokenSource.Cancel();
                 await m_task;
             }
             catch (AggregateException err)

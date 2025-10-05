@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
+using GoPlay.Core;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
+using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
 using GoPlay.Interfaces;
 using GoPlay.Statistics;
@@ -15,6 +17,8 @@ namespace GoPlay
         public abstract void Register(ProcessorBase processor);
         public abstract T GetProcessor<T>() where T : ProcessorBase;
         public abstract void Broadcast(uint clientId, int eventId, object data);
+        
+        public abstract Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false);
     }
     
     /// <summary>
@@ -176,6 +180,12 @@ namespace GoPlay
             {
                 yield return processor.GetStatus();
             }
+        }
+
+        public override async Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false)
+        {
+            await processor.StopThread();
+            processor.StartThread(clearPackageQueue, clearBroadcastQueue);
         }
     }
 }
