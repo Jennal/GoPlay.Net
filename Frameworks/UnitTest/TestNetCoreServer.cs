@@ -130,11 +130,15 @@ namespace UnitTest
             {
                 var clientId = i;
                 var profilerKey = $"Request_{clientId}";
-                var t = Task.Run(async () => { 
-                    var client = new Client<NcClient>();
-                    client.RequestTimeout = TimeSpan.MaxValue;
-                    client.Connect("127.0.0.1", 5557).Wait();
-
+                
+                var c = new Client<NcClient>();
+                c.RequestTimeout = TimeSpan.MaxValue;
+                var ok = await c.Connect("127.0.0.1", 5557);
+                Assert.IsTrue(ok);
+                
+                var t = Task.Run(async () =>
+                {
+                    var client = c;
                     for (var j = 0; j < requestCount; j++)
                     {
                         var id = clientId * j;

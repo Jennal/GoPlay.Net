@@ -18,7 +18,7 @@ namespace GoPlay.Core.Processors
         protected Queue<Func<Task>> m_deferTasks;
         protected List<(DateTime, Func<Task>)> m_delayTasks;
 
-        internal IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasks ?? Enumerable.Empty<(DateTime, Func<Task>)>();
+        internal virtual IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasks ?? Enumerable.Empty<(DateTime, Func<Task>)>();
         
         protected Task m_task;
         protected BlockingCollection<Package> m_packageQueue;

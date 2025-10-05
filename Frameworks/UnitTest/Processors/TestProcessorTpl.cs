@@ -3,14 +3,17 @@ using System.Threading.Tasks;
 using GoPlay.Core.Attributes;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
+using GoPlay.Interfaces;
 
 namespace UnitTest.Processors;
 
 [Processor("test")]
-class TestProcessorTpl : ProcessorTplBase
+class TestProcessorTpl : ProcessorTplBase, IUpdate
 {
     private int m_count = -1;
-        
+    public bool IsUpdated = false;
+    public override TimeSpan UpdateDeltaTime => TimeSpan.FromMilliseconds(10);
+
     public override string[] Pushes => new string[]
     {
         "test.push"
@@ -96,5 +99,11 @@ class TestProcessorTpl : ProcessorTplBase
         str.Value = $"Push: {str.Value}";
         Push("test.push", header, str);
         Push("test.push", header, str);
+    }
+
+    public async Task OnUpdate()
+    {
+        IsUpdated = true;
+        Server.Broadcast(1, 2, 3);
     }
 }

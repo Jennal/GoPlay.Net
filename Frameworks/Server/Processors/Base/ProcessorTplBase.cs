@@ -11,6 +11,7 @@ namespace GoPlay.Core.Processors
     public abstract class ProcessorTplBase : ProcessorBase
     {
         protected ConcurrentDictionary<Func<Task>, DateTime> m_delayTasksThreadSafe;
+        internal override IEnumerable<(DateTime, Func<Task>)> DelayTasks => m_delayTasksThreadSafe?.Select(o => (o.Value, o.Key)).ToArray() ?? Array.Empty<(DateTime, Func<Task>)>();
         
         protected BufferBlock<DataFlowItemBase> m_bufferBlock;
         protected ActionBlock<DataFlowItemBase> m_packageBlock;

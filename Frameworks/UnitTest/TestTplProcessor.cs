@@ -28,6 +28,7 @@ namespace UnitTest
             
             _server = new Server<NcServer>();
             _server.Register(new TestProcessorTpl());
+            _server.Register(new TestProcessorTplBroadcastReceiver());
             _server.Start("127.0.0.1", 8686);
             
             _client = new Client<NcClient>();
@@ -191,6 +192,71 @@ namespace UnitTest
             
             Assert.AreEqual(1, once);
             Assert.AreEqual(2, twice);
+        }
+        
+        [Test]
+        public async Task TestDeferCalls()
+        {
+            var pushResp = string.Empty;
+            _client.AddListener("test.push", (PbString data) =>
+            {
+                pushResp = data.Value;
+                Console.WriteLine($"Recv Push: {data.Value}");
+                Assert.AreEqual("Delay Push", data.Value);
+            });
+
+            var (status, resp) = await _client.Request<PbString, PbString>("test.echo.defer", new PbString
+            {
+                Value = "Test"
+            });
+            Assert.AreEqual(StatusCode.Success, status.Code);
+            Assert.AreEqual("[Test] Server reply: Test", resp.Value);
+            Assert.AreEqual(string.Empty, pushResp);
+            await Task.Delay(1500);
+            Assert.AreEqual("Delay Push", pushResp);
+        }
+        
+        [Test]
+        public async Task TestDelayCalls()
+        {
+            var pushResp = string.Empty;
+            _client.AddListener("test.push", (PbString data) =>
+            {
+                pushResp = data.Value;
+                Console.WriteLine($"Recv Push: {data.Value}");
+                Assert.AreEqual("Delay Push", data.Value);
+            });
+
+            var (status, resp) = await _client.Request<PbString, PbString>("test.echo.delay", new PbString
+            {
+                Value = "Test"
+            });
+            Assert.AreEqual(StatusCode.Success, status.Code);
+            Assert.AreEqual("[Test] Server reply: Test", resp.Value);
+            Assert.AreEqual(string.Empty, pushResp);
+            await Task.Delay(2000);
+            Assert.AreEqual("Delay Push", pushResp);
+        }
+
+        [Test]
+        public async Task TestUpdate()
+        {
+            var processor = _server.GetProcessor<TestProcessorTpl>();
+            await Task.Delay(processor.UpdateDeltaTime);
+            
+            Assert.IsTrue(processor.IsUpdated);
+        }
+        
+        [Test]
+        public async Task TestBroadcast()
+        {
+            var processor = _server.GetProcessor<TestProcessorTplBroadcastReceiver>();
+            await Task.Delay(processor.UpdateDeltaTime);
+            
+            Assert.IsTrue(processor.IsBroadcasted);
+            Assert.AreEqual(1, processor.ClientId);
+            Assert.AreEqual(2, processor.EventId);
+            Assert.AreEqual(3, processor.Data);
         }
     }
 }
