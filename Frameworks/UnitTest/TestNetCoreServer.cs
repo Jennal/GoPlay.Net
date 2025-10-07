@@ -132,8 +132,9 @@ namespace UnitTest
                 var profilerKey = $"Request_{clientId}";
                 var t = Task.Run(async () => { 
                     var client = new Client<NcClient>();
-                    client.RequestTimeout = TimeSpan.MaxValue;
-                    client.Connect("127.0.0.1", 5557).Wait();
+                    client.RequestTimeout = TimeSpan.FromSeconds(10);
+                    var ok = await client.Connect("127.0.0.1", 5557, TimeSpan.FromSeconds(10));
+                    Assert.IsTrue(ok);
 
                     for (var j = 0; j < requestCount; j++)
                     {
@@ -148,12 +149,14 @@ namespace UnitTest
                         Assert.AreEqual(status.Code, StatusCode.Success);
                         Assert.AreEqual(result.Value, $"[Test] Server reply: Hello_{id}");
                     }
+
+                    await client.DisconnectAsync();
                 });
                 
                 tasks.Add(t);
             }
 
-            Task.WaitAll(tasks.ToArray());
+            await Task.WhenAll(tasks.ToArray());
             Console.WriteLine(Profiler.StatisPrefix("Request"));
         }
         
