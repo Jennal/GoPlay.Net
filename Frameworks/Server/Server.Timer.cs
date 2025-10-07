@@ -13,14 +13,15 @@ namespace GoPlay
             {
                 try
                 {
+                    var now = DateTime.UtcNow;
                     var delay = Consts.TimeOut.Update;
                     foreach (var processor in m_processors)
                     {
                         //检查Update
-                        if (processor is IUpdate && processor.LastUpdate < DateTime.UtcNow)
+                        if (processor is IUpdate && processor.LastUpdate < now)
                         {
                             var targetTime = processor.LastUpdate.Add(processor.UpdateDeltaTime);
-                            if (targetTime <= DateTime.UtcNow)
+                            if (targetTime <= now)
                             {
                                 //设为最大值避免重复执行
                                 processor.LastUpdate = DateTime.MaxValue;
@@ -28,26 +29,26 @@ namespace GoPlay
                             }
                             else
                             {
-                                var delta = targetTime - DateTime.UtcNow;
+                                var delta = targetTime - now;
                                 if (delta < delay) delay = delta;
                             }
                         }
-                        
+
                         //检查DelayCall
                         foreach (var (execTime, action) in processor.DelayTasks)
                         {
-                            if (execTime <= DateTime.UtcNow)
+                            if (execTime <= now)
                             {
                                 processor.OnDelayCallReceived(execTime, action);
                             }
                             else
                             {
-                                var delta = execTime - DateTime.UtcNow;
+                                var delta = execTime - now;
                                 if (delta < delay) delay = delta;
                             }
                         }
                     }
-                    
+
                     Task.Delay(delay, token).Wait(token);
                 }
                 catch (OperationCanceledException)
@@ -58,7 +59,7 @@ namespace GoPlay
                 {
                     if (err.InnerException is OperationCanceledException) continue;
                     if (err.InnerException is TaskCanceledException) continue;
-                    
+
                     OnErrorEvent(IdLoopGenerator.INVALID, err);
                 }
                 catch (Exception err)
