@@ -7,6 +7,7 @@ using System.Threading;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
+using GoPlay.Core.Utils;
 
 namespace GoPlay.Core.Transport.NetCoreServer
 {
@@ -43,6 +44,14 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
+            var (headerOffset, realIp) = ProxyProtocolUtil.ParseProxyProtocol(buffer, offset, size);
+            if (offset > 0 && !string.IsNullOrEmpty(realIp))
+            {
+                ClientIP = realIp;
+                offset += headerOffset;
+                size -= headerOffset;
+            }
+            
             var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
             if (m_buffer == null)
             {

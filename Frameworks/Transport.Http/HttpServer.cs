@@ -7,6 +7,7 @@ using GoPlay.Core.Interfaces;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
+using GoPlay.Core.Utils;
 
 namespace GoPlay.Core.Transport.Http
 {
@@ -49,6 +50,13 @@ namespace GoPlay.Core.Transport.Http
             }
             
             var data = Convert.FromBase64String(request.Body);
+            var (offset, realIp) = ProxyProtocolUtil.ParseProxyProtocol(data, 0, data.Length);
+            if (offset > 0 && !string.IsNullOrEmpty(realIp))
+            {
+                ClientIP = realIp;
+                var trimmedData = new ReadOnlySpan<byte>(data, offset, data.Length - offset);
+                data = trimmedData.ToArray();
+            }
             PackServer.OnRecv(this, data);
        }
 

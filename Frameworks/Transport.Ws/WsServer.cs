@@ -10,6 +10,7 @@ using GoPlay.Core.Interfaces;
 using NetCoreServer;
 using GoPlay.Core.Protocols;
 using GoPlay.Core.Transports;
+using GoPlay.Core.Utils;
 
 namespace GoPlay.Core.Transport.Ws
 {
@@ -96,6 +97,14 @@ namespace GoPlay.Core.Transport.Ws
         
         public override void OnWsReceived(byte[] buffer, long offset, long size)
         {
+            var (headerOffset, realIp) = ProxyProtocolUtil.ParseProxyProtocol(buffer, offset, size);
+            if (offset > 0 && !string.IsNullOrEmpty(realIp))
+            {
+                ClientIP = realIp;
+                offset += headerOffset;
+                size -= headerOffset;
+            }
+            
             // Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
             var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
             if (m_buffer == null)
