@@ -4,12 +4,18 @@
     <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>
 
+  <!-- netstandard2.1 下 System.Threading.Channels 不在 BCL，需要显式 NuGet 引用；
+       net7/net8/net9 已内置，条件排除。版本跟随当前 LTS（net8.0）。 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AssemblyName>GoPlay.Client</AssemblyName>
     <RootNamespace>GoPlay</RootNamespace>
-    <TargetFrameworks>net7.0;net8.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
     <Title>GoPlay.Client</Title>
     <Authors>Jennal</Authors>
     <Description>GoPlay.Client
