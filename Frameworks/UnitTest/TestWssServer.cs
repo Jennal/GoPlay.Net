@@ -11,7 +11,6 @@ using GoPlay;
 using GoPlay.Core.Debug;
 using GoPlay.Core.Encodes;
 using GoPlay.Core.Protocols;
-using GoPlay.Core.Transport.Http;
 using GoPlay.Core.Transport.Wss;
 
 namespace UnitTest

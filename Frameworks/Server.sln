@@ -15,8 +15,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Client", "Client\Client.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Transport.NetCoreServer", "Transport.NetCoreServer\Transport.NetCoreServer.csproj", "{3F814D8D-EAFF-4E05-B7A6-CA5FC88EFF83}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Transport.Http", "Transport.Http\Transport.Http.csproj", "{02C4FC91-14AB-407B-B98F-18E93FFC8F59}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ThirdParty", "ThirdParty", "{E5ACEE7F-CDE7-4CF7-85C7-41C0D1F8CE4F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NetCoreServer", "NetCoreServer", "{D5C8C3A4-29D6-4D57-A5C8-24144CBEF616}"
@@ -80,10 +78,6 @@ Global
 		{08E1C4C3-754D-437E-85E8-1F4DD2439901}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{08E1C4C3-754D-437E-85E8-1F4DD2439901}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{08E1C4C3-754D-437E-85E8-1F4DD2439901}.Release|Any CPU.Build.0 = Release|Any CPU
-		{02C4FC91-14AB-407B-B98F-18E93FFC8F59}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{02C4FC91-14AB-407B-B98F-18E93FFC8F59}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{02C4FC91-14AB-407B-B98F-18E93FFC8F59}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{02C4FC91-14AB-407B-B98F-18E93FFC8F59}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CC12A3FE-F08F-4A81-846D-86653D57999E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{CC12A3FE-F08F-4A81-846D-86653D57999E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CC12A3FE-F08F-4A81-846D-86653D57999E}.Release|Any CPU.ActiveCfg = Release|Any CPU

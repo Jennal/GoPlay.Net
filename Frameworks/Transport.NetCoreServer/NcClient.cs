@@ -87,7 +87,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
                 System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
                 pos += sizeof(ushort) + len;
 
-                RecvChannel.Add(packData, m_token);
+                // socket 完成回调线程上执行，未处理异常会让进程 failfast（net8 下尤其明显）。
+                // Disconnect 期间 token 被 cancel / channel 被 dispose，丢弃未消费数据即可。
+                try
+                {
+                    if (m_token.IsCancellationRequested) return;
+                    RecvChannel.Add(packData, m_token);
+                }
+                catch (OperationCanceledException) { return; }
+                catch (ObjectDisposedException) { return; }
+                catch (InvalidOperationException) { return; }
             }
 
             if (pos == 0) return;

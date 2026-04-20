@@ -11,7 +11,6 @@ FIXTURES=(
   TestNetCoreServer
   TestWsServer
   TestWssServer
-  TestHttpServer
   TestListeners
   TestDeferCall
   TestDelayCall

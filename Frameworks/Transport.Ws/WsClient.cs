@@ -192,7 +192,20 @@ namespace GoPlay.Core.Transport.Ws
 
         internal void OnRecv(byte[] data)
         {
-            m_responseChannel.Add(data, m_cancelSource.Token);
+            // 注意：本方法在 socket 完成回调的 ThreadPool 线程上执行，
+            // 未处理异常会直接让进程 failfast（net8 下尤其明显）。
+            // Disconnect 期间 Cancel/Dispose/置 null 会让下面的 Add 抛 OCE/ODE/NRE，
+            // 这时数据本就没人消费，吞掉即可。
+            try
+            {
+                var cts = m_cancelSource;
+                if (cts == null || cts.IsCancellationRequested) return;
+                m_responseChannel.Add(data, cts.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
+            catch (NullReferenceException) { }
+            catch (InvalidOperationException) { }
         }
         
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
