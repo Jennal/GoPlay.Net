@@ -21,17 +21,17 @@ namespace GoPlay
     }
     
     /// <summary>
-    /// 每个Processor会使用一个线程
+    /// 每个 Processor 一个 ProcessorRunner（虚拟线程模型）。
+    /// 路由分发通过 Dictionary&lt;uint, ProcessorRunner&gt; 做 O(1) 投递。
     /// </summary>
     public partial class Server<T>
     {
         protected List<IStart> m_starters;
         protected List<IStop> m_stoppers;
         
-        private Dictionary<string, Task> m_tasks = new Dictionary<string, Task>();
-        private Dictionary<string, CancellationTokenSource> m_restartProcessorTokenSources = new Dictionary<string, CancellationTokenSource>();
-        private Dictionary<string, BlockingCollection<Package>> m_packageQueues = new Dictionary<string, BlockingCollection<Package>>();
-        private Dictionary<string, ConcurrentQueue<(uint, int, object)>> m_broadcastQueues = new Dictionary<string, ConcurrentQueue<(uint, int, object)>>();
+        // 旧字段已被 m_runners 取代。保留命名方便阅读 git history 时对照。
+        private Dictionary<string, ProcessorRunner> m_runners = new Dictionary<string, ProcessorRunner>();
+        private Dictionary<uint, ProcessorRunner> m_routeIdToRunner = new Dictionary<uint, ProcessorRunner>();
 
         protected virtual void ProcessorOnClientConnect(uint clientId)
         {
@@ -59,34 +59,48 @@ namespace GoPlay
         
         protected void StartProcessors()
         {
-            m_packageQueues.Clear();
-            m_tasks.Clear();
-            m_restartProcessorTokenSources.Clear();
+            m_runners.Clear();
+            m_routeIdToRunner.Clear();
 
             m_starters = Processors.OfType<IStart>().ToList();
             m_stoppers = Processors.OfType<IStop>().ToList();
 
-            //init data
+            // 1. 为每个 processor 建一个 runner
             foreach (var processor in Processors)
-            {   
+            {
                 var name = processor.GetName();
-                m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
-                m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
-                m_restartProcessorTokenSources[name] = new CancellationTokenSource();
+                var runner = new ProcessorRunner(processor, this);
+                m_runners[name] = runner;
             }
-            
-            //do start
+
+            // 2. 建立 routeId -> runner 的 O(1) 路由表
+            BuildRouteMap();
+
+            // 3. 触发 starter
             foreach (var starter in m_starters)
             {
                 starter.OnStart();
             }
-            
-            //init thread
+
+            // 4. 启动 runner
+            foreach (var pair in m_runners)
+            {
+                pair.Value.Start(m_cancelSource.Token);
+            }
+        }
+
+        private void BuildRouteMap()
+        {
+            m_routeIdToRunner.Clear();
             foreach (var processor in Processors)
-            {   
+            {
                 var name = processor.GetName();
-                var source = m_restartProcessorTokenSources[name];
-                m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token, source.Token), source.Token);
+                if (!m_runners.TryGetValue(name, out var runner)) continue;
+
+                foreach (var route in processor.GetRoutes())
+                {
+                    m_routeIdToRunner[route.RouteId] = runner;
+                }
             }
         }
 
@@ -108,11 +122,11 @@ namespace GoPlay
         
         protected void StopProcessors()
         {
-            foreach (var task in m_tasks)
+            foreach (var pair in m_runners)
             {
                 try
                 {
-                    task.Value.Wait();
+                    pair.Value.StopAsync().Wait();
                 }
                 catch (AggregateException err)
                 {
@@ -129,33 +143,13 @@ namespace GoPlay
         
         protected virtual void OnDataReceived(Package packRaw)
         {
-            var processor = Processors.FirstOrDefault(o => o.IsRecognizeRoute(packRaw.Header.PackageInfo.Route));
-            if (processor == null)
+            if (!m_routeIdToRunner.TryGetValue(packRaw.Header.PackageInfo.Route, out var runner))
             {
                 OnErrorEvent(packRaw.Header.ClientId, new RouteNotExistsException(packRaw.Header.PackageInfo.Route));
                 return;
             }
 
-            var name = processor.GetName();
-            m_packageQueues[name].Add(packRaw);
-        }
-
-        protected void PackageLoop(ProcessorBase processor, CancellationToken cancelToken, CancellationToken restartToken)
-        {
-            var name = processor.GetName();
-            var queue = m_packageQueues[name];
-            var broadcastQueue = m_broadcastQueues[name];
-            while (IsStarted && !cancelToken.IsCancellationRequested && !restartToken.IsCancellationRequested)
-            {
-                try
-                {
-                    if (!processor.PackageLoopFrame(queue, broadcastQueue, cancelToken)) break;
-                }
-                catch (TaskCanceledException)
-                {
-                    break;
-                }
-            }
+            runner.Enqueue(packRaw);
         }
 
         public override async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
@@ -200,10 +194,10 @@ namespace GoPlay
                 try
                 {
                     if (!processor.IsRecognizeBroadcastEvent(eventId)) continue;
-                    
+
                     var name = processor.GetName();
-                    var queue = m_broadcastQueues[name];
-                    queue.Enqueue((clientId, eventId, data));
+                    if (!m_runners.TryGetValue(name, out var runner)) continue;
+                    runner.BroadcastQueue.Enqueue((clientId, eventId, data));
                 }
                 catch (OperationCanceledException)
                 {
@@ -228,16 +222,14 @@ namespace GoPlay
             foreach (var processor in m_processors)
             {
                 var name = processor.GetName();
-                var packageQueue = m_packageQueues[name];
-                var broadcastQueue = m_broadcastQueues[name];
-                var task = m_tasks[name];
-                
+                if (!m_runners.TryGetValue(name, out var runner)) continue;
+
                 yield return new ProcessorStatus
                 {
                     Name = name,
-                    Status = task.Status,
-                    PackageQueueCount = packageQueue.Count,
-                    BroadcastQueueCount = broadcastQueue.Count,
+                    Status = runner.Status,
+                    PackageQueueCount = runner.PackageQueueCount,
+                    BroadcastQueueCount = runner.BroadcastQueue.Count,
                 };
             }
         }
@@ -245,26 +237,33 @@ namespace GoPlay
         public override async Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false)
         {
             var name = processor.GetName();
-            m_restartProcessorTokenSources[name].Cancel();
-            await m_tasks[name];
+            if (!m_runners.TryGetValue(name, out var oldRunner)) return;
 
-            if (clearPackageQueue)
+            await oldRunner.StopAsync();
+
+            // 取出旧 runner 的状态以便选择性继承
+            var oldBroadcasts = clearBroadcastQueue ? null : oldRunner.BroadcastQueue;
+            // 注意：当前实现的 channel 不支持读残留再迁移，clearPackageQueue=false 时会丢失尚未消费的包。
+            //      原实现使用 BlockingCollection，可以原样保留。如果业务依赖此特性，需要在 ProcessorRunner 增加迁移 API。
+
+            var newRunner = new ProcessorRunner(processor, this);
+            if (oldBroadcasts != null)
             {
-                m_packageQueues[name] = new BlockingCollection<Package>(ushort.MaxValue);
+                while (oldBroadcasts.TryDequeue(out var item))
+                {
+                    newRunner.BroadcastQueue.Enqueue(item);
+                }
             }
-            
-            if (clearBroadcastQueue)
-            {
-                m_broadcastQueues[name] = new ConcurrentQueue<(uint, int, object)>();
-            }
-            
+
+            m_runners[name] = newRunner;
+            BuildRouteMap();
+
             if (processor is IStart starter)
             {
                 starter.OnStart();
             }
-            
-            m_restartProcessorTokenSources[name] = new CancellationTokenSource();
-            m_tasks[name] = TaskUtil.LongRun(() => PackageLoop(processor, m_cancelSource.Token, m_restartProcessorTokenSources[name].Token), m_restartProcessorTokenSources[name].Token);
+
+            newRunner.Start(m_cancelSource.Token);
         }
     }
 }

@@ -18,6 +18,20 @@ namespace GoPlay
         
         public EncodingType EncodingType = EncodingType.Protobuf;
 
+        /// <summary>
+        /// 默认每个 Processor 允许的最大并发 in-flight 请求数。
+        /// 业务可在 Processor class 上标 [MaxConcurrency(N)] 单独覆盖。
+        /// 默认 1：严格串行，对老业务行为完全兼容。
+        /// </summary>
+        public int DefaultConcurrency { get; }
+
+        protected Server(int defaultConcurrency = 1)
+        {
+            if (defaultConcurrency < 1)
+                throw new ArgumentOutOfRangeException(nameof(defaultConcurrency), "defaultConcurrency 必须 >= 1");
+            DefaultConcurrency = defaultConcurrency;
+        }
+
         public abstract Type TransportType { get; }
         
         public abstract Task Start(string host, int port);
@@ -86,7 +100,9 @@ namespace GoPlay
             remove => Transport.OnClientDisconnected -= value;
         }
         
-        public Server()
+        public Server() : this(1) { }
+
+        public Server(int defaultConcurrency) : base(defaultConcurrency)
         {
             OnClientConnected += OnClientConnectEvent;
             OnClientDisconnected += OnClientDisconnectEvent;

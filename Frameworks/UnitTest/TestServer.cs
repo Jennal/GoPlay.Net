@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnitTest.Helpers;
 using UnitTest.Processors;
 using GoPlay;
 using GoPlay.Core;
@@ -20,22 +21,10 @@ namespace UnitTest
 {
     public class TestServer
     {
-        private Server<TcpServer> _server = null;
-        private Client<TcpClient> _client = null;
-        
         [SetUp]
-        public async Task Setup()
+        public void Setup()
         {
             Profiler.Clear();
-            
-            if (_server != null) return;
-            
-            // _server = new Server<TcpServer>();
-            // _server.Register(new TestProcessor());
-            // _server.Start("127.0.0.1", 8686);
-            //
-            // _client = new Client<TcpClient>();
-            // await _client.Connect("127.0.0.1", 8686);
         }
 
         [Test]
@@ -55,36 +44,44 @@ namespace UnitTest
         [Test]
         public async Task TestRequest()
         {
+            var port = TestPort.GetFree();
             var server = new Server<TcpServer>();
-            server.Register(new TestProcessor());
-            var task = server.Start("127.0.0.1", 5558);
+            Client<TcpClient> client = null;
+            try
+            {
+                server.Register(new TestProcessor());
+                server.Start("127.0.0.1", port);
 
-            var client = new Client<TcpClient>();
-            client.Connect("127.0.0.1", 5558).Wait();
+                client = new Client<TcpClient>();
+                await client.Connect("127.0.0.1", port);
 
-            var (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
+                var (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
+                {
+                    Value = "hello"
+                });
+                Assert.AreEqual(StatusCode.Success, status.Code);
+                Assert.AreEqual("Server reply: hello", result.Value);
+
+                (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
+                {
+                    Value = "hello1"
+                });
+                Assert.AreEqual(status.Code, StatusCode.Error);
+                Assert.AreEqual(status.Message, "SYSTEM_ERR");
+                Assert.AreEqual(null, result);
+
+                (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
+                {
+                    Value = "hello2"
+                });
+                Assert.AreEqual(StatusCode.Success, status.Code);
+                Assert.AreEqual("Server reply: hello2", result.Value);
+            }
+            finally
             {
-                Value = "hello"
-            });
-            Assert.AreEqual(StatusCode.Success, status.Code);
-            Assert.AreEqual("Server reply: hello", result.Value);
-            
-            (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
-            {
-                Value = "hello1"
-            });
-            Assert.AreEqual(status.Code, StatusCode.Error);
-            Assert.AreEqual(status.Message, "SYSTEM_ERR");
-            Assert.AreEqual(null, result);
-            
-            (status, result) = await client.Request<PbString, PbString>("test.err", new PbString
-            {
-                Value = "hello2"
-            });
-            Assert.AreEqual(StatusCode.Success, status.Code);
-            Assert.AreEqual("Server reply: hello2", result.Value);
-            
-            server.Stop();
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                server.Stop();
+            }
         }
         
         [Test]
@@ -93,72 +90,97 @@ namespace UnitTest
             var clientCount = 10;
             var requestCount = 100;
 
-            var encoder = ProtobufEncoder.Instance;
+            var port = TestPort.GetFree();
             var server = new Server<TcpServer>();
-            server.Register(new TestProcessor());
-            var task = server.Start("127.0.0.1", 5557);
-
-            var tasks = new List<Task>();
-            for (int i = 0; i < clientCount; i++)
+            try
             {
-                var clientId = i;
-                var t = Task.Run(async () => { 
-                    var client = new Client<TcpClient>();
-                    client.Connect("127.0.0.1", 5557).Wait();
+                server.Register(new TestProcessor());
+                server.Start("127.0.0.1", port);
 
-                    for (var j = 0; j < requestCount; j++)
+                var tasks = new List<Task>();
+                for (int i = 0; i < clientCount; i++)
+                {
+                    var clientId = i;
+                    var t = Task.Run(async () =>
                     {
-                        var id = clientId * j;
-                        var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
-                        {
-                            Value = $"Hello_{id}"
-                        });
-                
-                        Assert.AreEqual(status.Code, StatusCode.Success);
-                        Assert.AreEqual(result.Value, $"[Test] Server reply: Hello_{id}");
-                    }
-                });
-                
-                tasks.Add(t);
-            }
+                        var client = new Client<TcpClient>();
+                        await client.Connect("127.0.0.1", port);
 
-            Task.WaitAll(tasks.ToArray());
+                        try
+                        {
+                            for (var j = 0; j < requestCount; j++)
+                            {
+                                var id = clientId * j;
+                                var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
+                                {
+                                    Value = $"Hello_{id}"
+                                });
+
+                                Assert.AreEqual(status.Code, StatusCode.Success);
+                                Assert.AreEqual(result.Value, $"[Test] Server reply: Hello_{id}");
+                            }
+                        }
+                        finally
+                        {
+                            try { await client.DisconnectAsync(); } catch { /* ignore */ }
+                        }
+                    });
+
+                    tasks.Add(t);
+                }
+
+                await Task.WhenAll(tasks.ToArray());
+            }
+            finally
+            {
+                server.Stop();
+            }
         }
         
         [Test]
         public async Task TestAddListenerOnce()
         {
+            var port = TestPort.GetFree();
             var server = new Server<TcpServer>();
-            server.Register(new TestProcessor());
-            var task = server.Start("127.0.0.1", 5556);
-
-            var client = new Client<TcpClient>();
-            await client.Connect("127.0.0.1", 5556);
-
-            var once = 0;
-            var twice = 0;
-            
-            client.AddListenerOnce<PbString>("test.push", val =>
+            Client<TcpClient> client = null;
+            try
             {
-                once++;
-                Console.WriteLine($"ONCE: {val.Value}");
-            });
-            
-            client.AddListener<PbString>("test.push", val =>
-            {
-                twice++;
-                Console.WriteLine($"ALL: {val.Value}");
-            });
-            
-            client.Notify("test.notify", new PbString
-            {
-                Value = "hello"
-            });
+                server.Register(new TestProcessor());
+                server.Start("127.0.0.1", port);
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            
-            Assert.AreEqual(1, once);
-            Assert.AreEqual(2, twice);
+                client = new Client<TcpClient>();
+                await client.Connect("127.0.0.1", port);
+
+                var once = 0;
+                var twice = 0;
+
+                client.AddListenerOnce<PbString>("test.push", val =>
+                {
+                    once++;
+                    Console.WriteLine($"ONCE: {val.Value}");
+                });
+
+                client.AddListener<PbString>("test.push", val =>
+                {
+                    twice++;
+                    Console.WriteLine($"ALL: {val.Value}");
+                });
+
+                client.Notify("test.notify", new PbString
+                {
+                    Value = "hello"
+                });
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
+                Assert.AreEqual(1, once);
+                Assert.AreEqual(2, twice);
+            }
+            finally
+            {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                server.Stop();
+            }
         }
         
         [Test]
@@ -183,8 +205,9 @@ namespace UnitTest
         [Test]
         public async Task TestOverflowPackage()
         {
-            var port = 5560;
+            var port = TestPort.GetFree();
             var server = new Server<NcServer>();
+            Client<NcClient> client = null;
             server.OnError += (u, exception) =>
             {
                 Console.WriteLine($"Server.OnError[{u}]: {exception}");
@@ -199,15 +222,15 @@ namespace UnitTest
 
                 var str = sb.ToString();
                 server.Register(new TestProcessor());
-                var task = server.Start("127.0.0.1", port);
+                server.Start("127.0.0.1", port);
 
-                var client = new Client<NcClient>();
+                client = new Client<NcClient>();
                 client.OnError += (exception) =>
                 {
                     Console.WriteLine($"Client.OnError: {exception}");
                 };
                 client.RequestTimeout = TimeSpan.MaxValue;
-                client.Connect("127.0.0.1", port).Wait();
+                await client.Connect("127.0.0.1", port);
 
                 var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
                 {
@@ -219,6 +242,7 @@ namespace UnitTest
             }
             finally
             {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
                 server.Stop();
             }
         }

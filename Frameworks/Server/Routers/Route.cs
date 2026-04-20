@@ -19,6 +19,20 @@ namespace GoPlay.Core.Routers
         public uint RouteId;
         public ServerTag ServerTag;
 
+        // 启动期编译好的强类型 invoker。失败为 null，则走反射 fallback。
+        private RouteCompiler.CompiledInvoker _compiled;
+
+        /// <summary>
+        /// Method 级 [MaxConcurrency(N)] 配置；null 表示未标注，不在该层限流。
+        /// 校验和实际限流由 ProcessorRunner 负责（避免 await semaphore 时占用 processor 并发名额）。
+        /// </summary>
+        public int? MethodMaxConcurrency { get; }
+
+        /// <summary>
+        /// Method 级限流信号量；不为 null 时由 ProcessorRunner 在调度路径上 acquire/release。
+        /// </summary>
+        public SemaphoreSlim MethodConcurrencySem { get; }
+
         public Route(ProcessorBase processor, MethodInfo method, uint routeId)
         {
             Processor = processor;
@@ -27,6 +41,15 @@ namespace GoPlay.Core.Routers
             RouteString = GetRoute();
             RouteId = routeId;
             ServerTag = GetServerTag(processor, method);
+
+            var mc = method.GetCustomAttribute<MaxConcurrencyAttribute>();
+            if (mc != null)
+            {
+                MethodMaxConcurrency = mc.Value;
+                MethodConcurrencySem = new SemaphoreSlim(mc.Value, mc.Value);
+            }
+
+            _compiled = RouteCompiler.TryCompile(processor, method);
         }
 
         private ServerTag GetServerTag(ProcessorBase processor, MethodInfo method)
@@ -73,6 +96,54 @@ namespace GoPlay.Core.Routers
         }
 
         public async Task<Package> Invoke(Package package)
+        {
+            if (_compiled != null)
+            {
+                return await InvokeCompiled(package).ConfigureAwait(false);
+            }
+
+            return await InvokeReflect(package).ConfigureAwait(false);
+        }
+
+        private async ValueTask<Package> InvokeCompiled(Package package)
+        {
+            var header = package.Header.Clone();
+            header.PackageInfo.Type = PackageType.Response;
+            header.ClientId = package.Header.ClientId;
+
+            try
+            {
+                return await _compiled(Processor, package, header).ConfigureAwait(false);
+            }
+            catch (Exception err)
+            {
+                while (err is ProcessorMethodException == false && err.InnerException != null) err = err.InnerException;
+                if (err is ProcessorMethodException pme)
+                {
+                    header.Status = new Status
+                    {
+                        Code = pme.Code,
+                        Message = pme.Msg,
+                    };
+                    return new Package
+                    {
+                        Header = header
+                    };
+                }
+
+                header.Status = new Status
+                {
+                    Code = StatusCode.Error,
+                    Message = $"Internal Error: \n{err.Message}\n\n{err.StackTrace}", //TODO: 上线前去掉
+                };
+                return new Package
+                {
+                    Header = header
+                };
+            }
+        }
+
+        private async Task<Package> InvokeReflect(Package package)
         {
 #if DEBUG && PROFILER
             Profiler.Begin("Prepare Param");

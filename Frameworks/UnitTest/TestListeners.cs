@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnitTest.Helpers;
 using UnitTest.Processors;
 using GoPlay;
 using GoPlay.Core.Debug;
@@ -11,22 +12,29 @@ namespace UnitTest
 {
     public class TestListeners
     {
-        private Server<TcpServer> _server = null;
-        private Client<TcpClient> _client = null;
+        private Server<TcpServer> _server;
+        private Client<TcpClient> _client;
+        private int _port;
         
         [SetUp]
         public async Task Setup()
         {
             Profiler.Clear();
-
-            if (_server != null) return;
+            _port = TestPort.GetFree();
             
             _server = new Server<TcpServer>();
             _server.Register(new TestProcessor());
-            _server.Start("127.0.0.1", 8080);
+            _server.Start("127.0.0.1", _port);
             
             _client = new Client<TcpClient>();
-            await _client.Connect("127.0.0.1", 8080);
+            await _client.Connect("127.0.0.1", _port);
+        }
+
+        [TearDown]
+        public async Task TearDown()
+        {
+            try { if (_client != null) await _client.DisconnectAsync(); } catch { /* ignore */ }
+            try { _server?.Stop(); } catch { /* ignore */ }
         }
 
         [Test]

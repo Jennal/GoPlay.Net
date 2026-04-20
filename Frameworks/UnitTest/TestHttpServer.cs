@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnitTest.Helpers;
 using UnitTest.Processors;
 using GoPlay;
 using GoPlay.Core.Debug;
@@ -16,26 +17,33 @@ namespace UnitTest
 {
     public class TestHttpServer
     {
-        private Server<HttpServer> _server = null;
-        private Client<HttpClient> _client = null;
+        private Server<HttpServer> _server;
+        private Client<HttpClient> _client;
+        private int _port;
         
         [SetUp]
         public async Task Setup()
         {
             Profiler.Clear();
-            
-            if (_server != null) return;
+            _port = TestPort.GetFree();
             
             _server = new Server<HttpServer>();
             _server.Register(new TestProcessor());
-            _server.Start("127.0.0.1", 8686);
+            _server.Start("127.0.0.1", _port);
             
             _client = new Client<HttpClient>();
             _client.RequestTimeout = TimeSpan.MaxValue;
-            if (!await _client.Connect("127.0.0.1", 8686))
+            if (!await _client.Connect("127.0.0.1", _port))
             {
                 throw new Exception("connect failed!");
             }
+        }
+
+        [TearDown]
+        public async Task TearDown()
+        {
+            try { if (_client != null) await _client.DisconnectAsync(); } catch { /* ignore */ }
+            try { _server?.Stop(); } catch { /* ignore */ }
         }
 
         [Test]
@@ -81,37 +89,40 @@ namespace UnitTest
         [Test]
         public async Task BenchmarkRequest()
         {
-            var count = 1000;//10000 * 10;//1000 * 10000;
+            var count = 1000;
             var timer = new System.Diagnostics.Stopwatch();
             
             var client = new Client<HttpClient>();
-            await client.Connect("127.0.0.1", 8686);
-            client.RequestTimeout = TimeSpan.MaxValue;
-            client.OnError += err => Console.WriteLine($"ERROR: {err.Message}\n{err.StackTrace}"); 
-            
-            timer.Start();
-            for (var i = 0; i < count; i++)
+            try
             {
-                var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
-                {
-                    Value = $"Hello_{i}"
-                });
-                
-                // Console.WriteLine($"{i}, {status}, {result}");
-                
-                Assert.AreEqual("", status.Message);
-                Assert.AreEqual(StatusCode.Success, status.Code);
-                Assert.AreEqual($"[Test] Server reply: Hello_{i}", result.Value);
-            }
-            timer.Stop();
+                await client.Connect("127.0.0.1", _port);
+                client.RequestTimeout = TimeSpan.MaxValue;
+                client.OnError += err => Console.WriteLine($"ERROR: {err.Message}\n{err.StackTrace}");
 
-            var total = timer.ElapsedMilliseconds; 
-            var avg = (float)total / count;
-            Console.WriteLine($"Total millisec: {total}");
-            Console.WriteLine($"Average millisec: {avg}");
-            Console.WriteLine(Profiler.Statistics());
-            
-            // await client.DisconnectAsync();
+                timer.Start();
+                for (var i = 0; i < count; i++)
+                {
+                    var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
+                    {
+                        Value = $"Hello_{i}"
+                    });
+
+                    Assert.AreEqual("", status.Message);
+                    Assert.AreEqual(StatusCode.Success, status.Code);
+                    Assert.AreEqual($"[Test] Server reply: Hello_{i}", result.Value);
+                }
+                timer.Stop();
+
+                var total = timer.ElapsedMilliseconds;
+                var avg = (float)total / count;
+                Console.WriteLine($"Total millisec: {total}");
+                Console.WriteLine($"Average millisec: {avg}");
+                Console.WriteLine(Profiler.Statistics());
+            }
+            finally
+            {
+                try { await client.DisconnectAsync(); } catch { /* ignore */ }
+            }
         }
         
         [Test]
@@ -120,84 +131,107 @@ namespace UnitTest
             var clientCount = 100;
             var requestCount = 100;
 
-            var encoder = ProtobufEncoder.Instance;
+            var port = TestPort.GetFree();
             var server = new Server<HttpServer>();
-            server.Register(new TestProcessor());
-            var task = server.Start("127.0.0.1", 5557);
-
-            var tasks = new List<Task>();
-            for (int i = 0; i < clientCount; i++)
+            try
             {
-                var clientId = i;
-                var profilerKey = $"Request_{clientId}";
-                var t = Task.Run(async () => { 
-                    var client = new Client<HttpClient>();
-                    client.RequestTimeout = TimeSpan.MaxValue;
-                    client.Connect("127.0.0.1", 5557).Wait();
+                server.Register(new TestProcessor());
+                server.Start("127.0.0.1", port);
 
-                    for (var j = 0; j < requestCount; j++)
+                var tasks = new List<Task>();
+                for (int i = 0; i < clientCount; i++)
+                {
+                    var clientId = i;
+                    var profilerKey = $"Request_{clientId}";
+                    var t = Task.Run(async () =>
                     {
-                        var id = clientId * j;
-                        Profiler.Begin(profilerKey);
-                        var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
-                        {
-                            Value = $"Hello_{id}"
-                        });
-                        Profiler.End(profilerKey);
-                
-                        Assert.AreEqual(status.Code, StatusCode.Success);
-                        Assert.AreEqual(result.Value, $"[Test] Server reply: Hello_{id}");
-                    }
-                });
-                
-                tasks.Add(t);
-            }
+                        var client = new Client<HttpClient>();
+                        client.RequestTimeout = TimeSpan.MaxValue;
+                        await client.Connect("127.0.0.1", port);
 
-            Task.WaitAll(tasks.ToArray());
-            Console.WriteLine(Profiler.StatisPrefix("Request"));
+                        try
+                        {
+                            for (var j = 0; j < requestCount; j++)
+                            {
+                                var id = clientId * j;
+                                Profiler.Begin(profilerKey);
+                                var (status, result) = await client.Request<PbString, PbString>("test.echo", new PbString
+                                {
+                                    Value = $"Hello_{id}"
+                                });
+                                Profiler.End(profilerKey);
+
+                                Assert.AreEqual(status.Code, StatusCode.Success);
+                                Assert.AreEqual(result.Value, $"[Test] Server reply: Hello_{id}");
+                            }
+                        }
+                        finally
+                        {
+                            try { await client.DisconnectAsync(); } catch { /* ignore */ }
+                        }
+                    });
+
+                    tasks.Add(t);
+                }
+
+                await Task.WhenAll(tasks.ToArray());
+                Console.WriteLine(Profiler.StatisPrefix("Request"));
+            }
+            finally
+            {
+                server.Stop();
+            }
         }
         
         [Test]
         public async Task TestAddListenerOnce()
         {
+            var port = TestPort.GetFree();
             var server = new Server<HttpServer>();
-            server.Register(new TestProcessor());
-            server.OnError += (clientId, err) =>
+            Client<HttpClient> client = null;
+            try
             {
-                Console.WriteLine($"Server.OnError: {err}");
-            };
-            var task = server.Start("127.0.0.1", 5556);
+                server.Register(new TestProcessor());
+                server.OnError += (clientId, err) =>
+                {
+                    Console.WriteLine($"Server.OnError: {err}");
+                };
+                server.Start("127.0.0.1", port);
 
-            var client = new Client<HttpClient>();
-            await client.Connect("127.0.0.1", 5556);
+                client = new Client<HttpClient>();
+                await client.Connect("127.0.0.1", port);
 
-            var once = 0;
-            var twice = 0;
-            
-            client.AddListenerOnce<PbString>("test.push", val =>
-            {
-                once++;
-                Console.WriteLine($"ONCE: {val.Value}");
-            });
-            
-            client.AddListener<PbString>("test.push", val =>
-            {
-                twice++;
-                Console.WriteLine($"ALL: {val.Value}");
-            });
-            
-            client.Notify("test.notify", new PbString
-            {
-                Value = "hello"
-            });
+                var once = 0;
+                var twice = 0;
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            
-            // Assert.AreEqual(1, once);
-            // Assert.AreEqual(2, twice);
-            // Push not supported on http transport
-            Assert.AreEqual(0, once);
-            Assert.AreEqual(0, twice);
+                client.AddListenerOnce<PbString>("test.push", val =>
+                {
+                    once++;
+                    Console.WriteLine($"ONCE: {val.Value}");
+                });
+
+                client.AddListener<PbString>("test.push", val =>
+                {
+                    twice++;
+                    Console.WriteLine($"ALL: {val.Value}");
+                });
+
+                client.Notify("test.notify", new PbString
+                {
+                    Value = "hello"
+                });
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
+                // Push not supported on http transport
+                Assert.AreEqual(0, once);
+                Assert.AreEqual(0, twice);
+            }
+            finally
+            {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                server.Stop();
+            }
         }
     }
 }

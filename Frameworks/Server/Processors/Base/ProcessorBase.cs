@@ -21,7 +21,11 @@ namespace GoPlay.Core.Processors
         public virtual TimeSpan UpdateDeltaTime => Consts.TimeOut.Update;
         public virtual TimeSpan RecvTimeout => Consts.TimeOut.Recv;
         public virtual bool IsOnlyUpdate => false;
-        
+
+        // 注：Processor 并发上限改由 [MaxConcurrency(N)] class 级 attribute 配置，
+        // 不标则使用 Server 构造时的 defaultConcurrency。
+        // ProcessorRunner 在构造期解析；业务代码不再直接覆写 virtual 属性。
+
         public Server Server;
         public ISessionManager SessionManager => Server.SessionManager;
         
@@ -124,6 +128,7 @@ namespace GoPlay.Core.Processors
             return await route!.Invoke(pack);
         }
 
+        [Obsolete("已被 ProcessorRunner 取代。仅当自定义子类显式重写时才会被调用。新代码请通过 ProcessorRunner 与 Channel<Package> 处理消息。")]
         public virtual bool PackageLoopFrame(BlockingCollection<Package> packQueue, ConcurrentQueue<(uint, int, object)> broadcastQueue, CancellationToken cancelToken)
         {
             Server.Update(this).Wait(cancelToken);
@@ -141,6 +146,7 @@ namespace GoPlay.Core.Processors
             return ResolvePackageQueue(packQueue, cancelToken);
         }
 
+        [Obsolete("已被 ProcessorRunner.ProcessOne 取代。新代码不应再依赖该方法。")]
         protected virtual bool ResolvePackageQueue(BlockingCollection<Package> packQueue, CancellationToken cancelToken)
         {
             if (!packQueue.TryTake(out var pack, (int)RecvTimeout.TotalMilliseconds, cancelToken)) return true;
