@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using GoPlay.Core.Encodes.Factory;
 using GoPlay.Core;
@@ -123,7 +124,16 @@ namespace GoPlay
         public T Transport = new T();
         public IEncoder Encoder = EncoderFactory.Create(EncodingType.Protobuf); //Init instance
         
-        protected BlockingCollection<Package> m_sendQueue = new BlockingCollection<Package>(byte.MaxValue);
+        // 出站队列：async pipeline 取代旧版 BlockingCollection + Task.Wait。
+        // SingleReader=true（SendLoopAsync 独占消费），SingleWriter=false（多线程可 Send）。
+        // 容量对齐旧版 byte.MaxValue，保留 back-pressure。
+        protected Channel<Package> m_sendChannel = Channel.CreateBounded<Package>(
+            new BoundedChannelOptions(byte.MaxValue)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.Wait,
+            });
 
         protected ConcurrentDictionary<uint, (DateTime, object)> m_requestCallbacks = new ConcurrentDictionary<uint, (DateTime, object)>();
         protected ConcurrentDictionary<string, List<object>> m_callbacks = new ConcurrentDictionary<string, List<object>>();
@@ -195,7 +205,8 @@ namespace GoPlay
                 m_status = ClientStatus.Connecting;
                 Transport.Connect(host, port, timeout);
                 m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
-                m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
+                // SendLoopAsync：async pipeline，await 会让出 ThreadPool 线程，无需 LongRunning
+                m_sendTask = Task.Run(() => SendLoopAsync(m_cancelSource.Token), m_cancelSource.Token);
                 m_timeoutTask = TaskUtil.LongRun(TimeoutLoop, m_cancelSource.Token);
                 SendHandShake();
             }
@@ -312,39 +323,38 @@ namespace GoPlay
             }
         }
         
-        private void SendLoop()
+        private async Task SendLoopAsync(CancellationToken ct)
         {
-            while (!m_cancelSource.Token.IsCancellationRequested)
+            var reader = m_sendChannel.Reader;
+            while (!ct.IsCancellationRequested)
             {
+                Package pack = null;
                 try
                 {
-                    if (!m_sendQueue.TryTake(out var pack, Consts.TimeOut.Client)) continue;
+                    // WaitToReadAsync 让渡线程，而不是 TryTake 的轮询 + timeout
+                    if (!await reader.WaitToReadAsync(ct).ConfigureAwait(false)) break;
+                    if (!reader.TryRead(out pack)) continue;
 
-                    //update content size
                     if (pack.IsLastChunk && IsBlockSendByFilter(pack)) continue;
-                    // Console.WriteLine($" <[C]= {pack}");
 
-                    Transport.Send(pack.GetBytes(), m_cancelSource).AsTask().Wait();
-                    if (m_cancelSource.Token.IsCancellationRequested) break;
+                    // 不再 .AsTask().Wait()：直接 await，允许 transport 实现零阻塞
+                    await Transport.Send(pack.GetBytes(), m_cancelSource).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested) break;
 
-                    if(pack.IsLastChunk) PostSendFilter(pack);
+                    if (pack.IsLastChunk) PostSendFilter(pack);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) { /* 断开中，正常退出 */ }
+                catch (ChannelClosedException) { break; }
+                catch (AggregateException err) when (err.InnerException is OperationCanceledException
+                                                     || err.InnerException is TaskCanceledException)
                 {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    
-                    OnErrorEvent(err);
-                    DisconnectAsync().ConfigureAwait(false);
+                    /* 断开中 */
                 }
                 catch (Exception err)
                 {
                     OnErrorEvent(err);
-                    DisconnectAsync().ConfigureAwait(false).GetAwaiter();
+                    _ = DisconnectAsync();
+                    break;
                 }
             }
         }
@@ -678,17 +688,32 @@ namespace GoPlay
             if (m_cancelSource.Token.IsCancellationRequested) return;
 
             var list = pack.Split();
+            var writer = m_sendChannel.Writer;
             foreach (var p in list)
             {
-                m_sendQueue.Add(p, m_cancelSource.Token);    
+                if (writer.TryWrite(p)) continue;
+
+                // 满了：异步等位，保留 back-pressure 语义但不在调用线程上死锁
+                _ = WriteSlowAsync(p);
             }
+        }
+
+        private async Task WriteSlowAsync(Package pack)
+        {
+            try
+            {
+                await m_sendChannel.Writer.WriteAsync(pack, m_cancelSource.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { /* 断开中 */ }
+            catch (ChannelClosedException) { /* 断开中 */ }
+            catch (Exception err) { OnErrorEvent(err); }
         }
 
         public override void Dispose()
         {
             Disconnect();
             m_cancelSource?.Dispose();
-            m_sendQueue?.Dispose();
+            m_sendChannel?.Writer?.TryComplete();
         }
     }
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -15,7 +17,15 @@ namespace GoPlay.Core.Transport.Ws
 {
     class WsPackSession : WsSession
     {
-        private byte[] m_buffer;
+        // 使用 ArrayPool 做 ring-style stash buffer：
+        // - m_stash 随接收流增长而扩容（rent 更大 buffer，拷贝旧数据并归还原 buffer）
+        // - m_stashLen 表示当前已填入字节
+        // - parse 完整包后通过 Buffer.BlockCopy 把未消费部分前移，不另分配；
+        //   这相比旧实现每次 ToArray 整段 buffer 可节省大量 GC。
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
+
         public uint ClientId { get; }
         public string ClientIP;
         public Dictionary<string, string> Headers = new Dictionary<string, string>();
@@ -89,53 +99,72 @@ namespace GoPlay.Core.Transport.Ws
             Console.WriteLine($"WebSocket session with Id {Id} connected: {ClientIP}");
         }
 
+        public override void OnWsReceived(byte[] buffer, long offset, long size)
+        {
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
+            {
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
+            }
+            if (m_stashLen + size > m_stash.Length)
+            {
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
+            }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
+
+        private void DrainStash()
+        {
+            var pos = 0;
+            // 循环 drain：每轮从当前 pos 读取一个完整 pack，直到凑不齐为止。
+            // 对标 TcpServer.ReadFromClient 已修复的"一次只 parse 一个 pack"半包 bug，
+            // 避免 client pipeline 连发场景下后续 pack 卡在用户态 buffer 里等不到新事件。
+            while (m_stashLen - pos >= sizeof(ushort))
+            {
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
+
+                // 下游 InvokeOnDataReceived 最终会走 Package.ParseRaw(byte[])；
+                // 为保持现有 API 兼容（下游异步持有 Package.RawData），这里拷贝出独立 byte[]。
+                // stash 本身是 ArrayPool 的，生命周期 & 扩容开销大，因此 stash 复用仍然是大头收益。
+                var packData = new byte[len];
+                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                pos += sizeof(ushort) + len;
+
+                PackServer.OnRecv(this, packData);
+            }
+
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
+            {
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
+            }
+            m_stashLen = remaining;
+        }
+
         public override void OnWsDisconnected()
         {
             Console.WriteLine($"WebSocket session with Id {Id} disconnected!");
-        }
-        
-        public override void OnWsReceived(byte[] buffer, long offset, long size)
-        {
-            // Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            if (m_stash != null)
             {
-                m_buffer = data.ToArray();
-            }
-            else
-            {
-                using (var ms = new MemoryStream())
-                {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
-                }
-            }
-
-            using (var ms = new MemoryStream(m_buffer))
-            {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
-
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
-
-                        var packData = br.ReadBytes(len);
-                        PackServer.OnRecv(this, packData);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
             }
         }
 
@@ -203,6 +232,17 @@ namespace GoPlay.Core.Transport.Ws
                     session.SendBinaryAsync(ms.ToArray());
                 }
             }
+        }
+
+        /// <summary>
+        /// 零拷贝批量发送：<paramref name="framedBytes"/> 已经包含每个 pack 的 ushort 外层长度前缀，
+        /// 由 SessionSender 一次性拼装完成；这里直接 forward 到 session.SendBinaryAsync(span)，
+        /// 避免 MemoryStream.ToArray + 重复 prefix 计算。
+        /// </summary>
+        public void SendFramed(uint clientId, ReadOnlySpan<byte> framedBytes)
+        {
+            if (!GetSession(clientId, out var session)) return;
+            session.SendBinaryAsync(framedBytes);
         }
 
         public bool GetSession(uint clientId, out WsPackSession session)
@@ -273,6 +313,13 @@ namespace GoPlay.Core.Transport.Ws
         public override void Send(uint clientId, byte[] data)
         {
             m_server.Send(clientId, data);
+        }
+
+        /// <inheritdoc />
+        public override System.Threading.Tasks.ValueTask SendAsync(uint clientId, ReadOnlyMemory<byte> framedBytes, CancellationToken ct)
+        {
+            m_server.SendFramed(clientId, framedBytes.Span);
+            return default;
         }
 
         public override string GetClientIp(uint clientId)

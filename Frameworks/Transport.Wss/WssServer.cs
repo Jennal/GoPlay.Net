@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -17,7 +19,11 @@ namespace GoPlay.Core.Transport.Wss
 {
     class WssPackSession : WssSession
     {
-        private byte[] m_buffer;
+        // ArrayPool-backed stash（同 WsPackSession）。
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
+
         public uint ClientId { get; }
         public string ClientIP;
         public Dictionary<string, string> Headers = new Dictionary<string, string>();
@@ -91,53 +97,66 @@ namespace GoPlay.Core.Transport.Wss
             Console.WriteLine($"WebSocket session with Id {Id} connected: {ClientIP}");
         }
 
+        public override void OnWsReceived(byte[] buffer, long offset, long size)
+        {
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
+            {
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
+            }
+            if (m_stashLen + size > m_stash.Length)
+            {
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
+            }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
+
+        private void DrainStash()
+        {
+            var pos = 0;
+            while (m_stashLen - pos >= sizeof(ushort))
+            {
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
+
+                var packData = new byte[len];
+                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                pos += sizeof(ushort) + len;
+
+                PackServer.OnRecv(this, packData);
+            }
+
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
+            {
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
+            }
+            m_stashLen = remaining;
+        }
+
         public override void OnWsDisconnected()
         {
             Console.WriteLine($"WebSocket session with Id {Id} disconnected!");
-        }
-        
-        public override void OnWsReceived(byte[] buffer, long offset, long size)
-        {
-            // Console.WriteLine($"WebSocket session with Id {Id} OnWsReceived:[{offset}, {size}] => {buffer}");
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            if (m_stash != null)
             {
-                m_buffer = data.ToArray();
-            }
-            else
-            {
-                using (var ms = new MemoryStream())
-                {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
-                }
-            }
-
-            using (var ms = new MemoryStream(m_buffer))
-            {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
-
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
-
-                        var packData = br.ReadBytes(len);
-                        PackServer.OnRecv(this, packData);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
             }
         }
 
@@ -204,6 +223,12 @@ namespace GoPlay.Core.Transport.Wss
                     session.SendBinaryAsync(ms.ToArray());
                 }
             }
+        }
+
+        public void SendFramed(uint clientId, ReadOnlySpan<byte> framedBytes)
+        {
+            if (!GetSession(clientId, out var session)) return;
+            session.SendBinaryAsync(framedBytes);
         }
 
         public bool GetSession(uint clientId, out WssPackSession session)
@@ -275,6 +300,13 @@ namespace GoPlay.Core.Transport.Wss
         public override void Send(uint clientId, byte[] data)
         {
             m_server.Send(clientId, data);
+        }
+
+        /// <inheritdoc />
+        public override System.Threading.Tasks.ValueTask SendAsync(uint clientId, ReadOnlyMemory<byte> framedBytes, CancellationToken ct)
+        {
+            m_server.SendFramed(clientId, framedBytes.Span);
+            return default;
         }
 
         public override string GetClientIp(uint clientId)

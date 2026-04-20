@@ -4,6 +4,7 @@ using GoPlay.Core;
 using GoPlay.Core.Interfaces;
 using GoPlay.Core.Processors;
 using GoPlay.Core.Protocols;
+using GoPlay.Core.Senders;
 using GoPlay.Core.Transports;
 using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
@@ -21,15 +22,20 @@ namespace GoPlay
         /// <summary>
         /// 默认每个 Processor 允许的最大并发 in-flight 请求数。
         /// 业务可在 Processor class 上标 [MaxConcurrency(N)] 单独覆盖。
-        /// 默认 1：严格串行，对老业务行为完全兼容。
+        /// 
+        /// 传值约定：
+        /// - &gt; 0：显式指定。
+        /// - &lt;= 0：auto-sizing，按 Environment.ProcessorCount 推导（至少 1）。
+        /// 
+        /// 构造默认值 1：严格串行，对老业务行为完全兼容。
         /// </summary>
         public int DefaultConcurrency { get; }
 
         protected Server(int defaultConcurrency = 1)
         {
-            if (defaultConcurrency < 1)
-                throw new ArgumentOutOfRangeException(nameof(defaultConcurrency), "defaultConcurrency 必须 >= 1");
-            DefaultConcurrency = defaultConcurrency;
+            DefaultConcurrency = defaultConcurrency > 0
+                ? defaultConcurrency
+                : Math.Max(1, Environment.ProcessorCount);
         }
 
         public abstract Type TransportType { get; }
@@ -69,11 +75,21 @@ namespace GoPlay
         public T Transport = new T();
         public IEncoder Encoder = EncoderFactory.Create(EncodingType.Protobuf); //Init instance
 
-        protected BlockingCollection<Package> m_sendQueue;
+        /// <summary>
+        /// 每 session 一个发送器：同 client 内保序，不同 client 天然并行，
+        /// 取代旧版全局单线程 m_sendTask（该线程是跨 session 的共享瓶颈）。
+        /// </summary>
+        private readonly ConcurrentDictionary<uint, SessionSender> m_senders = new ConcurrentDictionary<uint, SessionSender>();
 
-        protected Task m_sendTask;
-        // protected Task m_recvTask;
-        // protected Task m_updateTask;
+        /// <summary>
+        /// 每个 SessionSender 的出站 Channel 容量。保留旧 m_sendQueue 的 ushort.MaxValue 上限。
+        /// </summary>
+        private const int SessionSenderCapacity = ushort.MaxValue;
+
+        /// <summary>
+        /// Stop 时等待 sender drain 的预算。超时后硬 Cancel。
+        /// </summary>
+        private static readonly TimeSpan SenderStopDrainTimeout = TimeSpan.FromSeconds(2);
 
         public override Type TransportType => typeof(T);
         
@@ -112,6 +128,9 @@ namespace GoPlay
 
         protected virtual void OnClientConnectEvent(uint clientId)
         {
+            // 必须在下发业务事件前把 sender 建好：processor.OnClientConnected 里可能立即 Push
+            GetOrCreateSender(clientId);
+
             FilterOnClientConnect(clientId);
             ProcessorOnClientConnect(clientId);
             SessionOnClientConnect(clientId);
@@ -122,6 +141,9 @@ namespace GoPlay
             FilterOnClientDisconnect(clientId);
             ProcessorOnClientDisconnect(clientId);
             SessionOnClientDisconnect(clientId);
+
+            // 业务回调结束后再关闭 sender：允许断开回调里做最后一次 Send(...)，由 sender drain 写出
+            RemoveAndStopSender(clientId);
         }
 
         public override void OnErrorEvent(uint clientId, Exception err)
@@ -140,16 +162,10 @@ namespace GoPlay
             IsStarted = true;
             OnStarted?.Invoke();
 
-            m_sendQueue = new BlockingCollection<Package>(ushort.MaxValue);
-            
-            // m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
-            m_sendTask = TaskUtil.LongRun(SendLoop, m_cancelSource.Token);
-            // m_updateTask = TaskUtil.LongRun(UpdateLoop, m_cancelSource.Token);
-
             StartProcessors();
-            
-            // return Task.WhenAll(m_recvTask, m_sendTask);
-            return Task.WhenAll(m_sendTask);
+
+            // 发送侧不再有全局长跑线程：每 session 一个 SessionSender（由 OnClientConnectEvent 创建）。
+            return Task.CompletedTask;
         }
 
         private void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -166,17 +182,9 @@ namespace GoPlay
             
             m_cancelSource.Cancel();
             StopProcessors();
-            
-            try
-            {
-                // Task.WaitAll(m_recvTask, m_sendTask);
-                Task.WaitAll(m_sendTask);
-                m_sendQueue.Dispose();
-            }
-            catch
-            {
-                /* DO NOTHING */
-            }
+
+            // 关闭所有 SessionSender：先 complete，Drain timeout 后硬 cancel
+            StopAllSenders();
 
             Transport.Stop();
 
@@ -191,37 +199,42 @@ namespace GoPlay
             OnStopped?.Invoke();
         }
 
-        protected void SendLoop()
+        private void StopAllSenders()
         {
-            var token = m_cancelSource.Token;
-            while (IsStarted && !token.IsCancellationRequested)
-            {
-                Package package = null;
-                try
-                {
-                    if (!m_sendQueue.TryTake(out package, Consts.TimeOut.Server)) continue;
-                    if (package.IsLastChunk && IsBlockSendByFilter(package)) continue;
+            var snapshot = m_senders.ToArray();
+            m_senders.Clear();
+            if (snapshot.Length == 0) return;
 
-                    // Console.WriteLine($" <[S]({package.Header.ClientId})= {package}");
-                    Transport.Send(package.Header.ClientId, package.GetBytes());
-                    if (package.IsLastChunk) PostSendFilter(package);
-                }
-                catch (OperationCanceledException)
-                {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    
-                    OnErrorEvent(package?.Header.ClientId ?? IdLoopGenerator.INVALID, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(package?.Header.ClientId ?? IdLoopGenerator.INVALID, err);
-                }
+            var tasks = new List<Task>(snapshot.Length);
+            foreach (var kv in snapshot)
+            {
+                tasks.Add(kv.Value.StopAsync(SenderStopDrainTimeout));
             }
+
+            try { Task.WaitAll(tasks.ToArray(), SenderStopDrainTimeout + TimeSpan.FromSeconds(1)); }
+            catch { /* best-effort */ }
+        }
+
+        private SessionSender GetOrCreateSender(uint clientId)
+        {
+            if (m_senders.TryGetValue(clientId, out var sender)) return sender;
+
+            var created = new SessionSender(clientId, this, Transport, capacity: SessionSenderCapacity);
+            if (m_senders.TryAdd(clientId, created))
+            {
+                created.Start(m_cancelSource.Token);
+                return created;
+            }
+
+            // 并发下别的线程已经建好一份：直接弃掉 created（还没 Start，无副作用）
+            return m_senders[clientId];
+        }
+
+        private void RemoveAndStopSender(uint clientId)
+        {
+            if (!m_senders.TryRemove(clientId, out var sender)) return;
+            // fire-and-forget：不阻塞 IO 线程
+            _ = sender.StopAsync(SenderStopDrainTimeout);
         }
 
         // protected void RecvLoop()
@@ -350,7 +363,8 @@ namespace GoPlay
                 var list = package.Split();
                 foreach (var p in list)
                 {
-                    m_sendQueue.Add(p, CanelToken);    
+                    var sender = GetOrCreateSender(p.Header.ClientId);
+                    sender.Enqueue(p);
                 }
             }
             catch (Exception err)
@@ -364,7 +378,8 @@ namespace GoPlay
             var package = Package.Create(0, PackageType.Kick, EncodingType);
             package.Header.ClientId = clientId;
             package.Header.Status.Message = reason;
-            m_sendQueue.Add(package, CanelToken);
+            var sender = GetOrCreateSender(clientId);
+            sender.Enqueue(package);
 
             TaskUtil.DelayRun(Consts.TimeOut.KickDelayDisconnect, () =>
             {
@@ -380,7 +395,6 @@ namespace GoPlay
         public override void Dispose()
         {
             Stop();
-            m_sendQueue?.Dispose();
             m_cancelSource?.Dispose();
         }
 
@@ -412,12 +426,45 @@ namespace GoPlay
             return $"UNKNOWN_ROUTE({routeId})";
         }
 
-        public override bool IsSendQueueFull => m_sendQueue.Count >= m_sendQueue.BoundedCapacity;
-        public override int SendQueueCount => m_sendQueue.Count;
+        /// <summary>
+        /// 任一 sender 满即视作整体满：这是对旧"全局单队列满"语义的保守对应。
+        /// </summary>
+        public override bool IsSendQueueFull
+        {
+            get
+            {
+                foreach (var pair in m_senders)
+                {
+                    if (pair.Value.QueueCount >= SessionSenderCapacity) return true;
+                }
+                return false;
+            }
+        }
 
+        public override int SendQueueCount
+        {
+            get
+            {
+                var total = 0;
+                foreach (var pair in m_senders) total += pair.Value.QueueCount;
+                return total;
+            }
+        }
+
+        /// <summary>
+        /// 诊断接口：枚举当前所有 sender 的出站快照。
+        /// 注意：原实现返回 BlockingCollection.ToList()（非破坏性）。
+        /// 由于 Channel 不暴露非破坏性枚举，这里返回的是 drain 出来的包，
+        /// 仅在诊断/停机路径上调用，不要在运行时调。
+        /// </summary>
         public override List<Package> GetAllSendQueue()
         {
-            return m_sendQueue.ToList();
+            var list = new List<Package>();
+            foreach (var pair in m_senders)
+            {
+                list.AddRange(pair.Value.DrainSnapshot());
+            }
+            return list;
         }
     }
 }

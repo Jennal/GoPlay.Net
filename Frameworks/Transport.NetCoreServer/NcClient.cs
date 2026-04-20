@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
@@ -18,7 +20,10 @@ namespace GoPlay.Core.Transport.NetCoreServer
         public SocketError LastError;
 
         private CancellationToken m_token;
-        private byte[] m_buffer;
+
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
         
         public PackClient(NcClient client, IPAddress address, int port, CancellationToken token) : base(address, port)
         {
@@ -33,51 +38,65 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override void OnDisconnected()
         {
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
+            }
             m_client.InvokeOnDisconnected();
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
             {
-                m_buffer = data.ToArray();
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
             }
-            else
+            if (m_stashLen + size > m_stash.Length)
             {
-                using (var ms = new MemoryStream())
-                {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
-                }
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
             }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
 
-            using (var ms = new MemoryStream(m_buffer))
+        private void DrainStash()
+        {
+            var pos = 0;
+            while (m_stashLen - pos >= sizeof(ushort))
             {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
+                var packData = new byte[len];
+                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                pos += sizeof(ushort) + len;
 
-                        var packData = br.ReadBytes(len);
-                        RecvChannel.Add(packData, m_token);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+                RecvChannel.Add(packData, m_token);
             }
+
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
+            {
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
+            }
+            m_stashLen = remaining;
         }
 
         protected override void OnError(SocketError error)
@@ -88,6 +107,12 @@ namespace GoPlay.Core.Transport.NetCoreServer
         protected override void Dispose(bool disposingManagedResources)
         {
             base.Dispose(disposingManagedResources);
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
+            }
             RecvChannel.Dispose();
         }
     }

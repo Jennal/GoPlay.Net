@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
@@ -12,8 +14,11 @@ namespace GoPlay.Core.Transport.NetCoreServer
 {
     class PackSession : TcpSession
     {
-        private byte[] m_buffer;
-        
+        // ArrayPool-backed stash（同 WsPackSession），避免每次收包 ToArray。
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
+
         public uint ClientId { get; }
         public string ClientIP;
         public PackServer PackServer => Server as PackServer;
@@ -36,52 +41,65 @@ namespace GoPlay.Core.Transport.NetCoreServer
             }
         }
 
-        protected override void OnDisconnected()
-        {
-            /* DO NOTHING */
-        }
-
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
             {
-                m_buffer = data.ToArray();
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
             }
-            else
+            if (m_stashLen + size > m_stash.Length)
             {
-                using (var ms = new MemoryStream())
-                {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
-                }
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
+            }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
+
+        private void DrainStash()
+        {
+            var pos = 0;
+            while (m_stashLen - pos >= sizeof(ushort))
+            {
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
+
+                var packData = new byte[len];
+                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                pos += sizeof(ushort) + len;
+
+                PackServer.OnRecv(this, packData);
             }
 
-            using (var ms = new MemoryStream(m_buffer))
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
             {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
+            }
+            m_stashLen = remaining;
+        }
 
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
-
-                        var packData = br.ReadBytes(len);
-                        PackServer.OnRecv(this, packData);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+        protected override void OnDisconnected()
+        {
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
             }
         }
 
@@ -148,6 +166,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
             }
         }
 
+        /// <summary>
+        /// 零拷贝批量发送：<paramref name="framedBytes"/> 已经是 wire bytes（含外层长度前缀），
+        /// 直接 forward 到 session.SendAsync(span)。
+        /// </summary>
+        public void SendFramed(uint clientId, ReadOnlySpan<byte> framedBytes)
+        {
+            if (!GetSession(clientId, out var session)) return;
+            session.SendAsync(framedBytes);
+        }
+
         public bool GetSession(uint clientId, out PackSession session)
         {
             return m_sessions.TryGetValue(clientId, out session);
@@ -186,6 +214,13 @@ namespace GoPlay.Core.Transport.NetCoreServer
         public override void Send(uint clientId, byte[] data)
         {
             m_server.Send(clientId, data);
+        }
+
+        /// <inheritdoc />
+        public override System.Threading.Tasks.ValueTask SendAsync(uint clientId, ReadOnlyMemory<byte> framedBytes, System.Threading.CancellationToken ct)
+        {
+            m_server.SendFramed(clientId, framedBytes.Span);
+            return default;
         }
 
         public override string GetClientIp(uint clientId)

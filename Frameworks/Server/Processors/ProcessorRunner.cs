@@ -57,6 +57,9 @@ namespace GoPlay.Core.Processors
             _maxConcurrency = ResolveMaxConcurrency(processor, server);
             _drainBatchSize = Math.Max(1, drainBatchSize);
 
+            // 启动期 lint：扫描 Processor 类型检测 [MaxConcurrency] 误用，仅打 Warning 不抛错
+            WarnOnMaxConcurrencyMisuse(processor);
+
             if (_maxConcurrency > 1)
             {
                 // 仅在允许流水线并发时才启用 ExclusiveScheduler，串行化同步代码段
@@ -99,6 +102,42 @@ namespace GoPlay.Core.Processors
             var attr = processor.GetType().GetCustomAttribute<MaxConcurrencyAttribute>(inherit: true);
             var n = attr?.Value ?? server.DefaultConcurrency;
             return Math.Max(1, n);
+        }
+
+        /// <summary>
+        /// 启动期 lint：[MaxConcurrency] 误用检测（非致命，仅打 Warning）。
+        /// 场景：
+        /// 1. 方法标了 [MaxConcurrency] 但没有 [Request]/[Notify]：attribute 完全无效。
+        /// 2. 方法 [MaxConcurrency] N 不大于 1：方法级限流写 1 是冗余（单 Processor 总闸已限制）。
+        /// 3. Class 标了 [MaxConcurrency] 但类型继承链上没有 ProcessorBase：理论上走不到此处，留个兜底。
+        /// 真正的类型级校验由 Roslyn analyzer 负责（后续补齐），这里是运行期兑底。
+        /// </summary>
+        private static void WarnOnMaxConcurrencyMisuse(ProcessorBase processor)
+        {
+            var type = processor.GetType();
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            foreach (var m in methods)
+            {
+                var mc = m.GetCustomAttribute<MaxConcurrencyAttribute>(inherit: true);
+                if (mc == null) continue;
+
+                var isRouteHandler =
+                    m.GetCustomAttribute<RequestAttribute>(inherit: true) != null ||
+                    m.GetCustomAttribute<NotifyAttribute>(inherit: true) != null;
+
+                if (!isRouteHandler)
+                {
+                    Console.Error.WriteLine(
+                        $"WARN [MaxConcurrency]: {type.Name}.{m.Name} 标了 [MaxConcurrency({mc.Value})] 但不是 [Request]/[Notify] 路由方法，attribute 将被忽略。");
+                    continue;
+                }
+
+                if (mc.Value == 1)
+                {
+                    Console.Error.WriteLine(
+                        $"WARN [MaxConcurrency]: {type.Name}.{m.Name} 标 [MaxConcurrency(1)] 是冗余：Processor 已是串行或上限已更小。考虑去掉该标注。");
+                }
+            }
         }
 
         public ProcessorBase Processor => _processor;

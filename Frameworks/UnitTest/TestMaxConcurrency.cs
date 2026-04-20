@@ -31,10 +31,22 @@ namespace UnitTest
         }
 
         [Test]
-        public void TestServerDefaultConcurrencyValidation()
+        public void TestServerDefaultConcurrencyAutoSizing()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => new Server<TcpServer>(defaultConcurrency: 0));
-            Assert.Throws<ArgumentOutOfRangeException>(() => new Server<TcpServer>(defaultConcurrency: -1));
+            // 0 / 负值：按 Environment.ProcessorCount 自动推导，至少 1
+            var expected = Math.Max(1, Environment.ProcessorCount);
+            using (var s1 = new Server<TcpServer>(defaultConcurrency: 0))
+            {
+                Assert.AreEqual(expected, s1.DefaultConcurrency);
+            }
+            using (var s2 = new Server<TcpServer>(defaultConcurrency: -1))
+            {
+                Assert.AreEqual(expected, s2.DefaultConcurrency);
+            }
+            using (var s3 = new Server<TcpServer>(defaultConcurrency: 4))
+            {
+                Assert.AreEqual(4, s3.DefaultConcurrency);
+            }
         }
 
         [Test]
