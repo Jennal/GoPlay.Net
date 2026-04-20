@@ -35,6 +35,14 @@ msbuild.log
 msbuild.err
 msbuild.wrn
 
+# Test results & crash dumps
+[Tt]est[Rr]esults/
+*.dmp
+*.crashdump
+*.trx
+*.coverage
+*.coveragexml
+
 # Visual Studio 2015
 .vs/
 
