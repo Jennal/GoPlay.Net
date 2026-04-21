@@ -25,6 +25,14 @@ namespace GoPlay.Core.Protocols
         {
             Header.PackageInfo.ContentSize = (uint) (RawData?.Length ?? 0);
         }
+
+        /// <summary>
+        /// 计算 body 编码后字节数，用于在 <see cref="Split"/> / <see cref="WriteTo"/> 路径上**不落盘**地预测尺寸。
+        /// 基类（<see cref="Package"/>）只有 RawData，直接返回长度；
+        /// <see cref="Package{T}"/> 覆盖为 <c>RawData ?? encoder.GetEncodedSize(Data)</c>，
+        /// 让 Protobuf 走 <c>IMessage.CalculateSize()</c> 0 alloc 拿到尺寸。
+        /// </summary>
+        protected virtual int GetBodyEncodedSize() => RawData?.Length ?? 0;
         
         public virtual byte[] GetBytes()
         {
@@ -99,6 +107,44 @@ namespace GoPlay.Core.Protocols
             {
                 bodyBytes.AsSpan(0, bodyLen).CopyTo(span.Slice(sizeof(ushort) * 2 + headerLen));
             }
+            writer.Advance(totalLen);
+            return totalLen;
+        }
+
+        /// <summary>
+        /// 给 <see cref="Package{T}"/> 在 RawData 还没被填的 zero-alloc 路径下复用：
+        /// header 与 body 都通过 <see cref="IEncoder.EncodeTo"/> 直接写到调用方 IBufferWriter
+        /// 申请的同一块连续 span，全程 0 byte[] 中间分配（Protobuf 编码器下）。
+        /// </summary>
+        protected static int WriteFrameWithDataBody<TData>(IBufferWriter<byte> writer, IEncoder encoder,
+            Header header, int headerLen, TData data, int bodyLen)
+        {
+            if (headerLen > ushort.MaxValue)
+                throw new Exception($"Package.WriteTo: header exceeds ushort: {headerLen}");
+
+            var innerLen = sizeof(ushort) + headerLen + bodyLen;
+            if (innerLen > ushort.MaxValue)
+                throw new Exception($"Package.WriteTo: frame size exceeds ushort outer prefix: {innerLen}");
+
+            var totalLen = sizeof(ushort) + innerLen;
+            var memory = writer.GetMemory(totalLen);
+            var span = memory.Span;
+            BinaryPrimitives.WriteUInt16LittleEndian(span, (ushort)innerLen);
+            BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(sizeof(ushort)), (ushort)headerLen);
+
+            var hWritten = encoder.EncodeTo(header, memory.Slice(sizeof(ushort) * 2, headerLen));
+            if (hWritten != headerLen)
+                throw new Exception(
+                    $"Package.WriteTo: header encoder wrote {hWritten} but pre-measured {headerLen}");
+
+            if (bodyLen > 0)
+            {
+                var bWritten = encoder.EncodeTo(data, memory.Slice(sizeof(ushort) * 2 + headerLen, bodyLen));
+                if (bWritten != bodyLen)
+                    throw new Exception(
+                        $"Package.WriteTo: body encoder wrote {bWritten} but pre-measured {bodyLen}");
+            }
+
             writer.Advance(totalLen);
             return totalLen;
         }
@@ -271,12 +317,20 @@ namespace GoPlay.Core.Protocols
 
         public virtual IEnumerable<Package> Split()
         {
-            UpdateContentSize();
-            if (Header.PackageInfo.ContentSize <= Consts.Package.MAX_CHUNK_SIZE)
+            // 先用 0-alloc 路径算 body 尺寸：Protobuf 走 IMessage.CalculateSize()，
+            // 不会触发 byte[] 分配。Header.ContentSize 必须先于 WriteTo 设置好（Header 编码会带入这一字段）。
+            var bodySize = GetBodyEncodedSize();
+            Header.PackageInfo.ContentSize = (uint)bodySize;
+
+            if (bodySize <= Consts.Package.MAX_CHUNK_SIZE)
             {
+                // 小消息热路径：保持 RawData = null（对 Package<T>），让 WriteTo 走 zero-alloc body 分支。
                 yield return this;
                 yield break;
             }
+
+            // 分块路径：必须把 body 编码落盘到 RawData，再按块切。这是大消息的一次性代价。
+            UpdateContentSize();
 
             var header = Header.Clone();
             header.PackageInfo.ChunkCount = (uint) Math.Ceiling(Header.PackageInfo.ContentSize / (float) Consts.Package.MAX_CHUNK_SIZE);
@@ -328,6 +382,14 @@ namespace GoPlay.Core.Protocols
             Header.PackageInfo.ContentSize = (uint) (RawData?.Length ?? 0);
         }
 
+        protected override int GetBodyEncodedSize()
+        {
+            if (RawData != null) return RawData.Length;
+            if (Data == null) return 0;
+            var encoder = EncoderFactory.Create(Header.PackageInfo.EncodingType);
+            return encoder.GetEncodedSize(Data);
+        }
+
         public override byte[] GetBytes()
         {
             var encoder = EncoderFactory.Create(Header.PackageInfo.EncodingType);
@@ -356,34 +418,39 @@ namespace GoPlay.Core.Protocols
         }
 
         /// <summary>
-        /// <see cref="Package{T}"/> 的 wire 写入：
-        /// 正常通过 <see cref="Server.Send"/> -&gt; Split 路径进入时，RawData 已由 <see cref="UpdateContentSize"/> 编码填好，
-        /// 这里直接复用即可（避免对同一个 Data 编码两次）；
-        /// 若上层绕开了 Split（直接构造 Package&lt;T&gt; 后 WriteTo），则按需惰性编码一次。
-        /// header 通过 <see cref="IEncoder.EncodeTo"/> 原地写 span，不分配中间 byte[]。
+        /// <see cref="Package{T}"/> 的 wire 写入。两条路径：
+        /// 1. <see cref="Package.RawData"/> 已被填好（分块场景，或上层手动设了 RawData）：
+        ///    走 byte[] body 路径，把 RawData 拷进 wire span。
+        /// 2. <see cref="Package.RawData"/> 仍为 null（小消息热路径，从 Step 3.10 起 <see cref="Split"/> 不再预编码）：
+        ///    通过 <see cref="IEncoder.GetEncodedSize"/> + <see cref="IEncoder.EncodeTo"/> 把 Data 直接
+        ///    编码到 IBufferWriter 申请的同一块 span，全程 0 byte[] 中间分配（Protobuf 路径）。
+        /// 注意：zero-alloc 路径**不会**把编码结果回写到 RawData，避免引入额外 byte[] 分配；
+        /// 上层若需要 byte[] 形式的 body 应显式调用 <see cref="UpdateContentSize"/>。
         /// </summary>
         public override int WriteTo(IBufferWriter<byte> writer)
         {
             var encoder = EncoderFactory.Create(Header.PackageInfo.EncodingType);
-            byte[] bodyBytes;
+
             if (RawData != null)
             {
-                bodyBytes = RawData;
-            }
-            else
-            {
-                bodyBytes = encoder.Encode(Data);
-                RawData = bodyBytes;
+                var bodyLen = RawData.Length;
+                if (bodyLen > Consts.Package.MAX_SIZE)
+                    throw new Exception(
+                        $"Package<{typeof(T).Name}>.WriteTo: Exceed max size({Consts.Package.MAX_SIZE}): {bodyLen}");
+
+                Header.PackageInfo.ContentSize = (uint)bodyLen;
+                var hLen = encoder.GetEncodedSize(Header);
+                return WriteFrame(writer, encoder, Header, hLen, RawData, bodyLen);
             }
 
-            var bodyLen = bodyBytes?.Length ?? 0;
-            if (bodyLen > Consts.Package.MAX_SIZE)
+            var dataBodyLen = Data == null ? 0 : encoder.GetEncodedSize(Data);
+            if (dataBodyLen > Consts.Package.MAX_SIZE)
                 throw new Exception(
-                    $"Package<{typeof(T).Name}>.WriteTo: Exceed max size({Consts.Package.MAX_SIZE}): {bodyLen}");
+                    $"Package<{typeof(T).Name}>.WriteTo: Exceed max size({Consts.Package.MAX_SIZE}): {dataBodyLen}");
 
-            Header.PackageInfo.ContentSize = (uint)bodyLen;
+            Header.PackageInfo.ContentSize = (uint)dataBodyLen;
             var headerLen = encoder.GetEncodedSize(Header);
-            return WriteFrame(writer, encoder, Header, headerLen, bodyBytes, bodyLen);
+            return WriteFrameWithDataBody(writer, encoder, Header, headerLen, Data, dataBodyLen);
         }
 
         public override string ToString()

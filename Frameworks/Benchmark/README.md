@@ -81,30 +81,38 @@ dotnet run -c Release --no-build -f net8.0  -- concurrency
 | Step 3.5 (net8) LTS 主基线     | 50.95 µs      |  0.95 µs  | 同代码，runtime 升级至 .NET 8，再 **-6.2%**          |
 | Step 3.5 (net9)                | 52.05 µs      |  1.40 µs  | 同代码，net9.0，vs net8 **+2.2%**（StdDev 内持平）   |
 | Step 3.5 (net10)               | 46.28 µs      |  1.69 µs  | 同代码，net10.0，vs net8 **-9.2%**、vs net9 **-11.1%** |
-| Step 3.10 (net8) LTS 主基线     | 49.28 µs      |  0.82 µs  | Header 改 span-based encode，省 1 次 `byte[]` 分配 |
-| **Step 3.10 (net10) 当前最佳**  | **45.08 µs**  |  0.95 µs  | 同改造，net10.0，vs Step 3.5 再 **-2.6%**           |
+| Step 3.10 (net8)                | 49.28 µs      |  0.82 µs  | Header 改 span-based encode，省 1 次 `byte[]` 分配 |
+| Step 3.10 (net10)               | 45.08 µs      |  0.95 µs  | 同改造，net10.0，vs Step 3.5 再 **-2.6%**           |
+| Step 3.11 (net8) LTS 主基线     | 48.12 µs      |  0.34 µs  | body 也走 span-based encode，小消息热路径 0 byte[] 中间分配 |
+| **Step 3.11 (net10) 当前最佳**  | **42.77 µs**  |  0.27 µs  | 同改造，net10.0，vs Step 3.5 累计 **-7.6%**         |
 
-即单连接同步 RTT（Step 3.10 后当前基线）：
+即单连接同步 RTT（Step 3.11 后当前基线）：
 - net7  ≈ **54 µs**（~18.4 kreq/s 串行上限）
-- net8  ≈ **49 µs**（~20.3 kreq/s 串行上限）← LTS 主基线
-- net10 ≈ **45 µs**（~22.2 kreq/s 串行上限）← 当前最佳
+- net8  ≈ **48 µs**（~20.8 kreq/s 串行上限）← LTS 主基线
+- net10 ≈ **43 µs**（~23.4 kreq/s 串行上限）← 当前最佳
 
-Step 3.10（`Header` span-based zero-alloc 编码）的收益，用 `MemoryDiagnoser` 量化：
+Step 3.10（`Header` span-based zero-alloc）+ Step 3.11（`Package<T>` body 也 span-based）的收益，用 `MemoryDiagnoser` 量化（端到端 Echo，client→server→client 完整 RTT）：
 
-| Runtime | Phase   | Mean      | Allocated / op | Gen0 / 1k op |
-|---------|---------|----------:|---------------:|-------------:|
-| net8    | BEFORE  | 49.96 µs  |   27.60 KB     |   1.8311     |
-| net8    | AFTER   | 49.28 µs  | **23.14 KB**   | **1.4648**   |
-| net10   | BEFORE  | 47.52 µs  |   27.44 KB     |   1.8311     |
-| net10   | AFTER   | 45.08 µs  | **22.98 KB**   | **1.4648**   |
+| Runtime | Phase                    | Mean      | Allocated / op | Gen0 / 1k op |
+|---------|--------------------------|----------:|---------------:|-------------:|
+| net8    | Step 3.9 (BEFORE)        | 49.96 µs  |   27.60 KB     |   1.8311     |
+| net8    | Step 3.10 (header only)  | 49.28 µs  |   23.14 KB     |   1.4648     |
+| net8    | **Step 3.11 (header+body)** | **48.12 µs** | **14.22 KB** | **0.7324** |
+| net10   | Step 3.9 (BEFORE)        | 47.52 µs  |   27.44 KB     |   1.8311     |
+| net10   | Step 3.10 (header only)  | 45.08 µs  |   22.98 KB     |   1.4648     |
+| net10   | **Step 3.11 (header+body)** | **42.77 µs** | **14.06 KB** | **0.7324** |
 
-- **每次 Echo 分配量下降 ≈ 4.5 KB（-16%）**，对应 Gen0 GC 频率从 **1.83 / 1k** 降到 **1.46 / 1k**（-20%）；
-- RTT：net8 -1.4%（StdDev 内，但方向一致），net10 **-5.1%**（显著，StdDev 外）；
-- 分配减少来自热路径上 `encoder.Encode(Header)` 的 `MemoryStream + ms.ToArray()` 被替换为 `IMessage.CalculateSize()` + `MessageExtensions.WriteTo(IBufferWriter<byte>)` 原地写入调用方 span，Protobuf 路径完全 0 次 `byte[]` 分配；
-- Json encoder 走 fallback（多一次 `GetByteCount` + `GetBytes(Span)`，但 Header 几乎不走 Json）。
+- **每次 Echo 累计：分配 27.4 KB → 14.06 KB（-49%）、Gen0 1.83 → 0.73 (-60%)、RTT net10 -10%、net8 -3.7%**；
+- Step 3.11 单步收益：分配再 -38%，Gen0 再 -50%，RTT net10 -5.1%、net8 -2.4%；
+- 实现方式：`Package.Split()` 不再在小消息热路径上预编码 body，而是用 `IEncoder.GetEncodedSize(Data)`
+  （Protobuf 走 `IMessage.CalculateSize()`，0 alloc）算出 body 字节数；`Package<T>.WriteTo` 在 RawData == null
+  时通过 `IEncoder.EncodeTo(Data, Memory<byte>)` 把 Data 直接编码到 `IBufferWriter` 申请的同一块连续 span，
+  和 Header 拼接写入。**完全跳过中间 `byte[] body` 的分配**；
+- 大消息（> `MAX_CHUNK_SIZE`）路径仍然走 `UpdateContentSize` → 落盘 RawData → 切块的老逻辑（分块本身就需要 byte[] 切片）；
+- `TestSplit` 等大消息分块单测仍然通过（覆盖 yield-back 的 `RawData != null` 分支）。
 
 **回归红线主基线仍锚定 net8 LTS**（见 §六），net10 是 STS（生命周期 18 个月），作为"当前最佳 runtime"公布，业务侧按版本策略自选。
-继续压榨需要改造 `Package<T>` 的 body 编码（与 Header 同套路）或做 client→server 的 pipelining（等下一轮）。
+后续优化空间见 §八。
 
 ---
 
@@ -204,8 +212,8 @@ net10.0 典型数据（两次 run 取值）：
 | 指标                                         | 本基线 (net8) | 红线（下跌超过） |
 |---------------------------------------------|--------------:|----------------:|
 | `InvokeRoute` mean                           | 146.5 ns      | +15% (>168 ns)  |
-| `Echo` single-RTT mean                       | **49.28 µs**  | +15% (>57 µs)   |
-| `Echo` Allocated / op                        | **23.14 KB**  | +15% (>27 KB)   |
+| `Echo` single-RTT mean                       | **48.12 µs**  | +15% (>55 µs)   |
+| `Echo` Allocated / op                        | **14.22 KB**  | +15% (>17 KB)   |
 | `delay=10ms` × `concurrency=64` QPS          | ≈ 3300       | -15% (<2800)    |
 | `delay=50ms` × `concurrency=64` QPS          | ≈  880       | -15% (<750)     |
 | `delay=100ms` × `concurrency=64` QPS         | ≈  470       | -15% (<400)     |
@@ -253,14 +261,27 @@ net10.0 典型数据（两次 run 取值）：
   实测 MemoryDiagnoser（net10 Echo）：Allocated **27.44 KB → 22.98 KB（-16%）**、Gen0 **1.83 → 1.46 /1k op（-20%）**，
   RTT **47.52 → 45.08 µs（-5.1%，显著）**；net8 同改造 49.96 → 49.28 µs（StdDev 内方向一致），Allocated -16%。
   36/36 单测在 net8/net10 上一次绿。
+- **Step 3.11**：`Package<T>` 的 body 编码也走 zero-alloc 路径。
+  `Package` 新增 `protected virtual int GetBodyEncodedSize()`（base 返回 RawData?.Length），
+  `Package<T>` 覆盖为 `RawData ?? encoder.GetEncodedSize(Data)`（Protobuf 走 `CalculateSize()`，0 alloc）。
+  `Split()` 用 `GetBodyEncodedSize` 决定是否分块：**小消息热路径不再预编码 body**（保持 `RawData = null`），
+  分块大消息才落盘 `RawData`。`Package<T>.WriteTo` 在 `RawData == null` 时通过新加的
+  `WriteFrameWithDataBody<TData>` 让 Header 与 Data 都用 `IEncoder.EncodeTo` 直接写到 `IBufferWriter`
+  申请的同一块连续 span，全程 0 byte[] 中间分配（Protobuf 路径）。
+  实测 MemoryDiagnoser（net10 Echo）：Allocated **22.98 KB → 14.06 KB（-39%）**、Gen0 **1.46 → 0.73 /1k op（-50%）**，
+  RTT **45.08 → 42.77 µs（-5.1%）**；net8 同改造 49.28 → 48.12 µs（-2.4%），Allocated -38.5%。
+  Step 3.9 → 3.11 累计：分配 27.4 KB → 14.06 KB（**-49%**）、Gen0 1.83 → 0.73（**-60%**）、net10 RTT -10%。
+  36/36 单测在 net8/net10 上一次绿（含 `TestSplit` 大消息分块场景）。
 
 ## 八、已知天花板 / 后续方向
 
 - 同一个 client 连接内 `Request` 仍是 **应用层串行**：发请求 → await → 回调 → 再发。要进一步压，需要业务侧发起 N 个并发 request（`Task.WhenAll`），这时单连接 QPS 由 `Concurrency × 1000/D` 决定，当前已达线性扩展。
 - ~~Server-side `Package.WriteTo(IBufferWriter)` 已经 zero-copy；但 `Header` 编码走的是 `Encoder.Encode(Header) → byte[]`，还有一次分配。后续可评估直接 span-based encode。~~ ← **Step 3.10 已完成**，Header 走 span-based zero-alloc，Echo 分配 -16%、Gen0 -20%。
-- `Package<T>` 的 body 编码仍走 `encoder.Encode(Data) → byte[]`（通过 `UpdateContentSize`）。
-  同样的套路可以让 body 也 span-based：`GetEncodedSize(Data)` 预算尺寸 → `EncodeTo(Data, Memory<byte>)` 原地写，
-  省掉 body 的 `byte[]` + `MemoryStream` 组合分配。需要重构 `Split()` / `UpdateContentSize()` 让它们只"算 size"而不落盘 RawData。
-  预估收益：Echo 路径 body 很小（PbString ≈ 10 bytes），但 GC 频度会再降；真实业务 body（几 KB）下收益显著。
+- ~~`Package<T>` 的 body 编码仍走 `encoder.Encode(Data) → byte[]`（通过 `UpdateContentSize`）。~~
+  ← **Step 3.11 已完成**，body 同样 span-based zero-alloc，Echo 累计分配 -49%、Gen0 -60%、net10 RTT -10%。
+- 收包路径 `Package.ParseRaw` 仍然 `data.Slice(...).ToArray()` 分配 `headerBytes` + `body` 两个 byte[]。
+  对端收消息也是热路径，可以引入 `Header.Parse(ReadOnlySpan<byte>)` + `body` 用 `ArrayPool` 租借/回收。
+  收益侧重 server 接收端的 GC 压力。
+- 大 body（≥ MAX_CHUNK_SIZE）分块路径仍然 `new byte[chunkSize]` per chunk，可以换 `ArrayPool<byte>.Rent`，但需要约束生命周期。
 - Roslyn analyzer（Step 3.3 preferred 路径）还没做，目前只有运行期 warning。要真正 fail-fast 需要追加 analyzer 项目。
 
