@@ -91,37 +91,56 @@ dotnet run -c Release --no-build -f net8.0  -- concurrency
 | Step 3.10 (net10)               | 45.08 µs      |  0.95 µs  | 同改造，net10.0，vs Step 3.5 再 **-2.6%**           |
 | Step 3.11 (net8)                | 48.12 µs      |  0.34 µs  | body 也走 span-based encode，小消息热路径 0 byte[] 中间分配 |
 | Step 3.11 (net10)               | 42.77 µs      |  0.27 µs  | 同改造，net10.0，vs Step 3.5 累计 **-7.6%**         |
-| Step 3.12 (net8) LTS 主基线     | **47.75 µs**  |  0.92 µs  | 收包路径 Header 也 zero-alloc，`Header.Parse(ReadOnlySpan<byte>)` |
-| **Step 3.12 (net10) 当前最佳**  | **43.77 µs**  |  0.86 µs  | 同改造，net10.0（RTT 在 StdDev 内持平 3.11）        |
+| Step 3.12 (net8)                | 47.75 µs      |  0.92 µs  | 收包路径 Header 也 zero-alloc，`Header.Parse(ReadOnlySpan<byte>)` |
+| Step 3.12 (net10)               | 43.77 µs      |  0.86 µs  | 同改造，net10.0（RTT 在 StdDev 内持平 3.11）        |
+| Step 3.13 (net8) LTS 主基线     | **46.71 µs**  |  0.91 µs  | Client 发送侧补完 zero-copy（`pack.WriteTo` + `ArrayBufferWriter`） |
+| **Step 3.13 (net10) 当前最佳**  | **42.90 µs**  |  0.86 µs  | 同改造，net10.0，Small 档 Allocated **-72%**       |
 
-即单连接同步 RTT（Step 3.12 后当前基线）：
-- net7  ≈ **54 µs**（~18.4 kreq/s 串行上限）
-- net8  ≈ **48 µs**（~20.9 kreq/s 串行上限）← LTS 主基线
-- net10 ≈ **44 µs**（~22.9 kreq/s 串行上限）← 当前最佳
+即单连接同步 RTT（Step 3.13 后当前基线，Small ≈ 7 B payload）：
+- net8  ≈ **47 µs**（~21.4 kreq/s 串行上限）← LTS 主基线
+- net10 ≈ **43 µs**（~23.3 kreq/s 串行上限）← 当前最佳
 
-Step 3.10（发包 Header span-based zero-alloc）+ Step 3.11（发包 body 也 span-based）+ Step 3.12（收包 Header 也 span-based）
-的收益，用 `MemoryDiagnoser` 量化（端到端 Echo，client→server→client 完整 RTT）：
+### 3.1 三档 payload 对照（Step 3.13 后，net10）
 
-| Runtime | Phase                         | Mean      | Allocated / op | Gen0 / 1k op |
-|---------|-------------------------------|----------:|---------------:|-------------:|
-| net8    | Step 3.9 (BEFORE)             | 49.96 µs  |   27.60 KB     |   1.8311     |
-| net8    | Step 3.10 (send header)       | 49.28 µs  |   23.14 KB     |   1.4648     |
-| net8    | Step 3.11 (send header+body)  | 48.12 µs  |   14.22 KB     |   0.7324     |
-| net8    | **Step 3.12 (+ recv header)** | **47.75 µs** | **13.81 KB** | **0.7324** |
-| net10   | Step 3.9 (BEFORE)             | 47.52 µs  |   27.44 KB     |   1.8311     |
-| net10   | Step 3.10 (send header)       | 45.08 µs  |   22.98 KB     |   1.4648     |
-| net10   | Step 3.11 (send header+body)  | 42.77 µs  |   14.06 KB     |   0.7324     |
-| net10   | **Step 3.12 (+ recv header)** | **43.77 µs** | **13.65 KB** | **0.7324** |
+用 `EchoSmall` / `EchoMedium` / `EchoLarge` 三个基准分别打 7 B / 1 KB / 10 KB 的 `PbString`，
+一起摸清"端到端一次 Echo 分配量随 payload 大小的放大比"，判断是否还有 body-linear 分配需要消除。
 
-- **Step 3.9 → 3.12 累计**：分配 27.4 KB → 13.65 KB（**-50%**）、Gen0 1.83 → 0.73 (**-60%**)、
-  net10 RTT 47.52 → 43.77 µs（**-7.9%**）、net8 RTT 49.96 → 47.75 µs（**-4.4%**）；
-- **Step 3.12 单步收益**：分配再 -2.9%（net10）/ -2.9%（net8），Gen0 持平（已到 1 次以内/op），
-  RTT 在 StdDev 内持平。收益侧重 **GC 压力**，在高 QPS、长连接、大量订阅的 server 场景下放大更显著；
-- 实现方式：`Header.Parse` 新增 `ReadOnlySpan<byte>` 重载，内部调用 `MessageParser.ParseFrom(ReadOnlySpan<byte>)`
-  （Protobuf 3.15+ API，0 alloc 消费 span）；`Package.ParseRaw(ReadOnlySpan<byte>)` 去掉
-  `headerBytes = data.Slice(...).ToArray()`，直接把 span 切片喂给 `Header.Parse`；
-- body 侧仍然需要 `.ToArray()`（下游 handler 链 async 持有 `Package.RawData`，不能留 span 引用到 TCP 接收缓冲），
-  后续可改 `ArrayPool<byte>.Rent` + 生命周期管理（§八）；
+| Payload      | Mean (net10)  | Allocated  | Alloc Ratio | Gen0 / 1k op |
+|--------------|--------------:|-----------:|------------:|-------------:|
+| 7 B   Small  | 42.90 µs      |  3.88 KB   | 1.00×       | 0.1221       |
+| 1 KB  Medium | 45.97 µs      | 13.86 KB   | 3.57×       | 0.7324       |
+| 10 KB Large  | 64.83 µs      | 103.87 KB  | 26.8×       | 6.8359       |
+
+- **Small 档分配已经压到 3.88 KB**——剩下的绝大部分是 `Task` / `TaskCompletionSource` / async state machine，
+  再挖需要换 `ValueTask` 或共享 TCS pool，ROI 边际递减；
+- **Medium 档每字节 body 放大 ≈ 10×**（13.86 KB / 1 KB）；**Large 档放大 ≈ 10×**（103.87 KB / 10 KB）——
+  放大因子现在跟 payload size 解耦了，说明 per-byte 拷贝的热路径只剩常数几份（收包 stash→byte[]、body `.ToArray()`、
+  业务侧 decode 结果）。此时再做 body `ArrayPool` 的 ROI 也变得可测（预估 Medium -2 KB、Large -20 KB）。
+
+### 3.2 累计分配曲线（端到端 Echo，client→server→client 完整 RTT，`MemoryDiagnoser`）
+
+以下以 Echo-Small（7 B payload）为指标，展示各 Step 对分配量的单调消减：
+
+| Runtime | Phase                                | Mean      | Allocated / op | Gen0 / 1k op |
+|---------|--------------------------------------|----------:|---------------:|-------------:|
+| net8    | Step 3.9 (BEFORE)                    | 49.96 µs  |   27.60 KB     |   1.8311     |
+| net8    | Step 3.10 (send header)              | 49.28 µs  |   23.14 KB     |   1.4648     |
+| net8    | Step 3.11 (send header+body)         | 48.12 µs  |   14.22 KB     |   0.7324     |
+| net8    | Step 3.12 (+ recv header)            | 47.75 µs  |   13.81 KB     |   0.7324     |
+| net8    | **Step 3.13 (+ client send zero-copy)** | **46.71 µs** | **4.05 KB** | **0.1221** |
+| net10   | Step 3.9 (BEFORE)                    | 47.52 µs  |   27.44 KB     |   1.8311     |
+| net10   | Step 3.10 (send header)              | 45.08 µs  |   22.98 KB     |   1.4648     |
+| net10   | Step 3.11 (send header+body)         | 42.77 µs  |   14.06 KB     |   0.7324     |
+| net10   | Step 3.12 (+ recv header)            | 43.77 µs  |   13.65 KB     |   0.7324     |
+| net10   | **Step 3.13 (+ client send zero-copy)** | **42.90 µs** | **3.88 KB** | **0.1221** |
+
+- **Step 3.9 → 3.13 累计（Small 7 B）**：分配 27.4 KB → 3.88 KB（**−86%**）、Gen0 1.83 → 0.12（**−93%**）、
+  net10 RTT −9.7%、net8 RTT −6.5%；
+- **Step 3.13 单步收益（Small）**：分配 13.65 → 3.88 KB（**−72%**）、Gen0 0.73 → 0.12（**−83%**）、
+  RTT 在 StdDev 内持平；这是所有 Step 里**单步分配降幅最大**的一次，因为补掉的是
+  Step 3.10/3.11 当时漏掉的一整条路径（详见 §七 Step 3.13）；
+- **Step 3.13 在 Medium/Large 上的收益**：Medium 29.47 → 13.86 KB（−53%），Large 201.56 → 103.87 KB（−48%）；
+  RTT Medium −6.3%、Large −6.6%；大 payload 场景收益绝对值更惊人；
 - `TestSplit` / 36/36 单测在 net8/net10 上一次绿。
 
 **回归红线主基线仍锚定 net8 LTS**（见 §六），net10 是 STS（生命周期 18 个月），作为"当前最佳 runtime"公布，业务侧按版本策略自选。
@@ -225,8 +244,10 @@ net10.0 典型数据（两次 run 取值）：
 | 指标                                         | 本基线 (net8) | 红线（下跌超过） |
 |---------------------------------------------|--------------:|----------------:|
 | `InvokeRoute` mean                           | 146.5 ns      | +15% (>168 ns)  |
-| `Echo` single-RTT mean                       | **47.75 µs**  | +15% (>55 µs)   |
-| `Echo` Allocated / op                        | **13.81 KB**  | +15% (>16 KB)   |
+| `EchoSmall` single-RTT mean                  | **46.71 µs**  | +15% (>54 µs)   |
+| `EchoSmall` Allocated / op                   | **4.05 KB**   | +25% (>5 KB)    |
+| `EchoMedium` Allocated / op (1 KB payload)   | **14.03 KB**  | +20% (>17 KB)   |
+| `EchoLarge` Allocated / op (10 KB payload)   | **104.04 KB** | +15% (>120 KB)  |
 | `delay=10ms` × `concurrency=64` QPS          | ≈ 3300       | -15% (<2800)    |
 | `delay=50ms` × `concurrency=64` QPS          | ≈  880       | -15% (<750)     |
 | `delay=100ms` × `concurrency=64` QPS         | ≈  470       | -15% (<400)     |
@@ -296,19 +317,47 @@ net10.0 典型数据（两次 run 取值）：
   net10 RTT -7.9%、net8 RTT -4.4%。收益偏向 GC 压力，高 QPS / 多订阅场景放大。
   body 侧仍需 `.ToArray()`（async 持有约束），下一步用 `ArrayPool` 改造（见 §八）。
   36/36 单测在 net8/net10 上一次绿。
+- **Step 3.13**：Client 发送侧补完 zero-copy（Step 3.10/3.11 漏做的那一半）。
+  在做三档 payload（7 B / 1 KB / 10 KB）benchmark 摸底时发现：Medium/Large 两档 Allocated 随 payload
+  线性放大 ~15–19×，远超预期。溯源发现 `Client.SendLoopAsync` 唯一调用处仍是
+  `Transport.Send(pack.GetBytes(), ...)`——`pack.GetBytes()` 是 Step 3.10 之前的老路径，
+  内部 `encoder.Encode(Header)→byte[]` + `encoder.Encode(Data)→byte[]` + `MemoryStream` 自扩容 + `ms.ToArray()`
+  共四份分配，完全没吃到 Server 端 `SessionSender` 早已享受的 `WriteTo(IBufferWriter)` 零拷贝通路。
+  修复方案：
+  1. `TransportClientBase` 新增 `virtual ValueTask Send(ReadOnlyMemory<byte>, CTS)`，**契约**是
+     "data 已是含 outer ushort 前缀的完整 wire frame，子类直接 socket 下发"——与 Server 端
+     `TransportServerBase.SendAsync(uint, ReadOnlyMemory<byte>, CancellationToken)` 对齐；
+  2. `NcClient` / `WsClient` / `WssClient` / `TcpClient` 四个 transport 全部覆写，直接调 NetCoreServer 底层
+     `SendAsync(ReadOnlySpan<byte>)` / `NetworkStream.WriteAsync(ReadOnlyMemory<byte>)`；
+  3. `Client` 类持一个 `ArrayBufferWriter<byte>`（初始 4 KB，随最大包体自然扩容，**整连接生命周期只分配一次**）；
+  4. `SendLoopAsync` 的 inner loop 改为 `pack.WriteTo(writer) → Transport.Send(writer.WrittenMemory, cts) → writer.ResetWrittenCount()`。
+  
+  实测 MemoryDiagnoser（net10 Echo，三档 payload）：
+  | Payload   | Alloc BEFORE | Alloc AFTER | 减幅    | Gen0 减幅 | RTT 减幅 |
+  |-----------|-------------:|------------:|--------:|----------:|---------:|
+  | 7 B Small | 13.65 KB     | **3.88 KB** | **-72%** | -83%     | ~0%      |
+  | 1 KB Med  | 29.47 KB     | **13.86 KB**| **-53%** | -57%     | -6.3%    |
+  | 10 KB Lg  | 201.56 KB    | **103.87 KB**| **-48%** | -43%    | -6.6%    |
+  
+  Step 3.9 → 3.13 累计（Small）：**分配 27.4 KB → 3.88 KB (-86%)**、Gen0 1.83 → 0.12 (**-93%**)、
+  net10 RTT 47.52 → 42.90 µs (-9.7%)、net8 RTT 49.96 → 46.71 µs (-6.5%)。
+  **这是所有 Step 里单步分配降幅最大的一次**，因为补掉的是 Step 3.10/3.11 当时漏掉的整条路径。
+  经验教训：优化收包/发包时**两侧对称审计**，别只看 Server 端。36/36 单测在 net8/net10 上一次绿。
 
 ## 八、已知天花板 / 后续方向
 
 - 同一个 client 连接内 `Request` 仍是 **应用层串行**：发请求 → await → 回调 → 再发。要进一步压，需要业务侧发起 N 个并发 request（`Task.WhenAll`），这时单连接 QPS 由 `Concurrency × 1000/D` 决定，当前已达线性扩展。
-- ~~Server-side `Package.WriteTo(IBufferWriter)` 已经 zero-copy；但 `Header` 编码走的是 `Encoder.Encode(Header) → byte[]`，还有一次分配。后续可评估直接 span-based encode。~~ ← **Step 3.10 已完成**，Header 走 span-based zero-alloc，Echo 分配 -16%、Gen0 -20%。
-- ~~`Package<T>` 的 body 编码仍走 `encoder.Encode(Data) → byte[]`（通过 `UpdateContentSize`）。~~
-  ← **Step 3.11 已完成**，body 同样 span-based zero-alloc，Echo 累计分配 -49%、Gen0 -60%、net10 RTT -10%。
-- ~~收包路径 `Package.ParseRaw` 仍然 `data.Slice(...).ToArray()` 分配 `headerBytes`。~~
-  ← **Step 3.12 已完成**，`Header.Parse(ReadOnlySpan<byte>)` 直接消费 span，Echo 分配再 -2.9%。
-- 收包路径 `body = data.Slice(...).ToArray()` 仍然分配。下游 handler 链 async 持有 `Package.RawData`，
-  不能留 span 引用到 TCP 接收缓冲，真正做零分配需要改成 `ArrayPool<byte>.Rent` + `Package.ReleaseRawData()`
-  生命周期管理（handler 完成后归还），风险点是 `Package.Clone()` 与多订阅分发时的归还时机。
-  预期 Echo 再省 ~300–500 B/op、Gen0 继续下探。
+- ~~Server-side `Package.WriteTo(IBufferWriter)` 已经 zero-copy；但 `Header` 编码走的是 `Encoder.Encode(Header) → byte[]`，还有一次分配。~~ ← **Step 3.10 已完成**。
+- ~~`Package<T>` 的 body 编码仍走 `encoder.Encode(Data) → byte[]`（通过 `UpdateContentSize`）。~~ ← **Step 3.11 已完成**。
+- ~~收包路径 `Package.ParseRaw` 仍然 `data.Slice(...).ToArray()` 分配 `headerBytes`。~~ ← **Step 3.12 已完成**。
+- ~~Client 发送侧 `pack.GetBytes()` + `Transport.Send(byte[])` 还是 Step 3.10 之前的老路径。~~ ← **Step 3.13 已完成**，每 Echo（Small）分配从 13.65 KB → 3.88 KB（−72%）。
+- **收包 body `.ToArray()` 改 `ArrayPool`**：Step 3.13 后 Medium/Large 档里 body 分配占比回归显性（Medium 约 2 KB、Large 约 20 KB）。
+  下游 handler 链 async 持有 `Package.RawData`，ArrayPool 化需要配 `Package.ReleaseRawData()` 生命周期管理，
+  `Package.Clone` / 多订阅分发是归还时机的难点。预期 Medium Echo −2 KB（~14%）、Large Echo −20 KB（~19%），
+  Small Echo 几乎无感。ROI 取决于业务典型 payload 大小，先按 Medium 收益决策。
+- **Small Echo 3.88 KB 里的 async state machine / TCS 分配**：剩余大头来自 `Task<T>` / `TaskCompletionSource` /
+  async state machine 的堆箱装。可能的路径：`Request` 返回 `ValueTask<T>` + 共享 TCS pool。ROI 有限（几百 B），
+  且会引入 ValueTask 重复 await 等使用坑，目前不建议先做。
 - 大 body（≥ MAX_CHUNK_SIZE）分块路径仍然 `new byte[chunkSize]` per chunk，可以换 `ArrayPool<byte>.Rent`，但需要约束生命周期。
 - Roslyn analyzer（Step 3.3 preferred 路径）还没做，目前只有运行期 warning。要真正 fail-fast 需要追加 analyzer 项目。
 

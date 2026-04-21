@@ -22,6 +22,46 @@ namespace GoPlay.Core.Transports
         public abstract ValueTask<byte[]> Recv(CancellationTokenSource cancelSource);
         public abstract ValueTask Send(byte[] data, CancellationTokenSource cancelSource);
 
+        /// <summary>
+        /// 零拷贝发送：调用方（<see cref="GoPlay.Client.SendLoopAsync"/>）拿
+        /// <see cref="System.Buffers.ArrayBufferWriter{T}"/> 承接
+        /// <see cref="GoPlay.Core.Protocols.Package.WriteTo"/> 的输出，然后以
+        /// <c>writer.WrittenMemory</c> 直接传入这里。
+        ///
+        /// <para>
+        /// <b>wire 契约差异（重要）</b>：
+        /// - <see cref="Send(byte[], CancellationTokenSource)"/>：<c>data</c> 是 <b>inner</b>（不含 outer ushort 长度前缀），
+        ///   子类内部自行加前缀后写 socket。
+        /// - <see cref="Send(ReadOnlyMemory{byte}, CancellationTokenSource)"/>：<c>data</c> 是 <b>完整 wire frame</b>
+        ///   （<see cref="GoPlay.Core.Protocols.Package.WriteTo"/> 已经写入 outer ushort 前缀），子类直接 socket 下发。
+        /// 两个重载契约不兼容，不能简单互转。
+        /// </para>
+        ///
+        /// <para>
+        /// 线程契约：子类必须在<b>返回 ValueTask 之前</b>把 data 拷贝到自己内部的 pending buffer，
+        /// 一旦 await 完成，调用方可以立刻复用 / Reset 原 buffer。Server 端
+        /// <c>TransportServerBase.SendAsync(clientId, ReadOnlyMemory&lt;byte&gt;, ct)</c> 走的是同一契约。
+        /// </para>
+        ///
+        /// <para>
+        /// 默认实现：把 outer 前缀剥掉再 fallback 到 byte[] 重载，保证协议语义正确。
+        /// 这条路径会产生一次 <c>ToArray</c> 分配，失去零拷贝效果；所有官方 transport
+        /// （NcClient / WsClient / WssClient / TcpClient）都已覆写此方法直接走底层
+        /// span 版 SendAsync，不会走到这条 fallback。自定义 transport 建议覆写。
+        /// </para>
+        /// </summary>
+        public virtual ValueTask Send(ReadOnlyMemory<byte> data, CancellationTokenSource cancelSource)
+        {
+            if (data.Length < sizeof(ushort))
+                throw new ArgumentException(
+                    "Send(ReadOnlyMemory): wire frame too short; must contain outer ushort length prefix",
+                    nameof(data));
+
+            // 剥掉 WriteTo 写入的 outer 前缀，交给 byte[] 版本（其内部会自己重新加前缀），保持净效果一致
+            var inner = data.Slice(sizeof(ushort)).ToArray();
+            return Send(inner, cancelSource);
+        }
+
         public abstract void Dispose();
 
         protected void InvokeOnConnected()

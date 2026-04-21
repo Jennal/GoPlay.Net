@@ -243,6 +243,19 @@ namespace GoPlay.Core.Transport.Wss
             return new ValueTask();
         }
 
+        /// <summary>
+        /// 零拷贝发送：与 <see cref="NcClient"/> / <see cref="WsClient"/> 同契约。
+        /// <paramref name="data"/> 已是完整 wire frame（含 outer ushort 前缀），直接给底层
+        /// <c>SendBinaryAsync(ReadOnlySpan&lt;byte&gt;)</c>。
+        /// </summary>
+        public override ValueTask Send(ReadOnlyMemory<byte> data, CancellationTokenSource cancelSource)
+        {
+            if (cancelSource.IsCancellationRequested) return new ValueTask();
+
+            m_client.SendBinaryAsync(data.Span);
+            return new ValueTask();
+        }
+
         public override void Dispose()
         {
             m_cancelSource?.Dispose();

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -144,6 +145,14 @@ namespace GoPlay
         protected Task m_sendTask;
         protected Task m_recvTask;
         protected Task m_timeoutTask;
+
+        // SendLoopAsync 独占复用的 wire-frame 组包 buffer：
+        // Package.WriteTo(writer) 把 [outerLen][headerLen][header][body] 直接写进这里，
+        // 然后 Transport.Send(writer.WrittenMemory, cts) 一次性下发。
+        // 整个连接生命周期只分配一次（按包体自然扩容到上游最大包规模），
+        // 替代 Step 3.10/3.11 之前 `pack.GetBytes()` 每包 MemoryStream + ToArray 的双份分配。
+        // 初始容量取 4 KB：小消息热路径不触发扩容，大消息按 IBufferWriter 标准 grow。
+        private readonly ArrayBufferWriter<byte> m_sendWriter = new ArrayBufferWriter<byte>(4 * 1024);
 
         public Task SendTask => m_sendTask;
         public Task RecvTask => m_recvTask;
@@ -326,6 +335,8 @@ namespace GoPlay
         private async Task SendLoopAsync(CancellationToken ct)
         {
             var reader = m_sendChannel.Reader;
+            var writer = m_sendWriter;
+
             while (!ct.IsCancellationRequested)
             {
                 Package pack = null;
@@ -337,8 +348,32 @@ namespace GoPlay
 
                     if (pack.IsLastChunk && IsBlockSendByFilter(pack)) continue;
 
-                    // 不再 .AsTask().Wait()：直接 await，允许 transport 实现零阻塞
-                    await Transport.Send(pack.GetBytes(), m_cancelSource).ConfigureAwait(false);
+                    // 零拷贝组包：直接写到复用 writer，跳过 `pack.GetBytes()` 的
+                    // `encoder.Encode(Data)->byte[]` + `MemoryStream`+`ToArray()` 三重分配。
+                    // writer 贯穿整个连接生命周期，只分配一次（按最大包体自然扩容）。
+                    try
+                    {
+                        pack.WriteTo(writer);
+                    }
+                    catch (Exception writeErr)
+                    {
+                        // 组包阶段任何异常都不要把 writer 留在脏状态，直接 reset 继续
+                        ResetSendWriter(writer);
+                        OnErrorEvent(writeErr);
+                        continue;
+                    }
+
+                    try
+                    {
+                        // Transport.Send(Memory) 契约：子类必须在返回 ValueTask 之前把数据拷进自己的 pending buffer，
+                        // 以便调用方 reset writer 复用底层 byte[]。NcClient/WsClient/WssClient/TcpClient 均遵守。
+                        await Transport.Send(writer.WrittenMemory, m_cancelSource).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        ResetSendWriter(writer);
+                    }
+
                     if (ct.IsCancellationRequested) break;
 
                     if (pack.IsLastChunk) PostSendFilter(pack);
@@ -357,6 +392,19 @@ namespace GoPlay
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// 归零 <see cref="ArrayBufferWriter{T}"/>。net8+ 有 <c>ResetWrittenCount()</c> 只归零 index 保留底层 buffer；
+        /// 旧 runtime 只能 <c>Clear()</c>（对 ArrayBufferWriter 语义相同：不重分配 buffer，仅 index 清零）。
+        /// </summary>
+        private static void ResetSendWriter(ArrayBufferWriter<byte> writer)
+        {
+#if NET8_0_OR_GREATER
+            writer.ResetWrittenCount();
+#else
+            writer.Clear();
+#endif
         }
 
         private void RecvLoop()

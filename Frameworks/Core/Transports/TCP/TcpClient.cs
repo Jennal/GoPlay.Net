@@ -108,5 +108,27 @@ namespace GoPlay.Core.Transports.TCP
             
             ns.Flush();
         }
+
+        /// <summary>
+        /// 零拷贝发送：<paramref name="data"/> 已是完整 wire frame（含 outer ushort 前缀），
+        /// 与 <see cref="NcClient"/> 契约一致。直接 <see cref="System.Net.Sockets.NetworkStream.WriteAsync(ReadOnlyMemory{byte}, CancellationToken)"/>，
+        /// 省去 byte[] 版本里每包两次 <c>WriteAsync</c> + <c>lenBuf</c> 分配。
+        /// </summary>
+        public override async ValueTask Send(ReadOnlyMemory<byte> data, CancellationTokenSource cancelSource)
+        {
+            if (data.Length == 0) return;
+            var ns = m_client.GetStream();
+
+            var start = 0;
+            var chunkSize = m_client.SendBufferSize;
+            while (!cancelSource.Token.IsCancellationRequested && start < data.Length)
+            {
+                var size = Math.Min(data.Length - start, chunkSize);
+                await ns.WriteAsync(data.Slice(start, size), cancelSource.Token);
+                start += size;
+            }
+
+            ns.Flush();
+        }
     }
 }

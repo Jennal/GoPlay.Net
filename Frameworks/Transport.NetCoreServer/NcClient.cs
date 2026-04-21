@@ -205,6 +205,21 @@ namespace GoPlay.Core.Transport.NetCoreServer
             return new ValueTask();
         }
 
+        /// <summary>
+        /// 零拷贝发送：<paramref name="data"/> 已经是完整 wire frame（含 outer ushort 长度前缀，
+        /// 由 <see cref="GoPlay.Core.Protocols.Package.WriteTo"/> 直接写入 <see cref="ArrayBufferWriter{T}"/> 得到）。
+        /// 直接 forward 到 NetCoreServer 底层 <c>SendAsync(ReadOnlySpan&lt;byte&gt;)</c>，
+        /// 完全跳过 byte[] 老路径 <c>Send(byte[])</c> 里的 <see cref="MemoryStream"/> + <see cref="BinaryWriter"/> + <c>ms.ToArray()</c>。
+        /// 与 Server 端 <c>NcServer.SendAsync(clientId, ReadOnlyMemory)</c> 走的是同一契约。
+        /// </summary>
+        public override ValueTask Send(ReadOnlyMemory<byte> data, CancellationTokenSource cancelSource)
+        {
+            if (cancelSource.IsCancellationRequested) return new ValueTask();
+
+            m_client.SendAsync(data.Span);
+            return new ValueTask();
+        }
+
         public override void Dispose()
         {
             m_client?.Dispose();
