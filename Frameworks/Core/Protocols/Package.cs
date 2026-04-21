@@ -205,8 +205,10 @@ namespace GoPlay.Core.Protocols
 
         /// <summary>
         /// span 版解析：输入为单个 pack 的 inner 字节（无 outer ushort 前缀）。
-        /// body 仍然会拷贝出一份独立 byte[]（业务后续会 async 持有 Package，不能留 span 引用）。
-        /// 目的是在 WsPackSession 等收包路径上消除 MemoryStream/BinaryReader 的频繁分配。
+        /// Header 直接从 span 切片喂给 <see cref="Header.Parse(ReadOnlySpan{byte})"/>
+        /// （Protobuf 3.15+ 的 ParseFrom(ReadOnlySpan) 零拷贝消费 span），省掉一次 headerBytes.ToArray() 分配。
+        /// body 仍然会拷贝出一份独立 byte[]（业务后续会 async 持有 Package，不能留 span 引用；
+        /// 进一步改造为 ArrayPool 租借见 §八 路线图）。
         /// </summary>
         public static Package ParseRaw(ReadOnlySpan<byte> data)
         {
@@ -218,9 +220,8 @@ namespace GoPlay.Core.Protocols
             if (data.Length < pos + headerLength)
                 throw new Exception("Package.ParseRaw: data too short for header bytes");
 
-            var headerBytes = data.Slice(pos, headerLength).ToArray();
+            var header = Header.Parse(data.Slice(pos, headerLength));
             pos += headerLength;
-            var header = Header.Parse(headerBytes);
 
             if (header.PackageInfo.ContentSize > Consts.Package.MAX_SIZE)
                 throw new Exception(

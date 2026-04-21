@@ -8,6 +8,10 @@ using GoPlay.Core.Transport.NetCoreServer;
 
 namespace GoPlay.Benchmarks;
 
+// 常驻 MemoryDiagnoser：回归红线里有 "Echo Allocated / op ≤ 16 KB" 这一条，
+// 只有开着才能持续验证。代价是 BDN Request 跑时长 +40–50%（约 15s → 22s），
+// 完全可接受。Concurrency/Route 因信噪比差或时间成本高，不加。
+[MemoryDiagnoser]
 public class BenchmarkRequest
 {
     private Server _server = null;
