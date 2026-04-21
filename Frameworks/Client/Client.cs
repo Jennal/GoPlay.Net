@@ -212,10 +212,20 @@ namespace GoPlay
             try
             {
                 m_status = ClientStatus.Connecting;
-                Transport.Connect(host, port, timeout);
+                // 使用 async 版本：子类（NcClient 等）可以用 TCS+事件驱动不占 ThreadPool worker。
+                // 100 并发 Task.Run 发起 Connect 时不会互相饥饿（见 TransportClientBase.ConnectAsync 注释）。
+                await Transport.ConnectAsync(host, port, timeout).ConfigureAwait(false);
                 m_recvTask = TaskUtil.LongRun(RecvLoop, m_cancelSource.Token);
-                // SendLoopAsync：async pipeline，await 会让出 ThreadPool 线程，无需 LongRunning
-                m_sendTask = Task.Run(() => SendLoopAsync(m_cancelSource.Token), m_cancelSource.Token);
+                // SendLoopAsync 的第一轮（发 Handshake）全同步跑到底（channel 已有 pack，
+                // NcClient.Send(ReadOnlyMemory) 返回 completed ValueTask 无真 await 点）。
+                // 用 Task.Run 时入口排 ThreadPool 队列；100 并发 Connect 场景下 worker 都在
+                // 跑别人的 Connect / handshake，SendLoopAsync 迟迟跑不起来 → handshake 发不出去
+                // → RequestTimeout(10s) 超时 → Connect 返回 false → Assert 失败。
+                // 统一用 TaskUtil.LongRun（LongRunning 专用线程），和 Recv/Timeout loop 对齐，彻底绕过 worker 队列。
+                // 注：SendLoopAsync 是 async，用 GetAwaiter().GetResult() 把 Task 桥回同步 Action。
+                m_sendTask = TaskUtil.LongRun(
+                    () => SendLoopAsync(m_cancelSource.Token).GetAwaiter().GetResult(),
+                    m_cancelSource.Token);
                 m_timeoutTask = TaskUtil.LongRun(TimeoutLoop, m_cancelSource.Token);
                 SendHandShake();
             }

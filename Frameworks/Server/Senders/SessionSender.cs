@@ -63,7 +63,14 @@ namespace GoPlay.Core.Senders
         public void Start(CancellationToken serverToken)
         {
             var linked = CancellationTokenSource.CreateLinkedTokenSource(serverToken, _stopCts.Token);
-            _runTask = Task.Run(() => RunAsync(linked.Token), linked.Token);
+            // 100 client 同时连入时，100 个 SessionSender 同时 Task.Run(RunAsync) 排 ThreadPool 队列；
+            // 而 server 的 handshake resp 靠这里的 RunAsync 第一轮 drain channel 发出——排队导致
+            // handshake resp 延迟 >10s，client 侧 RequestTimeout 触发 Connect 返回 false。
+            // 改 TaskUtil.LongRun（LongRunning 专用线程），与 Client.SendLoop / RecvLoop / TimeoutLoop 对称，
+            // 每 session 一个发送线程，换取 handshake 阶段零排队。
+            _runTask = TaskUtil.LongRun(
+                () => RunAsync(linked.Token).GetAwaiter().GetResult(),
+                linked.Token);
         }
 
         /// <summary>

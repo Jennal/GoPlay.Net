@@ -135,6 +135,26 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         public override void Connect(string host, int port, TimeSpan timeout)
         {
+            // 兼容保留：少数场景调用方仍走同步路径。内部委托给 async 版本再 GetAwaiter().GetResult()，
+            // 避免两套实现分叉。高并发场景请走 ConnectAsync（Client<T> 已切到它）。
+            try
+            {
+                ConnectAsync(host, port, timeout).GetAwaiter().GetResult();
+            }
+            catch (AggregateException ae) when (ae.InnerException != null)
+            {
+                throw ae.InnerException;
+            }
+        }
+
+        /// <summary>
+        /// 真异步 Connect：用 <see cref="TaskCompletionSource{TResult}"/> 监听 <c>OnConnected</c> 事件，
+        /// <see cref="CancellationTokenSource.CancelAfter"/> 负责 timeout。整条等待链不占 ThreadPool worker，
+        /// 从根上消除 "100 并发 Task.Run + 同步 Connect → worker 饥饿 → socket 回调无线程可用" 的
+        /// 死锁类 flaky（<c>BenchmarkMultiClientRequest</c> 是典型场景）。
+        /// </summary>
+        public override async Task ConnectAsync(string host, int port, TimeSpan timeout)
+        {
             m_cancelSource = new CancellationTokenSource();
 
             var addresses = Dns.GetHostAddresses(host);
@@ -142,29 +162,46 @@ namespace GoPlay.Core.Transport.NetCoreServer
             {
                 if (address.AddressFamily != AddressFamily.InterNetwork) continue;
                 if (m_client != null) m_client.Dispose();
-                
+
+                // 每个地址一次独立的 TCS：多地址尝试（IPv4 多条 A 记录）互不污染。
+                // RunContinuationsAsynchronously：防止 OnConnected 触发线程被后续 await 续跑拖住，
+                // 保持事件回调线程干净（与 NetCoreServer IOCP 线程池语义一致）。
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Action onConn = () => tcs.TrySetResult(true);
+                OnConnected += onConn;
+
+                using var timeoutCts = new CancellationTokenSource();
+                using var _ = timeoutCts.Token.Register(() => tcs.TrySetResult(false));
+
                 try
                 {
                     m_client = new PackClient(this, address, port, m_cancelSource.Token);
-
                     m_client.ConnectAsync();
-                    var startTime = DateTime.UtcNow;
-                    while (!m_client.IsConnected)
+
+                    // race guard：PackClient.ConnectAsync 理论上可在 ConnectAsync 返回前同步触发
+                    // OnConnected（比如 loopback 极速路径）。订阅先于 ConnectAsync 调用保证 onConn
+                    // 能接到；这里冗余补一刀 TrySetResult 纯粹保险。
+                    if (m_client.IsConnected) tcs.TrySetResult(true);
+
+                    timeoutCts.CancelAfter(timeout);
+
+                    var ok = await tcs.Task.ConfigureAwait(false);
+                    if (!ok)
                     {
-                        Thread.Yield();
-                        var ts = DateTime.UtcNow.Subtract(startTime);
-                        if (ts > timeout)
-                        {
-                            Console.WriteLine($"Connect timeout: {ts}");
-                            throw new Exception("Connect timeout!");
-                        }
+                        Console.WriteLine($"Connect timeout: {timeout}");
+                        throw new Exception("Connect timeout!");
                     }
 
                     return;
                 }
                 catch
                 {
+                    // 旧同步实现也是吞异常→下一个地址，保持语义一致
                     continue;
+                }
+                finally
+                {
+                    OnConnected -= onConn;
                 }
             }
 

@@ -17,6 +17,30 @@ namespace GoPlay.Core.Transports
         }
         
         public abstract void Connect(string host, int port, TimeSpan timeout);
+
+        /// <summary>
+        /// 异步连接。返回的 Task 完成时连接已建立（或抛出异常 / 触发 OnConnected 事件）。
+        ///
+        /// <para>
+        /// 为什么需要这个方法：同步 <see cref="Connect(string,int,System.TimeSpan)"/> 在子类里
+        /// 典型实现是 busy-spin 等 <c>IsConnected=true</c>（见 <c>NcClient</c> / <c>WsClient</c>），
+        /// 单个连接下无感；但在 100 个 <c>Task.Run</c> 并发发起 Connect 的压力场景下，
+        /// 100 个 ThreadPool worker 全部被 spin-loop 占住 → 底层 socket 完成回调
+        /// （该回调也走 ThreadPool，把 <c>IsConnected</c> 置 true）排不上执行 → 10s 内仍
+        /// <c>false</c> → 全部超时。本方法允许各 transport 用 <c>TaskCompletionSource</c> +
+        /// <c>OnConnected</c> 事件真异步实现，不占 worker。
+        /// </para>
+        ///
+        /// <para>
+        /// 默认实现回退到 <see cref="Connect(string,int,System.TimeSpan)"/> 外包一层 <see cref="Task.Run"/>，
+        /// 保持向后兼容但<b>不</b>根治饥饿。各官方 transport 建议逐个覆写。
+        /// </para>
+        /// </summary>
+        public virtual Task ConnectAsync(string host, int port, TimeSpan timeout)
+        {
+            return Task.Run(() => Connect(host, port, timeout));
+        }
+
         public abstract void Disconnect();
 
         public abstract ValueTask<byte[]> Recv(CancellationTokenSource cancelSource);
