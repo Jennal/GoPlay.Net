@@ -133,11 +133,12 @@ namespace GoPlay.Core.Transport.Wss
                     new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
                 if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                var packData = new byte[len];
-                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                // Step 3.14a: 直接以 stash 切片喂给 span 版 on-recv，省掉整帧 byte[] 分配。
+                // 详见 WsServer.DrainStash 的同款注释 / TransportServerBase.InvokeOnDataReceivedSpan。
+                var packSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
                 pos += sizeof(ushort) + len;
 
-                PackServer.OnRecv(this, packData);
+                PackServer.OnRecvSpan(this, packSpan);
             }
 
             if (pos == 0) return;
@@ -202,6 +203,16 @@ namespace GoPlay.Core.Transport.Wss
             if (session is WssPackSession packSession == false) return;
             m_server.InvokeOnDataReceived(packSession.ClientId, data);
             // m_readChannel.Add((packSession.ClientId, data), m_server.CancellationToken);
+        }
+
+        /// <summary>
+        /// Step 3.14a: span 版 on-recv，直接 forward 到
+        /// <see cref="TransportServerBase.InvokeOnDataReceivedSpan"/>，不做 byte[] 复制。
+        /// </summary>
+        internal void OnRecvSpan(SslSession session, ReadOnlySpan<byte> data)
+        {
+            if (session is WssPackSession packSession == false) return;
+            m_server.InvokeOnDataReceivedSpan(packSession.ClientId, data);
         }
 
         // public (uint, byte[]) Recv()

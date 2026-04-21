@@ -93,29 +93,46 @@ dotnet run -c Release --no-build -f net8.0  -- concurrency
 | Step 3.11 (net10)               | 42.77 µs      |  0.27 µs  | 同改造，net10.0，vs Step 3.5 累计 **-7.6%**         |
 | Step 3.12 (net8)                | 47.75 µs      |  0.92 µs  | 收包路径 Header 也 zero-alloc，`Header.Parse(ReadOnlySpan<byte>)` |
 | Step 3.12 (net10)               | 43.77 µs      |  0.86 µs  | 同改造，net10.0（RTT 在 StdDev 内持平 3.11）        |
-| Step 3.13 (net8) LTS 主基线     | **46.71 µs**  |  0.91 µs  | Client 发送侧补完 zero-copy（`pack.WriteTo` + `ArrayBufferWriter`） |
-| **Step 3.13 (net10) 当前最佳**  | **42.90 µs**  |  0.86 µs  | 同改造，net10.0，Small 档 Allocated **-72%**       |
+| Step 3.13 (net8)                | 46.71 µs      |  0.91 µs  | Client 发送侧补完 zero-copy（`pack.WriteTo` + `ArrayBufferWriter`） |
+| Step 3.13 (net10)               | 42.90 µs      |  0.86 µs  | 同改造，net10.0，Small 档 Allocated -72%            |
+| Step 3.14a (net8) LTS 主基线    | **48.13 µs**  |  2.22 µs  | Server 侧 DrainStash → `ParseRaw(Span)`，省整帧 byte[] |
+| **Step 3.14a (net10) 当前最佳** | **42.24 µs**  |  0.69 µs  | 同改造，net10.0，Medium/Large 档 Allocated −7.5% / −9.7% |
 
-即单连接同步 RTT（Step 3.13 后当前基线，Small ≈ 7 B payload）：
-- net8  ≈ **47 µs**（~21.4 kreq/s 串行上限）← LTS 主基线
-- net10 ≈ **43 µs**（~23.3 kreq/s 串行上限）← 当前最佳
+即单连接同步 RTT（Step 3.14a 后当前基线，Small ≈ 7 B payload）：
+- net8  ≈ **48 µs**（~20.8 kreq/s 串行上限）← LTS 主基线
+- net10 ≈ **42 µs**（~23.7 kreq/s 串行上限）← 当前最佳
 
-### 3.1 三档 payload 对照（Step 3.13 后，net10）
+> **Small 档 RTT 在 net8 上 Step 3.13→3.14a 看到 +3% 抖动，StdDev 1σ 内可重复性差**：
+> Step 3.14a 本身是"省一次 `new byte[len]`"的收包优化，预期 RTT 在噪声内持平。net10 同档 RTT 反而微降 1.5%，趋势不一致，应视为 StdDev 内噪声（BDN Request benchmark 里 Echo-Small 本底 StdDev 就 ~1 µs）。
+
+### 3.1 三档 payload 对照（Step 3.14a 后）
 
 用 `EchoSmall` / `EchoMedium` / `EchoLarge` 三个基准分别打 7 B / 1 KB / 10 KB 的 `PbString`，
 一起摸清"端到端一次 Echo 分配量随 payload 大小的放大比"，判断是否还有 body-linear 分配需要消除。
 
-| Payload      | Mean (net10)  | Allocated  | Alloc Ratio | Gen0 / 1k op |
-|--------------|--------------:|-----------:|------------:|-------------:|
-| 7 B   Small  | 42.90 µs      |  3.88 KB   | 1.00×       | 0.1221       |
-| 1 KB  Medium | 45.97 µs      | 13.86 KB   | 3.57×       | 0.7324       |
-| 10 KB Large  | 64.83 µs      | 103.87 KB  | 26.8×       | 6.8359       |
+**net10**（当前最佳）：
 
-- **Small 档分配已经压到 3.88 KB**——剩下的绝大部分是 `Task` / `TaskCompletionSource` / async state machine，
+| Payload      | Mean      | Allocated  | Alloc Ratio | Gen0 / 1k op |
+|--------------|----------:|-----------:|------------:|-------------:|
+| 7 B   Small  | 42.24 µs  |   3.84 KB  | 1.00×       | 0.1221       |
+| 1 KB  Medium | 44.99 µs  |  12.81 KB  | 3.34×       | 0.7324       |
+| 10 KB Large  | 66.99 µs  |  93.83 KB  | 24.4×       | 6.2256       |
+
+**net8**（LTS 主基线）：
+
+| Payload      | Mean      | Allocated  | Alloc Ratio | Gen0 / 1k op |
+|--------------|----------:|-----------:|------------:|-------------:|
+| 7 B   Small  | 48.13 µs  |   4.00 KB  | 1.00×       | 0.1221       |
+| 1 KB  Medium | 47.95 µs  |  12.98 KB  | 3.24×       | 0.7324       |
+| 10 KB Large  | 69.41 µs  |  93.99 KB  | 23.5×       | 5.8594       |
+
+- **Small 档分配已经压到 ~3.8 KB**（net10 / net8 一致）——剩下的绝大部分是 `Task` / `TaskCompletionSource` / async state machine，
   再挖需要换 `ValueTask` 或共享 TCS pool，ROI 边际递减；
-- **Medium 档每字节 body 放大 ≈ 10×**（13.86 KB / 1 KB）；**Large 档放大 ≈ 10×**（103.87 KB / 10 KB）——
-  放大因子现在跟 payload size 解耦了，说明 per-byte 拷贝的热路径只剩常数几份（收包 stash→byte[]、body `.ToArray()`、
-  业务侧 decode 结果）。此时再做 body `ArrayPool` 的 ROI 也变得可测（预估 Medium -2 KB、Large -20 KB）。
+- **Medium 档每字节 body 放大 ≈ 9×**（12.81 KB / 1 KB，net10）；**Large 档放大 ≈ 9×**（93.83 KB / 10 KB，net10）——
+  放大因子从 Step 3.13 的 10× 进一步收窄（Server 端 packData 消除）。剩下的常数份数主要是：
+  client 侧收包 `new byte[len]` 整帧、server/client 各自 body `.ToArray()`、业务侧 decode 结果。
+- Step 3.15 body `ArrayPool` 预估收益：Medium −2 KB、Large −20 KB。但需要 Package IDisposable / ref-count
+  生命周期管理，复杂度远高于 3.14a。建议先上 3.14b（Client 侧同构改造），再评估 3.15 是否还需要做。
 
 ### 3.2 累计分配曲线（端到端 Echo，client→server→client 完整 RTT，`MemoryDiagnoser`）
 
@@ -127,21 +144,24 @@ dotnet run -c Release --no-build -f net8.0  -- concurrency
 | net8    | Step 3.10 (send header)              | 49.28 µs  |   23.14 KB     |   1.4648     |
 | net8    | Step 3.11 (send header+body)         | 48.12 µs  |   14.22 KB     |   0.7324     |
 | net8    | Step 3.12 (+ recv header)            | 47.75 µs  |   13.81 KB     |   0.7324     |
-| net8    | **Step 3.13 (+ client send zero-copy)** | **46.71 µs** | **4.05 KB** | **0.1221** |
+| net8    | Step 3.13 (+ client send zero-copy)  | 46.71 µs  |    4.05 KB     |   0.1221     |
+| net8    | **Step 3.14a (+ server recv zero-copy)** | **48.13 µs** | **4.00 KB** | **0.1221** |
 | net10   | Step 3.9 (BEFORE)                    | 47.52 µs  |   27.44 KB     |   1.8311     |
 | net10   | Step 3.10 (send header)              | 45.08 µs  |   22.98 KB     |   1.4648     |
 | net10   | Step 3.11 (send header+body)         | 42.77 µs  |   14.06 KB     |   0.7324     |
 | net10   | Step 3.12 (+ recv header)            | 43.77 µs  |   13.65 KB     |   0.7324     |
-| net10   | **Step 3.13 (+ client send zero-copy)** | **42.90 µs** | **3.88 KB** | **0.1221** |
+| net10   | Step 3.13 (+ client send zero-copy)  | 42.90 µs  |    3.88 KB     |   0.1221     |
+| net10   | **Step 3.14a (+ server recv zero-copy)** | **42.24 µs** | **3.84 KB** | **0.1221** |
 
-- **Step 3.9 → 3.13 累计（Small 7 B）**：分配 27.4 KB → 3.88 KB（**−86%**）、Gen0 1.83 → 0.12（**−93%**）、
-  net10 RTT −9.7%、net8 RTT −6.5%；
-- **Step 3.13 单步收益（Small）**：分配 13.65 → 3.88 KB（**−72%**）、Gen0 0.73 → 0.12（**−83%**）、
-  RTT 在 StdDev 内持平；这是所有 Step 里**单步分配降幅最大**的一次，因为补掉的是
-  Step 3.10/3.11 当时漏掉的一整条路径（详见 §七 Step 3.13）；
-- **Step 3.13 在 Medium/Large 上的收益**：Medium 29.47 → 13.86 KB（−53%），Large 201.56 → 103.87 KB（−48%）；
-  RTT Medium −6.3%、Large −6.6%；大 payload 场景收益绝对值更惊人；
-- `TestSplit` / 36/36 单测在 net8/net10 上一次绿。
+- **Step 3.9 → 3.14a 累计（Small 7 B）**：分配 27.4 KB → 3.84 KB（**−86%**）、Gen0 1.83 → 0.12（**−93%**）、
+  net10 RTT −11%、net8 RTT −3.7%；
+- **Step 3.14a 单步收益**：Small 档分配几乎持平（Server 端 packData 本身就只有十几字节），**主要收益在 Medium/Large**：
+  Medium 13.86 → 12.81 KB（**−7.5%**），Large 103.87 → 93.83 KB（**−9.7%**）。降幅精确吻合理论值（"省掉 `new byte[headerLen + bodyLen]`"）。
+  RTT 在 StdDev 内（net10 / net8 Large 档 ±2% 内，方向不一致 → 噪声）；
+- **收益上限**：3.14a 只改 Server 侧。Client 侧 `DrainStash` 同样每包 `new byte[len]`，还有另一份 Medium/Large 级的分配，
+  配套 3.14b（Client 侧同构改造，需改 `Transport.Recv` channel 模型）可把 Medium/Large 档再省一次；
+- net8 x2 + net10 x5 test run：35/36 一致 pass，`TestDeferCalls` 在 net10 ~30% flaky（**与 3.14a 无关**，
+  stash 改动前后 baseline 同量级 flaky，单独跑始终 pass，是 test 间端口 / TIME_WAIT 干扰），记 §八 待修。
 
 **回归红线主基线仍锚定 net8 LTS**（见 §六），net10 是 STS（生命周期 18 个月），作为"当前最佳 runtime"公布，业务侧按版本策略自选。
 后续优化空间见 §八。
@@ -244,10 +264,10 @@ net10.0 典型数据（两次 run 取值）：
 | 指标                                         | 本基线 (net8) | 红线（下跌超过） |
 |---------------------------------------------|--------------:|----------------:|
 | `InvokeRoute` mean                           | 146.5 ns      | +15% (>168 ns)  |
-| `EchoSmall` single-RTT mean                  | **46.71 µs**  | +15% (>54 µs)   |
-| `EchoSmall` Allocated / op                   | **4.05 KB**   | +25% (>5 KB)    |
-| `EchoMedium` Allocated / op (1 KB payload)   | **14.03 KB**  | +20% (>17 KB)   |
-| `EchoLarge` Allocated / op (10 KB payload)   | **104.04 KB** | +15% (>120 KB)  |
+| `EchoSmall` single-RTT mean                  | **48.13 µs**  | +15% (>55 µs)   |
+| `EchoSmall` Allocated / op                   | **4.00 KB**   | +25% (>5 KB)    |
+| `EchoMedium` Allocated / op (1 KB payload)   | **12.98 KB**  | +20% (>16 KB)   |
+| `EchoLarge` Allocated / op (10 KB payload)   | **93.99 KB**  | +15% (>108 KB)  |
 | `delay=10ms` × `concurrency=64` QPS          | ≈ 3300       | -15% (<2800)    |
 | `delay=50ms` × `concurrency=64` QPS          | ≈  880       | -15% (<750)     |
 | `delay=100ms` × `concurrency=64` QPS         | ≈  470       | -15% (<400)     |
@@ -343,6 +363,31 @@ net10.0 典型数据（两次 run 取值）：
   net10 RTT 47.52 → 42.90 µs (-9.7%)、net8 RTT 49.96 → 46.71 µs (-6.5%)。
   **这是所有 Step 里单步分配降幅最大的一次**，因为补掉的是 Step 3.10/3.11 当时漏掉的整条路径。
   经验教训：优化收包/发包时**两侧对称审计**，别只看 Server 端。36/36 单测在 net8/net10 上一次绿。
+- **Step 3.14a**：Server 端收包路径补完 zero-copy（干掉整帧 `new byte[len]`）。
+  在 Step 3.13 后做三档 payload（7 B / 1 KB / 10 KB）审计时，发现每个 transport（Ws / Wss / Nc）的 `DrainStash`
+  都有同款 `var packData = new byte[len]; BlockCopy(m_stash, ..., packData, ...); InvokeOnDataReceived(packData)`
+  模式，即**每收一包都会多 `new byte[headerLen + bodyLen]` 分配**。而关键观察是：
+  这份 `packData` 的生命周期**仅限 DrainStash 同步循环内部**（ParseRaw 返回就没人引用了），**不跨 async**——
+  唯一跨 async 的是 `Package.RawData`（body），由 ParseRaw 内部 `.ToArray()` 拷出独立副本。
+  既然 packData 是同步生命周期，就可以直接改走 span：
+  1. `TransportServerBase` 新增 `public delegate void DataReceivedSpanHandler(uint, ReadOnlySpan<byte>)` + 
+     `InvokeOnDataReceivedSpan`（没绑 span handler 时回退到 byte[] event，老 transport 0 改动仍可用）；
+  2. `Server` 新增 `OnDataReceivedSpan` 入口，与 byte[] 版共享 `DispatchReceived` 抽取出的 chunk/filter/PackageType 分流；
+  3. `WsServer` / `WssServer` / `NcServer` 三个改造后的 transport `DrainStash` 直接
+     `new ReadOnlySpan<byte>(m_stash, pos + 2, len)` 喂给 `InvokeOnDataReceivedSpan`；
+  4. `TcpServer` 结构不同（收完一批 packets 再 dispatch），走 byte[] fallback 不改动，**不影响正确性**。
+  
+  实测 MemoryDiagnoser（三档 payload，net10）：
+  | Payload   | Alloc 3.13 | Alloc 3.14a | Δ        | 吻合理论值（new byte[headerLen+bodyLen]）|
+  |-----------|-----------:|------------:|---------:|:-----------------------------------------|
+  | 7 B Small |   3.88 KB  |    3.84 KB  |  −40 B   | packData ~13 B + 32 B bucket 对齐        |
+  | 1 KB Med  |  13.86 KB  |   12.81 KB  | **−1.05 KB (−7.5%)** | ~1024 B + 6 B header      |
+  | 10 KB Lg  | 103.87 KB  |   93.83 KB  | **−10.04 KB (−9.7%)**| ~10240 B + 6 B header     |
+  
+  net8 同改造趋势完全一致（Medium −7.5%、Large −9.7%）。RTT 在 StdDev 内（±2%，net10 / net8 方向不一致 → 噪声）。
+  **Small 档 Server 侧 packData 本身就只有十几字节，ArrayPool 化或 span 化几乎无可榨空间**  ——这是 3.14a 没收益的场景。
+  收益上限：只改了 Server 侧，Client 侧 `DrainStash` 同款分配还在；配套 3.14b（Client 侧）可再省一次。
+  net8 x2 + net10 x5 test run：35/36 一致 pass，`TestDeferCalls` net10 ~30% flaky 是 pre-existing（baseline 同量级）。
 
 ## 八、已知天花板 / 后续方向
 
@@ -351,13 +396,19 @@ net10.0 典型数据（两次 run 取值）：
 - ~~`Package<T>` 的 body 编码仍走 `encoder.Encode(Data) → byte[]`（通过 `UpdateContentSize`）。~~ ← **Step 3.11 已完成**。
 - ~~收包路径 `Package.ParseRaw` 仍然 `data.Slice(...).ToArray()` 分配 `headerBytes`。~~ ← **Step 3.12 已完成**。
 - ~~Client 发送侧 `pack.GetBytes()` + `Transport.Send(byte[])` 还是 Step 3.10 之前的老路径。~~ ← **Step 3.13 已完成**，每 Echo（Small）分配从 13.65 KB → 3.88 KB（−72%）。
-- **收包 body `.ToArray()` 改 `ArrayPool`**：Step 3.13 后 Medium/Large 档里 body 分配占比回归显性（Medium 约 2 KB、Large 约 20 KB）。
+- ~~Server 端 `DrainStash` 仍 `new byte[len]` 分配整帧再交给 `ParseRaw(byte[])`。~~ ← **Step 3.14a 已完成**，Medium/Large 档 −7.5% / −9.7%；TcpServer 结构不同未改，走 byte[] fallback。
+- **Step 3.14b（Client 侧同款 zero-copy）**：Ws/Wss/Nc/Tcp Client 的 `DrainStash` 也都 `new byte[len]`，
+  但 Client 侧 `Transport.Recv` 目前是 `ValueTask<byte[]>` + `BlockingCollection` 模型，span 不能跨 await，
+  需要把 Client recv 改成 push 模型（transport 直接同步调 `Client.DispatchRawSpan`，绕过 `RecvChannel`）。
+  预期 Medium / Large 档 Echo 再省一次 1 KB / 10 KB。改动比 3.14a 大一档。
+- **Step 3.15 body `.ToArray()` → ArrayPool**：收包 body `.ToArray()` 的 Medium 约 1 KB、Large 约 10 KB 还在。
   下游 handler 链 async 持有 `Package.RawData`，ArrayPool 化需要配 `Package.ReleaseRawData()` 生命周期管理，
-  `Package.Clone` / 多订阅分发是归还时机的难点。预期 Medium Echo −2 KB（~14%）、Large Echo −20 KB（~19%），
-  Small Echo 几乎无感。ROI 取决于业务典型 payload 大小，先按 Medium 收益决策。
-- **Small Echo 3.88 KB 里的 async state machine / TCS 分配**：剩余大头来自 `Task<T>` / `TaskCompletionSource` /
+  `Package.Clone` / 多订阅分发是归还时机的难点。Small 档无感。建议先做 3.14b 再评估 3.15 是否还需要。
+- **Small Echo 3.84 KB 里的 async state machine / TCS 分配**：剩余大头来自 `Task<T>` / `TaskCompletionSource` /
   async state machine 的堆箱装。可能的路径：`Request` 返回 `ValueTask<T>` + 共享 TCS pool。ROI 有限（几百 B），
   且会引入 ValueTask 重复 await 等使用坑，目前不建议先做。
 - 大 body（≥ MAX_CHUNK_SIZE）分块路径仍然 `new byte[chunkSize]` per chunk，可以换 `ArrayPool<byte>.Rent`，但需要约束生命周期。
+- **Pre-existing flaky: `TestDeferCalls` net10 ~30% fail rate**（Step 3.14a 前后都 flaky，单独跑 100% pass），
+  疑似 test 间 TCP port reuse / TIME_WAIT 干扰。待单独诊断，不影响 3.14a 正确性。
 - Roslyn analyzer（Step 3.3 preferred 路径）还没做，目前只有运行期 warning。要真正 fail-fast 需要追加 analyzer 项目。
 

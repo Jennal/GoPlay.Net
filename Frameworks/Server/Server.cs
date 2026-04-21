@@ -123,6 +123,12 @@ namespace GoPlay
             OnClientConnected += OnClientConnectEvent;
             OnClientDisconnected += OnClientDisconnectEvent;
             Transport.OnError += OnErrorEvent;
+
+            // Step 3.14a: 优先走 span 版 dispatch，transport DrainStash 直接切片喂过来，
+            // 省掉整帧 `new byte[len]` 分配。
+            // transport 若未 DrainStash-span 化，TransportServerBase.InvokeOnDataReceivedSpan
+            // 会 fallback 到 byte[] event；为了 fallback 路径仍然工作，这里也保留 byte[] 订阅。
+            Transport.SetDataReceivedSpanHandler(OnDataReceivedSpan);
             Transport.OnDataReceived += OnDataReceived;
         }
 
@@ -297,42 +303,23 @@ namespace GoPlay
         //     }
         // }
 
-        private void OnDataReceived(ValueTuple<uint, byte[]> val)
+        /// <summary>
+        /// Step 3.14a: span 版收包入口。transport 子类 DrainStash 直接以 stash 切片调用
+        /// <see cref="TransportServerBase.InvokeOnDataReceivedSpan"/>，省掉整帧 <c>new byte[len]</c>。
+        ///
+        /// <para>
+        /// 语义等价于 <see cref="OnDataReceived(ValueTuple{uint,byte[]})"/>，只有第一步 <see cref="Package.ParseRaw"/>
+        /// 改走 <see cref="ReadOnlySpan{T}"/> 重载。之后 Package 走 Channel 跨 async，不影响 span 生命周期
+        /// （ParseRaw 内部 body 仍然 <c>.ToArray()</c> 拷出独立 byte[]，那份由 Step 3.15 候选 ArrayPool 化再议）。
+        /// </para>
+        /// </summary>
+        private void OnDataReceivedSpan(uint clientId, ReadOnlySpan<byte> data)
         {
-            var (clientId, data) = val;
             try
             {
                 var pack = Package.ParseRaw(data);
                 pack.Header.ClientId = clientId;
-                // Console.WriteLine($" =[S]> {pack}");
-
-                //处理分包
-                if (pack.IsChunk)
-                {
-                    pack = ResolveChunk(pack);
-                    if (pack.IsChunk) return;
-                }
-
-                if (IsBlockRecvByFilter(pack)) return;
-                    
-                switch (pack.Header.PackageInfo.Type)
-                {
-                    case PackageType.HankShakeReq:
-                        OnHandShake(pack);
-                        break;
-                    case PackageType.Ping:
-                        OnPing(pack);
-                        break;
-                    case PackageType.Pong:
-                        OnPong(pack);
-                        break;
-                    case PackageType.Notify:
-                    case PackageType.Request:
-                        OnDataReceived(pack);
-                        break;
-                }
-
-                PostRecvFilter(pack);
+                DispatchReceived(clientId, pack);
             }
             catch (OperationCanceledException)
             {
@@ -342,13 +329,81 @@ namespace GoPlay
             {
                 if (err.InnerException is OperationCanceledException) return;
                 if (err.InnerException is TaskCanceledException) return;
-                    
+
                 OnErrorEvent(clientId, err);
             }
             catch (Exception err)
             {
                 OnErrorEvent(clientId, err);
             }
+        }
+
+        /// <summary>
+        /// byte[] 版 fallback 入口：未 span 化的 transport 仍然走这里。
+        /// 逻辑由 <see cref="DispatchReceived"/> 与 span 版共享。
+        /// </summary>
+        private void OnDataReceived(ValueTuple<uint, byte[]> val)
+        {
+            var (clientId, data) = val;
+            try
+            {
+                var pack = Package.ParseRaw(data);
+                pack.Header.ClientId = clientId;
+                DispatchReceived(clientId, pack);
+            }
+            catch (OperationCanceledException)
+            {
+                //IGNORE ERR
+            }
+            catch (AggregateException err)
+            {
+                if (err.InnerException is OperationCanceledException) return;
+                if (err.InnerException is TaskCanceledException) return;
+
+                OnErrorEvent(clientId, err);
+            }
+            catch (Exception err)
+            {
+                OnErrorEvent(clientId, err);
+            }
+        }
+
+        /// <summary>
+        /// span 版与 byte[] 版共享的 Package dispatch 逻辑（chunk 重组、filter、按 PackageType 分流）。
+        /// 本方法**不**捕获异常：由上层的 <see cref="OnDataReceivedSpan"/> / <see cref="OnDataReceived"/>
+        /// 统一做 try/catch（两者 catch 集合一致）。
+        /// </summary>
+        private void DispatchReceived(uint clientId, Package pack)
+        {
+            // Console.WriteLine($" =[S]> {pack}");
+
+            //处理分包
+            if (pack.IsChunk)
+            {
+                pack = ResolveChunk(pack);
+                if (pack.IsChunk) return;
+            }
+
+            if (IsBlockRecvByFilter(pack)) return;
+
+            switch (pack.Header.PackageInfo.Type)
+            {
+                case PackageType.HankShakeReq:
+                    OnHandShake(pack);
+                    break;
+                case PackageType.Ping:
+                    OnPing(pack);
+                    break;
+                case PackageType.Pong:
+                    OnPong(pack);
+                    break;
+                case PackageType.Notify:
+                case PackageType.Request:
+                    OnDataReceived(pack);
+                    break;
+            }
+
+            PostRecvFilter(pack);
         }
 
         public override void Send(Package package)

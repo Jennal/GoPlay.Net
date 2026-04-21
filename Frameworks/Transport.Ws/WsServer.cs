@@ -138,14 +138,17 @@ namespace GoPlay.Core.Transport.Ws
                     new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
                 if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                // 下游 InvokeOnDataReceived 最终会走 Package.ParseRaw(byte[])；
-                // 为保持现有 API 兼容（下游异步持有 Package.RawData），这里拷贝出独立 byte[]。
-                // stash 本身是 ArrayPool 的，生命周期 & 扩容开销大，因此 stash 复用仍然是大头收益。
-                var packData = new byte[len];
-                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
+                // Step 3.14a: 直接把 stash 切片以 ReadOnlySpan 喂给上层 Server.OnDataReceivedSpan，
+                // 省掉这里原先的整帧 `new byte[len]` 分配。
+                // span 生命周期仅限 DrainStash 同步循环内部：
+                //   InvokeOnDataReceivedSpan → Server.OnDataReceivedSpan → Package.ParseRaw(ReadOnlySpan)
+                // ParseRaw 内部 body 会 .ToArray() 拷成独立 byte[]，async 下游持有的是那份 body。
+                // 若 Server 未绑 span handler（老宿主），TransportServerBase.InvokeOnDataReceivedSpan 会
+                // fallback 到 ToArray + byte[] event，行为等价 Step 3.13 及以前。
+                var packSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
                 pos += sizeof(ushort) + len;
 
-                PackServer.OnRecv(this, packData);
+                PackServer.OnRecvSpan(this, packSpan);
             }
 
             if (pos == 0) return;
@@ -211,6 +214,17 @@ namespace GoPlay.Core.Transport.Ws
             
             m_server.InvokeOnDataReceived(packSession.ClientId, data);
             // m_readChannel.Add((packSession.ClientId, data), m_server.CancellationToken);
+        }
+
+        /// <summary>
+        /// Step 3.14a: span 版 on-recv，直接 forward 到
+        /// <see cref="TransportServerBase.InvokeOnDataReceivedSpan"/>，不做 byte[] 复制。
+        /// </summary>
+        internal void OnRecvSpan(TcpSession session, ReadOnlySpan<byte> data)
+        {
+            if (session is WsPackSession packSession == false) return;
+
+            m_server.InvokeOnDataReceivedSpan(packSession.ClientId, data);
         }
 
         // public (uint, byte[]) Recv()
