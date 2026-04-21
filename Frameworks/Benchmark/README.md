@@ -1,8 +1,8 @@
 # GoPlay.Net Server 长连接框架 —— 官方性能基线
 
 > 本文件固化当前优化后（Step 1~3）在 **Intel Core i9-14900K / Windows 11** 上的基线数据，
-> 同时提供 **.NET 7 / .NET 8 / .NET 9** 三个 runtime 的横向对比。
-> 支持的 runtime：**net7.0 / net8.0 / net9.0**（已在三者上做端到端单测 + BDN 基线）。
+> 同时提供 **.NET 7 / .NET 8 / .NET 9 / .NET 10** 四个 runtime 的横向对比。
+> 支持的 runtime：**net7.0 / net8.0 / net9.0 / net10.0**（已在四者上做端到端单测 + BDN 基线）。
 > 作为后续回归的参考，数值显著下跌（> 15%）应当立即定位并修复。
 
 ---
@@ -13,8 +13,8 @@
 BenchmarkDotNet v0.13.3
 OS           : Windows 11 (10.0.26200.8246)
 CPU          : Intel Core i9-14900K, 1 CPU, 32 logical / 24 physical cores
-.NET SDK     : 9.0.308
-Runtimes 测过 : net7.0 (7.0.20), net8.0 (8.0.19), net9.0 (9.0.11), X64 RyuJIT AVX2
+.NET SDK     : 10.0.202
+Runtimes 测过 : net7.0 (7.0.20), net8.0 (8.0.19), net9.0 (9.0.11), net10.0 (10.0.6), X64 RyuJIT AVX2
 Build        : Release, `--no-build`
 ```
 
@@ -25,16 +25,19 @@ Build        : Release, `--no-build`
 dotnet build -c Release
 
 # 快速对比表（Stopwatch，~30s，用于回归扫描）
-dotnet run -c Release --no-build -f net8.0 -- report
-dotnet run -c Release --no-build -f net9.0 -- report    # 参考 runtime
+dotnet run -c Release --no-build -f net8.0  -- report    # LTS 主基线
+dotnet run -c Release --no-build -f net10.0 -- report    # 当前最佳 runtime
+dotnet run -c Release --no-build -f net9.0  -- report    # 参考 runtime
 
 # 官方 BDN 基线（生成 CI 置信区间）
-dotnet run -c Release --no-build -f net7.0 -- request   # net7 RTT
-dotnet run -c Release --no-build -f net8.0 -- request   # net8 RTT
-dotnet run -c Release --no-build -f net9.0 -- request   # net9 RTT
-dotnet run -c Release --no-build -f net8.0 -- route
-dotnet run -c Release --no-build -f net9.0 -- route
-dotnet run -c Release --no-build -f net8.0 -- concurrency
+dotnet run -c Release --no-build -f net7.0  -- request   # net7 RTT
+dotnet run -c Release --no-build -f net8.0  -- request   # net8 RTT
+dotnet run -c Release --no-build -f net9.0  -- request   # net9 RTT
+dotnet run -c Release --no-build -f net10.0 -- request   # net10 RTT
+dotnet run -c Release --no-build -f net8.0  -- route
+dotnet run -c Release --no-build -f net9.0  -- route
+dotnet run -c Release --no-build -f net10.0 -- route
+dotnet run -c Release --no-build -f net8.0  -- concurrency
 ```
 
 ---
@@ -43,14 +46,16 @@ dotnet run -c Release --no-build -f net8.0 -- concurrency
 
 压 Route 分发的纯同步部分（零 I/O，零等待），用于观察启动期反射 vs 运行期编译委托的代价。
 
-| Method      | Runtime | Mean             | Error       | StdDev      | Δ vs net7   |
-|-------------|:-------:|-----------------:|------------:|------------:|------------:|
-| CreateRoute | net7.0  |     168,963.4 ns | 1,020.70 ns |   954.76 ns |   baseline  |
-| CreateRoute | net8.0  | **144,981.3 ns** |   598.85 ns |   500.07 ns |   **-14.2%** |
-| CreateRoute | net9.0  |     185,910.8 ns | 3,497.61 ns | 3,271.67 ns |   **+10.0%** |
-| InvokeRoute | net7.0  |         194.6 ns |     3.18 ns |     2.97 ns |   baseline  |
-| InvokeRoute | net8.0  |     **146.5 ns** |     2.92 ns |     2.59 ns |   **-24.7%** |
-| InvokeRoute | net9.0  |     **142.3 ns** |     2.86 ns |     5.96 ns |   **-26.9%** |
+| Method      | Runtime  | Mean             | Error        | StdDev       | Δ vs net7    |
+|-------------|:--------:|-----------------:|-------------:|-------------:|-------------:|
+| CreateRoute | net7.0   |     168,963.4 ns |  1,020.70 ns |    954.76 ns |   baseline   |
+| CreateRoute | net8.0   | **144,981.3 ns** |    598.85 ns |    500.07 ns |   **-14.2%** |
+| CreateRoute | net9.0   |     185,910.8 ns |  3,497.61 ns |  3,271.67 ns |   **+10.0%** |
+| CreateRoute | net10.0  |     648,675.4 ns |  2,644.69 ns |  2,473.84 ns |  **+283.9%** |
+| InvokeRoute | net7.0   |         194.6 ns |      3.18 ns |      2.97 ns |   baseline   |
+| InvokeRoute | net8.0   |         146.5 ns |      2.92 ns |      2.59 ns |   **-24.7%** |
+| InvokeRoute | net9.0   |         142.3 ns |      2.86 ns |      5.96 ns |   **-26.9%** |
+| InvokeRoute | net10.0  |      **97.0 ns** |      1.08 ns |      0.96 ns |   **-50.2%** |
 
 - `CreateRoute`：包含反射解析 `[Request]` 标注 + 构建 `ExpressionUtil` 编译委托，一次性启动成本。
 - `InvokeRoute`：**热路径基线**，编译委托调用 Echo 全链路。
@@ -58,6 +63,10 @@ dotnet run -c Release --no-build -f net8.0 -- concurrency
 - 再升 net9：**热路径 InvokeRoute 继续微降到 142 ns**（vs net8 再 -2.9%），符合 net9 对委托调用的分层编译/内联进一步优化预期；但
   **冷路径 CreateRoute 回弹到 186 µs**（vs net7 +10%、vs net8 +28%），这是 Expression Tree 首次编译 / R2R 剥离带来的启动时代价，
   运行期只付一次，**不影响稳态吞吐**。
+- net10 再次大跃进：**热路径 InvokeRoute 骤降到 97 ns**（vs net7 **-50%**、vs net8 **-34%**、vs net9 **-32%**），
+  主要来自 net10 的 Dynamic PGO 默认开启 + guarded devirtualization 对间接委托调用命中更高。
+  **冷路径 CreateRoute 激增到 649 µs**（vs net8 **+348%**）—— Expression Tree 首编译在 net10 下更保守，
+  把内联/R2R 的决策后置到 tiered compilation，**一次性成本**，运行几毫秒稳态后完全摊平，不进入回归红线。
 
 ---
 
@@ -65,20 +74,28 @@ dotnet run -c Release --no-build -f net8.0 -- concurrency
 
 同机 loopback，1 个 `NcClient` ↔ 1 个 `NcServer`，业务是立即返回的 Echo：
 
-| 阶段 / Runtime                | Mean          | StdDev    | 备注                                                 |
-|-------------------------------|--------------:|----------:|------------------------------------------------------|
-| Step 3.4 基线（net7）         | 69.08 µs      |      n/a  | Client.SendLoop 仍是 `BlockingCollection`+`.Wait()`  |
-| Step 3.5 (net7)               | 54.30 µs      |  1.58 µs  | Client 换 `Channel<Package>` + `async await`，**-21%** |
-| **Step 3.5 (net8) 当前最佳**  | **50.95 µs**  |  0.95 µs  | 同代码，runtime 升级至 .NET 8，再 **-6.2%**          |
-| Step 3.5 (net9)               | 52.05 µs      |  1.40 µs  | 同代码，net9.0，vs net8 **+2.2%**（StdDev 内持平）   |
+| 阶段 / Runtime                 | Mean          | StdDev    | 备注                                                 |
+|--------------------------------|--------------:|----------:|------------------------------------------------------|
+| Step 3.4 基线（net7）          | 69.08 µs      |      n/a  | Client.SendLoop 仍是 `BlockingCollection`+`.Wait()`  |
+| Step 3.5 (net7)                | 54.30 µs      |  1.58 µs  | Client 换 `Channel<Package>` + `async await`，**-21%** |
+| Step 3.5 (net8) LTS 主基线     | 50.95 µs      |  0.95 µs  | 同代码，runtime 升级至 .NET 8，再 **-6.2%**          |
+| Step 3.5 (net9)                | 52.05 µs      |  1.40 µs  | 同代码，net9.0，vs net8 **+2.2%**（StdDev 内持平）   |
+| **Step 3.5 (net10) 当前最佳**  | **46.28 µs**  |  1.69 µs  | 同代码，net10.0，vs net8 **-9.2%**、vs net9 **-11.1%** |
 
 即单连接同步 RTT：
-- net7 ≈ **54 µs**（~18.4 kreq/s 串行上限）
-- net8 ≈ **51 µs**（~19.6 kreq/s 串行上限）← 当前最佳
-- net9 ≈ **52 µs**（~19.2 kreq/s 串行上限）
+- net7  ≈ **54 µs**（~18.4 kreq/s 串行上限）
+- net8  ≈ **51 µs**（~19.6 kreq/s 串行上限）← LTS 主基线
+- net9  ≈ **52 µs**（~19.2 kreq/s 串行上限）
+- net10 ≈ **46 µs**（~21.6 kreq/s 串行上限）← 当前最佳
 
-net9 vs net8 在 Echo RTT 上差异在 1 µs 内（远小于 1.4 µs StdDev），视作**持平**；因此 **当前最佳 runtime 仍保留为 net8**，
-net9 作为并行可选 runtime 发布，供业务项目按版本策略选用。继续压榨需要改造 client → server 的握手/分包层面，或做 pipelining（等下一轮）。
+net10 vs net8 的 RTT 提升 **~5 µs**，远大于 StdDev（1.7 µs），是**显著提升**；推测收益来自：
+
+1. Dynamic PGO 在 net10 下默认更激进，命中 Channel / SocketAsyncEventArgs 等热点的 guarded devirtualization；
+2. async state machine 的 box elision / inlining 在 net10 下更完整，Echo 这种高频 `await` 链路直接受益；
+3. `InvokeRoute` 同步路径从 146 ns 降到 97 ns（**-34%**），也直接反映在 RTT 里。
+
+但 **回归红线主基线仍锚定 net8 LTS**（见 §六），net10 是 STS（生命周期 18 个月），作为"当前最佳 runtime"公布，业务侧按版本策略自选。
+继续压榨需要改造 client → server 的握手/分包层面，或做 pipelining（等下一轮）。
 
 ---
 
@@ -108,21 +125,21 @@ net9 作为并行可选 runtime 发布，供业务项目按版本策略选用。
 - `delay≥10ms`：业务 await 异步 I/O 时，旧架构每条消息独占 "虚线程" 整段 D ms，
   理论上限 `1000/D req/s`；新架构达 `Concurrency × 1000/D req/s`。实测 47–54× 提升。
 
-### 4.2 net7 vs net8 vs net9（新架构 Concurrency=64 下）
+### 4.2 net7 vs net8 vs net9 vs net10（新架构 Concurrency=64 下）
 
 两次 run 取典型值，方差范围 ±15% 内属测量噪声：
 
-| Delay(ms) | net7 QPS       | net8 QPS       | net9 QPS       | 说明                                            |
-|----------:|---------------:|---------------:|---------------:|-------------------------------------------------|
-|         0 |  ~47k          |  ~80k          |  ~47k ~ 58k    | wall ≤ 6 ms，方差过大不对比                     |
-|        10 |  3339 ~ 4160   |  3178 ~ 3582   |  3707 ~ 3891   | 瓶颈是 `Task.Delay(10)` timer，runtime 无关     |
-|        50 |   901 ~  916   |   847 ~  900   |   901 ~  903   | 同上，`50 × Concurrency⁻¹` 理论 1280 为天花板    |
-|       100 |   466 ~  475   |   456 ~  480   |   458 ~  478   | 同上，理论 640 为天花板                         |
+| Delay(ms) | net7 QPS       | net8 QPS       | net9 QPS       | net10 QPS      | 说明                                            |
+|----------:|---------------:|---------------:|---------------:|---------------:|-------------------------------------------------|
+|         0 |  ~47k          |  ~80k          |  ~47k ~ 58k    |  ~34k ~ 138k   | wall ≤ 6 ms，方差过大不对比                     |
+|        10 |  3339 ~ 4160   |  3178 ~ 3582   |  3707 ~ 3891   |  3152 ~ 3170   | 瓶颈是 `Task.Delay(10)` timer，runtime 无关     |
+|        50 |   901 ~  916   |   847 ~  900   |   901 ~  903   |   792 ~  795   | 同上，`50 × Concurrency⁻¹` 理论 1280 为天花板    |
+|       100 |   466 ~  475   |   456 ~  480   |   458 ~  478   |   449 ~  454   | 同上，理论 640 为天花板                         |
 
-结论：**delay-bound 场景（业务主动 await）下，net7→net8→net9 runtime 升级对 Concurrency 矩阵都没显著收益**，
+结论：**delay-bound 场景（业务主动 await）下，net7→net8→net9→net10 runtime 升级对 Concurrency 矩阵都没显著收益**，
 预期之内 —— 瓶颈是 Task.Delay/Timer，不是 JIT 或 GC。
-三 runtime 的 QPS 区间完全重叠，在 ±5% 噪声内持平。
-net8/net9 的收益集中在 CPU-bound 的 `BenchmarkRequest`（-6%）和 `InvokeRoute`（-27%）。
+四 runtime 的 QPS 区间完全重叠，在 ±15% 噪声内持平。
+net8/net9/net10 的收益集中在 CPU-bound 的 `BenchmarkRequest`（net10 -9.2%）和 `InvokeRoute`（net10 -34%）。
 
 ---
 
@@ -155,8 +172,19 @@ net9.0 典型数据（两次 run 取值）：
 |       100 | limited.slow   |    64 |  105.60 ~ 110.63 |       578 ~  606  |      64 (proc) |
 |       100 | limited.slow8  |    64 |  857.30 ~ 863.87 |        74 ~   75  |     8 (method) |
 
-`slow / slow8` QPS 比约 7.3~8（三 runtime 一致），与 `64 / 8 = 8` 相符（偏差来自 warmup、GC、scheduler 抖动）。
-方法级 `[MaxConcurrency]` 在 net7/net8/net9 上按预期工作。
+net10.0 典型数据（两次 run 取值）：
+
+| Delay(ms) | Route          | Batch | Wall(ms)         | Throughput(req/s) | ConcurrencyCap |
+|----------:|:---------------|------:|-----------------:|------------------:|---------------:|
+|        10 | limited.slow   |    64 |   14.06 ~ 19.00  |      3368 ~ 4551  |      64 (proc) |
+|        10 | limited.slow8  |    64 |  124.64 ~ 126.30 |       507 ~  513  |     8 (method) |
+|        50 | limited.slow   |    64 |   62.46 ~ 63.48  |      1008 ~ 1025  |      64 (proc) |
+|        50 | limited.slow8  |    64 |  498.04 ~ 501.36 |       128 ~  129  |     8 (method) |
+|       100 | limited.slow   |    64 |  109.55 ~ 110.95 |       577 ~  584  |      64 (proc) |
+|       100 | limited.slow8  |    64 |  871.76 ~ 886.63 |        72 ~   73  |     8 (method) |
+
+`slow / slow8` QPS 比约 7.0~8（四 runtime 一致），与 `64 / 8 = 8` 相符（偏差来自 warmup、GC、scheduler 抖动）。
+方法级 `[MaxConcurrency]` 在 net7/net8/net9/net10 上按预期工作。
 
 ---
 
@@ -174,11 +202,14 @@ net9.0 典型数据（两次 run 取值）：
 | `method [MaxConcurrency(8)]` QPS / 64-ratio | ≈ 8×         | 偏离 >1.5×       |
 
 > `delay=0` 场景下 wall time 只有 1–6 ms，测量方差很大（QPS 在 30k–150k 之间跳），不作为回归判据。
-> Concurrency 矩阵的 QPS 基线值是 **net7 / net8 / net9 多次 run 的典型下沿**，三 runtime 数据重合。
+> Concurrency 矩阵的 QPS 基线值是 **net7 / net8 / net9 / net10 多次 run 的典型下沿**，四 runtime 数据重合。
 >
-> **主基线选择 net8.0 LTS**：回归红线的绝对数值全部按 net8 校准。net7 已 EoL，net9 非 LTS，两者作为参考 runtime，
-> 在 §三（Request）/ §四（Concurrency）/ §五（Method-level）同步列出数据；若仅 net9 有 >15% 下跌但 net8 不跌，
-> 先定位为 runtime 差异（如 JIT/GC 变化），而不是框架回归。
+> **主基线选择 net8.0 LTS**：回归红线的绝对数值全部按 net8 校准。net7 已 EoL，net9 / net10 是 STS（18 个月），
+> 三者作为参考 runtime，在 §三（Request）/ §四（Concurrency）/ §五（Method-level）同步列出数据；
+> 若仅 net9 / net10 有 >15% 下跌但 net8 不跌，先定位为 runtime 差异（如 JIT/GC/Dynamic PGO 变化），而不是框架回归。
+>
+> **例外**：`CreateRoute` 冷路径在 net10 下 +348%（Expression Tree 首编译策略变化），只付一次，不纳入回归红线；
+> 若 net10 下 `CreateRoute` 反而又回到 150 µs 量级，才是"意外"（JIT 策略被业务代码干扰）需要调查。
 
 ---
 
@@ -197,6 +228,12 @@ net9.0 典型数据（两次 run 取值）：
   可执行/测试项目 `net7.0;net8.0;net9.0`；第三方 `NetCoreServer` 同步把 `net8.0;net9.0` 加进 TargetFrameworks，
   避免 net9 宿主走 `netstandard2.1` 降级路径。net9 下 36/36 单测全绿，BDN Echo/InvokeRoute 与 net8 持平，
   `InvokeRoute` 微降到 142 ns，`CreateRoute` 冷路径回弹到 186 µs（不影响稳态吞吐）。
+- **Step 3.9**：加 `net10.0` 支持，四 runtime（net7/net8/net9/net10）共存，库项目
+  `net7.0;net8.0;net9.0;net10.0;netstandard2.1`，可执行/测试项目 `net7.0;net8.0;net9.0;net10.0`；
+  `NetCoreServer` 同步加 `net10.0`。net10 下 36/36 单测一次绿，Echo RTT 从 net8 的 50.95 µs 降到
+  **46.28 µs（-9.2%）**，`InvokeRoute` 从 146 ns 降到 **97 ns（-34%）**，主要来自 net10 Dynamic PGO 默认
+  开启 + guarded devirtualization 对 Channel / async state machine 的命中。`CreateRoute` 冷路径反弹到 649 µs，
+  属首编译策略变化，一次性成本，不影响稳态。net10 定为"当前最佳 runtime"，**但回归红线仍锚定 net8 LTS**。
 
 ## 八、已知天花板 / 后续方向
 

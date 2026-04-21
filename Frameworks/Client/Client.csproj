@@ -15,7 +15,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>GoPlay.Client</AssemblyName>
     <RootNamespace>GoPlay</RootNamespace>
-    <TargetFrameworks>net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
     <Title>GoPlay.Client</Title>
     <Authors>Jennal</Authors>
     <Description>GoPlay.Client
