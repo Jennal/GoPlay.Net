@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using GoPlay.Core.Encodes.Factory;
+using GoPlay.Core.Interfaces;
 using GoPlay.Core.Debug;
 
 namespace GoPlay.Core.Protocols
@@ -52,6 +53,7 @@ namespace GoPlay.Core.Protocols
         /// 与旧路径 GetBytes() + Transport.Send(byte[]) 自己加 ushort 前缀等价，但：
         /// - 一次写入目标 IBufferWriter，支持 SessionSender 把 N 个包拼入同一 buffer；
         /// - 避免 MemoryStream/ToArray 的两段额外分配；
+        /// - header 通过 <see cref="IEncoder.EncodeTo"/> 原地写入 span，省掉中间 <c>byte[] headerBytes</c> 分配；
         /// - 为 Package&lt;T&gt; 提供子类覆盖点以避免 body 双重编码。
         ///
         /// 返回值：已写入字节数（包含 outerLen 自己）。
@@ -59,32 +61,43 @@ namespace GoPlay.Core.Protocols
         public virtual int WriteTo(IBufferWriter<byte> writer)
         {
             var encoder = EncoderFactory.Create(Header.PackageInfo.EncodingType);
-            Header.PackageInfo.ContentSize = (uint)(RawData?.Length ?? 0);
-            var headerBytes = encoder.Encode(Header);
-            if (headerBytes.Length > ushort.MaxValue)
-                throw new Exception($"Package.WriteTo: header exceeds ushort: {headerBytes.Length}");
-
             var bodyLen = RawData?.Length ?? 0;
-            return WriteFrame(writer, headerBytes, RawData, bodyLen);
+            Header.PackageInfo.ContentSize = (uint)bodyLen;
+
+            var headerLen = encoder.GetEncodedSize(Header);
+            return WriteFrame(writer, encoder, Header, headerLen, RawData, bodyLen);
         }
 
         /// <summary>
         /// 给子类（Package&lt;T&gt;）复用的 wire 写入原语；其它路径不要直接调用。
+        /// header / body 都原地写入 writer 申请的同一块 span，对 Protobuf 是 0 次 byte[] 分配。
         /// </summary>
-        protected static int WriteFrame(IBufferWriter<byte> writer, byte[] headerBytes, byte[] bodyBytes, int bodyLen)
+        protected static int WriteFrame(IBufferWriter<byte> writer, IEncoder encoder, Header header,
+            int headerLen, byte[] bodyBytes, int bodyLen)
         {
-            var innerLen = sizeof(ushort) + headerBytes.Length + bodyLen;
+            if (headerLen > ushort.MaxValue)
+                throw new Exception($"Package.WriteTo: header exceeds ushort: {headerLen}");
+
+            var innerLen = sizeof(ushort) + headerLen + bodyLen;
             if (innerLen > ushort.MaxValue)
                 throw new Exception($"Package.WriteTo: frame size exceeds ushort outer prefix: {innerLen}");
 
             var totalLen = sizeof(ushort) + innerLen;
-            var span = writer.GetSpan(totalLen);
+            // 用 GetMemory 而不是 GetSpan：Memory 能桥接到 Protobuf 的 IBufferWriter<byte> 路径，
+            // 让 Header 编码直接落在这块 buffer 里，不再分配临时 byte[]。
+            var memory = writer.GetMemory(totalLen);
+            var span = memory.Span;
             BinaryPrimitives.WriteUInt16LittleEndian(span, (ushort)innerLen);
-            BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(sizeof(ushort)), (ushort)headerBytes.Length);
-            headerBytes.AsSpan().CopyTo(span.Slice(sizeof(ushort) * 2));
+            BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(sizeof(ushort)), (ushort)headerLen);
+
+            var written = encoder.EncodeTo(header, memory.Slice(sizeof(ushort) * 2, headerLen));
+            if (written != headerLen)
+                throw new Exception(
+                    $"Package.WriteTo: header encoder wrote {written} but pre-measured {headerLen}");
+
             if (bodyLen > 0)
             {
-                bodyBytes.AsSpan(0, bodyLen).CopyTo(span.Slice(sizeof(ushort) * 2 + headerBytes.Length));
+                bodyBytes.AsSpan(0, bodyLen).CopyTo(span.Slice(sizeof(ushort) * 2 + headerLen));
             }
             writer.Advance(totalLen);
             return totalLen;
@@ -347,6 +360,7 @@ namespace GoPlay.Core.Protocols
         /// 正常通过 <see cref="Server.Send"/> -&gt; Split 路径进入时，RawData 已由 <see cref="UpdateContentSize"/> 编码填好，
         /// 这里直接复用即可（避免对同一个 Data 编码两次）；
         /// 若上层绕开了 Split（直接构造 Package&lt;T&gt; 后 WriteTo），则按需惰性编码一次。
+        /// header 通过 <see cref="IEncoder.EncodeTo"/> 原地写 span，不分配中间 byte[]。
         /// </summary>
         public override int WriteTo(IBufferWriter<byte> writer)
         {
@@ -368,12 +382,8 @@ namespace GoPlay.Core.Protocols
                     $"Package<{typeof(T).Name}>.WriteTo: Exceed max size({Consts.Package.MAX_SIZE}): {bodyLen}");
 
             Header.PackageInfo.ContentSize = (uint)bodyLen;
-            var headerBytes = encoder.Encode(Header);
-            if (headerBytes.Length > ushort.MaxValue)
-                throw new Exception(
-                    $"Package<{typeof(T).Name}>.WriteTo: header exceeds ushort: {headerBytes.Length}");
-
-            return WriteFrame(writer, headerBytes, bodyBytes, bodyLen);
+            var headerLen = encoder.GetEncodedSize(Header);
+            return WriteFrame(writer, encoder, Header, headerLen, bodyBytes, bodyLen);
         }
 
         public override string ToString()
