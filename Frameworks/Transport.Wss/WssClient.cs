@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -113,11 +112,18 @@ namespace GoPlay.Core.Transport.Wss
                     new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
                 if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                var packData = new byte[len];
-                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
-                pos += sizeof(ushort) + len;
+                // Step 3.15（客户端侧对称）：span 直 push，消除 pull-over-push 双缓冲。
+                try
+                {
+                    if (m_token.IsCancellationRequested) return;
+                    var frameSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
+                    m_client.DispatchSpan(frameSpan);
+                }
+                catch (OperationCanceledException) { return; }
+                catch (ObjectDisposedException) { return; }
+                catch (InvalidOperationException) { return; }
 
-                m_client.OnRecv(packData);
+                pos += sizeof(ushort) + len;
             }
 
             if (pos == 0) return;
@@ -139,12 +145,16 @@ namespace GoPlay.Core.Transport.Wss
     {
         private PackClient m_client;
         private CancellationTokenSource m_cancelSource;
-        private BlockingCollection<byte[]> m_responseChannel = new BlockingCollection<byte[]>(byte.MaxValue);
 
         protected virtual string KeyPath => "client.pfx";
         protected virtual string KeyPass => "qwerty";
 
         public override bool IsConnected => m_client?.IsConnected ?? false;
+
+        /// <summary>
+        /// WssClient 走 IOCP 回调 + DrainStash 直 push 到 Client&lt;T&gt;，消除 pull-over-push 双缓冲。
+        /// </summary>
+        public override bool SupportPush => true;
 
         public override void Connect(string host, int port, TimeSpan timeout)
         {
@@ -204,25 +214,22 @@ namespace GoPlay.Core.Transport.Wss
             m_client = null;
         }
 
-        internal void OnRecv(byte[] data)
+        /// <summary>
+        /// 供 inner <see cref="PackClient"/> 的 IOCP 回调线程调用，把一帧 inner bytes 直接推给 Client 的 span handler。
+        /// </summary>
+        internal void DispatchSpan(ReadOnlySpan<byte> data)
         {
-            // socket 完成回调线程上执行，未处理异常会让进程 failfast（net8 下尤其明显）。
-            // Disconnect 期间 Cancel/Dispose/置 null 会让 Add 抛 OCE/ODE/NRE，丢弃即可。
-            try
-            {
-                var cts = m_cancelSource;
-                if (cts == null || cts.IsCancellationRequested) return;
-                m_responseChannel.Add(data, cts.Token);
-            }
-            catch (OperationCanceledException) { }
-            catch (ObjectDisposedException) { }
-            catch (NullReferenceException) { }
-            catch (InvalidOperationException) { }
+            InvokeOnDataReceivedSpan(data);
         }
-        
+
+        /// <summary>
+        /// Push transport 不走 pull 路径。
+        /// </summary>
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
         {
-            return new ValueTask<byte[]>(m_responseChannel.Take(m_cancelSource.Token));
+            throw new NotSupportedException(
+                "WssClient is a push transport (SupportPush=true); Recv() is unused. " +
+                "Check that Client<T>.Connect correctly branches on Transport.SupportPush.");
         }
 
         public override ValueTask Send(byte[] data, CancellationTokenSource cancelSource)

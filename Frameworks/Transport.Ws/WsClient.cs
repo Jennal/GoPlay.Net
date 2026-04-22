@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -111,11 +110,21 @@ namespace GoPlay.Core.Transport.Ws
                     new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
                 if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                var packData = new byte[len];
-                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
-                pos += sizeof(ushort) + len;
+                // Step 3.15（客户端侧对称）：span 直 push，省掉 new byte[len]+BlockCopy+BlockingCollection 一跳。
+                // 生命周期契约：frameSpan 只在 DispatchSpan 返回前有效；Client&lt;T&gt; span handler 同步
+                // ParseRaw(ReadOnlySpan<byte>)，body 需 async 持有的在 ParseRaw 内 ToArray 拷出。
+                // socket 完成回调线程未处理异常会 failfast，tempated 吞 disconnect 期间的异常。
+                try
+                {
+                    if (m_token.IsCancellationRequested) return;
+                    var frameSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
+                    m_client.DispatchSpan(frameSpan);
+                }
+                catch (OperationCanceledException) { return; }
+                catch (ObjectDisposedException) { return; }
+                catch (InvalidOperationException) { return; }
 
-                m_client.OnRecv(packData);
+                pos += sizeof(ushort) + len;
             }
 
             if (pos == 0) return;
@@ -137,12 +146,16 @@ namespace GoPlay.Core.Transport.Ws
     {
         private PackClient m_client;
         private CancellationTokenSource m_cancelSource;
-        private BlockingCollection<byte[]> m_responseChannel = new BlockingCollection<byte[]>(byte.MaxValue);
 
         protected virtual string KeyPath => "client.pfx";
         protected virtual string KeyPass => "qwerty";
 
         public override bool IsConnected => m_client?.IsConnected ?? false;
+
+        /// <summary>
+        /// WsClient 走 IOCP 回调 + DrainStash 直 push 到 Client&lt;T&gt;，消除 pull-over-push 双缓冲。
+        /// </summary>
+        public override bool SupportPush => true;
 
         public override void Connect(string host, int port, TimeSpan timeout)
         {
@@ -190,27 +203,24 @@ namespace GoPlay.Core.Transport.Ws
             m_client = null;
         }
 
-        internal void OnRecv(byte[] data)
+        /// <summary>
+        /// 供 inner <see cref="PackClient"/> 的 IOCP 回调线程调用，把一帧 inner bytes 直接推给 Client 的 span handler。
+        /// 基类 <see cref="TransportClientBase.InvokeOnDataReceivedSpan"/> 是 protected，inner class 无法直接访问，这里转发。
+        /// </summary>
+        internal void DispatchSpan(ReadOnlySpan<byte> data)
         {
-            // 注意：本方法在 socket 完成回调的 ThreadPool 线程上执行，
-            // 未处理异常会直接让进程 failfast（net8 下尤其明显）。
-            // Disconnect 期间 Cancel/Dispose/置 null 会让下面的 Add 抛 OCE/ODE/NRE，
-            // 这时数据本就没人消费，吞掉即可。
-            try
-            {
-                var cts = m_cancelSource;
-                if (cts == null || cts.IsCancellationRequested) return;
-                m_responseChannel.Add(data, cts.Token);
-            }
-            catch (OperationCanceledException) { }
-            catch (ObjectDisposedException) { }
-            catch (NullReferenceException) { }
-            catch (InvalidOperationException) { }
+            InvokeOnDataReceivedSpan(data);
         }
-        
+
+        /// <summary>
+        /// Push transport 不走 pull 路径；Client&lt;T&gt; 在 Connect 里按 <see cref="SupportPush"/>=true 分支
+        /// 只启动 SendLoop+TimeoutLoop。走到本方法说明上层 Connect 路径错走到 pull 分支。
+        /// </summary>
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
         {
-            return new ValueTask<byte[]>(m_responseChannel.Take(m_cancelSource.Token));
+            throw new NotSupportedException(
+                "WsClient is a push transport (SupportPush=true); Recv() is unused. " +
+                "Check that Client<T>.Connect correctly branches on Transport.SupportPush.");
         }
 
         public override ValueTask Send(byte[] data, CancellationTokenSource cancelSource)

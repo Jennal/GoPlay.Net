@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -15,8 +14,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
     class PackClient : TcpClient
     {
         private NcClient m_client;
-        
-        public BlockingCollection<byte[]> RecvChannel = new BlockingCollection<byte[]>(byte.MaxValue);
+
         public SocketError LastError;
 
         private CancellationToken m_token;
@@ -83,20 +81,22 @@ namespace GoPlay.Core.Transport.NetCoreServer
                     new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
                 if (m_stashLen - pos - sizeof(ushort) < len) break;
 
-                var packData = new byte[len];
-                System.Buffer.BlockCopy(m_stash, pos + sizeof(ushort), packData, 0, len);
-                pos += sizeof(ushort) + len;
-
-                // socket 完成回调线程上执行，未处理异常会让进程 failfast（net8 下尤其明显）。
-                // Disconnect 期间 token 被 cancel / channel 被 dispose，丢弃未消费数据即可。
+                // Step 3.15（客户端侧对称）：span 切片直接 push 到 Client<T>，消除 pull-over-push 双缓冲。
+                // 生命周期契约：frameSpan 只在 InvokeOnDataReceivedSpan 返回前有效，Client 侧同步
+                // ParseRaw(ReadOnlySpan<byte>) 解码；body 如需 async 持有已在 ParseRaw 内 ToArray 拷出。
+                // socket 完成回调线程上执行，未处理异常会让进程 failfast（net8 下尤其明显）——用 try 兜底，
+                // 错误走 transport 的 OnError 路径（同老逻辑：Disconnect 期间丢弃未消费数据）。
                 try
                 {
                     if (m_token.IsCancellationRequested) return;
-                    RecvChannel.Add(packData, m_token);
+                    var frameSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
+                    m_client.DispatchSpan(frameSpan);
                 }
                 catch (OperationCanceledException) { return; }
                 catch (ObjectDisposedException) { return; }
                 catch (InvalidOperationException) { return; }
+
+                pos += sizeof(ushort) + len;
             }
 
             if (pos == 0) return;
@@ -122,7 +122,6 @@ namespace GoPlay.Core.Transport.NetCoreServer
                 m_stash = null;
                 m_stashLen = 0;
             }
-            RecvChannel.Dispose();
         }
     }
     
@@ -132,6 +131,12 @@ namespace GoPlay.Core.Transport.NetCoreServer
         private CancellationTokenSource m_cancelSource;
 
         public override bool IsConnected => m_client?.IsConnected ?? false;
+
+        /// <summary>
+        /// IOCP 回调线程直 push：NcClient 经 NetCoreServer 底层 TcpClient.OnReceived 触发 DrainStash，
+        /// Client&lt;T&gt; 的 span handler 同步解码 + 分发，消除 <c>RecvChannel&lt;byte[]&gt;</c> 过境一跳。
+        /// </summary>
+        public override bool SupportPush => true;
 
         public override void Connect(string host, int port, TimeSpan timeout)
         {
@@ -219,9 +224,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
             m_client = null;
         }
 
+        /// <summary>
+        /// Push transport 不走 pull 路径。Client&lt;T&gt; 在 Connect 里检查 <see cref="SupportPush"/>=true
+        /// 后只启动 SendLoop+TimeoutLoop，不会调此方法；保留签名供 <see cref="TransportClientBase"/>
+        /// 抽象契约满足，走到说明上层有 bug。
+        /// </summary>
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
         {
-            return new ValueTask<byte[]>(m_client.RecvChannel.Take(cancelSource.Token));
+            throw new NotSupportedException(
+                "NcClient is a push transport (SupportPush=true); Recv() is unused. " +
+                "Check that Client<T>.Connect correctly branches on Transport.SupportPush.");
         }
 
         public override ValueTask Send(byte[] data, CancellationTokenSource cancelSource)
@@ -271,6 +283,15 @@ namespace GoPlay.Core.Transport.NetCoreServer
         internal new void InvokeOnDisconnected()
         {
             base.InvokeOnDisconnected();
+        }
+
+        /// <summary>
+        /// 供 inner <see cref="PackClient"/> 的 IOCP 回调线程调用，把一帧 inner bytes 直接推给 Client 的 span handler。
+        /// base 方法是 <c>protected</c>，inner class 无法直接访问，这里转发。
+        /// </summary>
+        internal void DispatchSpan(ReadOnlySpan<byte> data)
+        {
+            InvokeOnDataReceivedSpan(data);
         }
     }
 }

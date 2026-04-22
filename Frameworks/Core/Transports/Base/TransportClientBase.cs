@@ -4,12 +4,63 @@ using System.Threading.Tasks;
 
 namespace GoPlay.Core.Transports
 {
+    /// <summary>
+    /// Span 版收包回调（客户端版）：子类（<c>NcClient</c> / <c>WsClient</c> / <c>WssClient</c>）
+    /// 在 <c>DrainStash</c> 同步循环内把 stash 里的一帧以 <see cref="ReadOnlySpan{T}"/> 直接推给
+    /// 上层（<see cref="GoPlay.Client{T}"/>），省掉 transport 层 <c>new byte[len] + BlockCopy</c>
+    /// 以及一次 <c>BlockingCollection&lt;byte[]&gt;</c> 过境。
+    ///
+    /// <para><b>生命周期契约</b>：<paramref name="data"/> 只在 handler 返回前有效 —— 通常是 transport
+    /// <c>DrainStash</c> 同步循环内部，handler 内走 <see cref="GoPlay.Core.Protocols.Package.ParseRaw(ReadOnlySpan{byte})"/>
+    /// 同步解码；body 需要 async 持有的那一份在 <c>ParseRaw</c> 里 <c>.ToArray()</c> 拷出独立 byte[]。
+    /// 不要在 handler 里 await / 入队原始 span。</para>
+    /// </summary>
+    public delegate void ClientDataReceivedSpanHandler(ReadOnlySpan<byte> data);
+
     public abstract class TransportClientBase : IDisposable
     {
         public event Action OnConnected;
         public event Action OnDisconnected;
 
         public abstract bool IsConnected { get; }
+
+        // Span 版不能用 event（ref struct 受 event 访问器限制），且同一 transport 只会有一个 Client 订阅者，单字段更简单。
+        private ClientDataReceivedSpanHandler m_onDataReceivedSpan;
+
+        /// <summary>
+        /// 绑定 span 版收包 handler。<see cref="GoPlay.Client{T}.Connect"/> 在启动 SendLoop 之前调用；
+        /// 传 <c>null</c> 表示解绑。对于 <see cref="SupportPush"/>=<c>false</c> 的 transport（如 TCP），
+        /// Client 走传统 pull 路径（<see cref="Recv"/>），不会调用本方法。
+        /// </summary>
+        public void SetDataReceivedSpanHandler(ClientDataReceivedSpanHandler handler)
+        {
+            m_onDataReceivedSpan = handler;
+        }
+
+        /// <summary>
+        /// 子类探针：span handler 是否已绑定。用于测试 / 诊断，验证 <see cref="GoPlay.Client{T}.Connect"/>
+        /// 已正确穿过 push 就绪屏障（缺陷 3 的核心不变量）。生产路径不应依赖此属性做分支。
+        /// </summary>
+        protected bool HasDataReceivedSpanHandler => m_onDataReceivedSpan != null;
+
+        /// <summary>
+        /// 是否支持 IOCP 回调直接 push 到 <see cref="GoPlay.Client{T}"/>。
+        /// 默认 <c>false</c>，Client 退回 <see cref="Recv"/> pull 模式（供 <c>TcpClient</c> 等没有 IOCP
+        /// 回调、只能 spin 式 <c>Socket.Select</c> 的 transport 使用）。
+        /// Nc/Ws/Wss 覆写为 <c>true</c>，消除 pull-over-push 双缓冲。
+        /// </summary>
+        public virtual bool SupportPush => false;
+
+        /// <summary>
+        /// 子类 <c>DrainStash</c> 内同步调用，把已切好的 inner 帧直接推给 Client。
+        /// 未绑定 span handler 时 silently drop（对 push-only transport 不会发生，push transport 的
+        /// 上层 <see cref="GoPlay.Client{T}"/> 总会在 <see cref="GoPlay.Client{T}.Connect"/> 里
+        /// <see cref="SetDataReceivedSpanHandler"/>）。
+        /// </summary>
+        protected void InvokeOnDataReceivedSpan(ReadOnlySpan<byte> data)
+        {
+            m_onDataReceivedSpan?.Invoke(data);
+        }
 
         public virtual void Connect(string host, int port)
         {
