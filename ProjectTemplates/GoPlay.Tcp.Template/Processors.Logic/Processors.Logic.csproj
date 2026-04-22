@@ -11,6 +11,19 @@
     <ProjectReference Include="..\ProcessorsBase\ProcessorsBase.csproj" />
   </ItemGroup>
 
+  <!-- ProcessorRef 源生成器 + Processor 隔离 Analyzer：
+       扫 [ProcessorApi] 生成 ProcessorRef<T> 扩展，并对 GetProcessorUnsafe 调用给出 PROCREF010/011/012 诊断 -->
+  <ItemGroup>
+    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="IP2Region.Net" Version="2.0.2" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.6" />

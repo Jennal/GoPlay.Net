@@ -14,7 +14,9 @@ namespace GoPlay.Core.Processors
         protected List<Route> m_routes;
         protected Dictionary<string, uint> m_pushDict;
         protected List<(string, uint, ServerTag)> m_routeIdDict;
-        protected Queue<Func<Task>> m_deferTasks;
+
+        // 仅在 Runner 自己的线程上下文里被读写。外部提交 DelayCall 时走 Runner.Post 进入本 Runner
+        // 线程后再 Add，保持单线程访问，避免 List 结构撕裂。
         protected List<(DateTime, Func<Task>)> m_delayTasks;
         
         internal DateTime LastUpdate = DateTime.UtcNow;
@@ -28,6 +30,13 @@ namespace GoPlay.Core.Processors
 
         public Server Server;
         public ISessionManager SessionManager => Server.SessionManager;
+
+        /// <summary>
+        /// 关联的 Runner。由 <see cref="ProcessorRunner"/> 构造期反向注入，
+        /// <see cref="DeferCall"/> / <see cref="DelayCall"/> 用它把闭包 Post 到本 Runner 邮箱，
+        /// 保证跨线程调用这两个 API 时队列结构的单线程访问。
+        /// </summary>
+        internal ProcessorRunner _runner;
         
         public abstract string[] Pushes { get; }
 
@@ -190,46 +199,75 @@ namespace GoPlay.Core.Processors
             return true;
         }
 
+        /// <summary>
+        /// 把一段异步工作投递到本 Processor 的 Runner 邮箱，稍后串行执行（fire-and-forget）。
+        /// 
+        /// 语义变更（历史兼容）：旧实现用 <c>Queue&lt;Func&lt;Task&gt;&gt;</c>，跨线程调用会撕裂队列；
+        /// 现在统一走 <see cref="ProcessorRunner.Post"/> 的 Channel，线程安全。
+        /// 任务会和本 Runner 处理的消息、跨 Processor 调用交错但保持串行。
+        /// </summary>
         public virtual void DeferCall(Func<Task> func)
         {
-            if (m_deferTasks == null) m_deferTasks = new Queue<Func<Task>>();
-            m_deferTasks.Enqueue(func);
-        }
-        
-        public virtual async Task DoDeferCalls()
-        {
-            if (m_deferTasks == null || m_deferTasks.Count <= 0) return;
+            if (func == null) return;
 
-            while (m_deferTasks.Count > 0)
+            var runner = _runner;
+            if (runner != null)
             {
-                try
-                {
-                    var func = m_deferTasks.Dequeue();
-                    await func();
-                }
-                catch (OperationCanceledException)
-                {
-                    //IGNORE ERR
-                }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    
-                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
-                catch (Exception err)
-                {
-                    Server.OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
+                runner.Post(func);
+                return;
+            }
+
+            // Server 启动前 Runner 还没建好：此时必然在主线程单线程上下文里，
+            // 退化为"启动时同步执行"，等价于历史行为中首次 tick 立即 drain。
+            // 生产路径不会命中这里；仅为极端早期注册期兜底。
+            try
+            {
+                func().GetAwaiter().GetResult();
+            }
+            catch (Exception err)
+            {
+                Server?.OnErrorEvent(IdLoopGenerator.INVALID, err);
             }
         }
         
+        /// <summary>
+        /// 过渡期保留：旧语义里由 <see cref="ProcessorRunner"/> 的周期性任务循环调用，
+        /// 现在 <see cref="DeferCall"/> 已经把闭包塞进 Runner.control channel，周期性 drain 不再需要。
+        /// 保留为 no-op，避免老代码 override 失效；子类如果覆写了本方法，也仍然会被周期调用。
+        /// </summary>
+        public virtual Task DoDeferCalls()
+        {
+            return Task.CompletedTask;
+        }
+        
+        /// <summary>
+        /// 延迟若干时间后在本 Runner 上执行一次闭包。
+        /// 
+        /// 线程安全：<c>m_delayTasks</c> 本身只在 Runner 自己的线程上下文读写。
+        /// 若从外部 Runner 调用，先通过 <see cref="ProcessorRunner.Post"/> 进入本 Runner 再 Add，
+        /// 保持 List 操作单线程。
+        /// </summary>
         public virtual void DelayCall(TimeSpan delay, Func<Task> func)
         {
-            if (m_delayTasks == null) m_delayTasks = new ();
+            if (func == null) return;
 
             var time = DateTime.UtcNow.Add(delay);
+            var runner = _runner;
+
+            if (runner != null && ProcessorRunner.Current != runner)
+            {
+                // 跨 Runner 调用：投递闭包到本 Runner 的控制队列里，让"添加到 m_delayTasks"也串行
+                runner.Post(() =>
+                {
+                    if (m_delayTasks == null) m_delayTasks = new();
+                    m_delayTasks.Add((time, func));
+                    return Task.CompletedTask;
+                });
+                return;
+            }
+
+            // 同一 Runner 上下文（或尚未绑定 Runner 的启动期）：直接 Add
+            if (m_delayTasks == null) m_delayTasks = new();
             m_delayTasks.Add((time, func));
         }
         

@@ -14,7 +14,27 @@ namespace GoPlay
         public List<ProcessorBase> Processors => m_processors;
 
         public abstract void Register(ProcessorBase processor);
-        public abstract T GetProcessor<T>() where T : ProcessorBase;
+
+        /// <summary>
+        /// 获取指定 Processor 的 Actor 调用句柄。返回 <see cref="ProcessorRef{T}"/>，
+        /// 所有跨 Processor 方法调用必须通过它（或 Source Generator 为 <c>[ProcessorApi]</c> 方法
+        /// 生成的扩展方法）完成，由目标 Runner 的 mailbox 串行执行，天然无竞争。
+        ///
+        /// 找不到对应 Processor 时返回 <c>default(ProcessorRef&lt;T&gt;)</c>（<c>IsValid == false</c>），
+        /// 调用其方法会抛 <see cref="InvalidOperationException"/>。
+        /// </summary>
+        public abstract ProcessorRef<T> GetProcessor<T>() where T : ProcessorBase;
+
+        /// <summary>
+        /// 过渡期逃生舱：返回裸 Processor 对象，用于尚未迁移到 <c>[ProcessorApi]</c> 白名单机制的调用点。
+        /// <para>
+        /// 直接持有裸对象意味着方法调用发生在调用方的 Runner 线程上下文里，
+        /// 和目标 Runner 形成跨线程数据竞争——仅为迁移期过渡兼容，长期目标是全部迁到 <see cref="GetProcessor{T}"/>。
+        /// </para>
+        /// </summary>
+        [Obsolete("跨 Processor 直接持有裸对象会引入线程竞争。请把目标方法标 [ProcessorApi] 并改用 Server.GetProcessor<T>().Xxx(...)。此 API 仅为迁移期保留，合并清理后将被删除。", error: false)]
+        public abstract T GetProcessorUnsafe<T>() where T : ProcessorBase;
+
         public abstract void Broadcast(uint clientId, int eventId, object data);
         
         public abstract Task RestartProcessor(ProcessorBase processor, bool clearPackageQueue = false, bool clearBroadcastQueue = false);
@@ -115,7 +135,19 @@ namespace GoPlay
             m_processors.Add(processor);
         }
 
-        public override TP GetProcessor<TP>()
+        public override ProcessorRef<TP> GetProcessor<TP>()
+        {
+            var target = m_processors.OfType<TP>().FirstOrDefault();
+            if (target == null) return default;
+
+            var name = target.GetName();
+            if (!m_runners.TryGetValue(name, out var runner)) return default;
+
+            return new ProcessorRef<TP>(target, runner);
+        }
+
+        [Obsolete("跨 Processor 直接持有裸对象会引入线程竞争。请把目标方法标 [ProcessorApi] 并改用 Server.GetProcessor<T>().Xxx(...)。此 API 仅为迁移期保留，合并清理后将被删除。", error: false)]
+        public override TP GetProcessorUnsafe<TP>()
         {
             return m_processors.OfType<TP>().FirstOrDefault();
         }

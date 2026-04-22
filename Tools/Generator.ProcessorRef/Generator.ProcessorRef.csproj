@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Source Generator 必须输出 netstandard2.0 程序集，以便 Roslyn 2.0 host 加载 -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>GoPlay.Generators.ProcessorRef</RootNamespace>
+    <AssemblyName>GoPlay.Generators.ProcessorRef</AssemblyName>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+    <!-- Roslyn 分析器/生成器标准 NuGet 打包约定：产物进 analyzers/dotnet/cs/，不链接到 runtime -->
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+
+    <PackageId>GoPlay.Generators.ProcessorRef</PackageId>
+    <Title>GoPlay.Generators.ProcessorRef</Title>
+    <Authors>Jennal</Authors>
+    <Description>Source generator for GoPlay.Net ProcessorRef extension methods (cross-Processor safe calls via mailbox).
+
+For more information, please go to [https://github.com/Jennal/GoPlay.Net](https://github.com/Jennal/GoPlay.Net)</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net</RepositoryUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>goplay;source-generator;analyzer;processor;actor;codegen</PackageTags>
+
+    <!-- RS2008 要求 analyzer 维护 release tracking；本地内部生成器无发布版本概念，关掉 -->
+    <!-- NU5128 在 DevelopmentDependency + SuppressDependenciesWhenPacking 组合下可忽略 -->
+    <NoWarn>$(NoWarn);RS2008;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 4.8 支持 ForAttributeWithMetadataName（4.3+ 可用）、IncrementalValueProvider 组合等新 API -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- 把编译产物放进 analyzers/dotnet/cs/（Roslyn 分析器/生成器的 NuGet 约定路径） -->
+  <ItemGroup>
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\..\LICENSE"   Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

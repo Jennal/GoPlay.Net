@@ -11,4 +11,16 @@
     <ProjectReference Include="..\ProcessorsBase\ProcessorsBase.csproj" />
   </ItemGroup>
 
+  <!-- ProcessorRef 源生成器 + Processor 隔离 Analyzer -->
+  <ItemGroup>
+    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Analyzer 必须输出 netstandard2.0 程序集，以便 Roslyn 2.0 host 加载 -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>GoPlay.Analyzers.ProcessorIsolation</RootNamespace>
+    <AssemblyName>GoPlay.Analyzers.ProcessorIsolation</AssemblyName>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+
+    <PackageId>GoPlay.Analyzers.ProcessorIsolation</PackageId>
+    <Title>GoPlay.Analyzers.ProcessorIsolation</Title>
+    <Authors>Jennal</Authors>
+    <Description>Roslyn analyzer for GoPlay.Net Processor isolation: hints/warns on cross-Processor GetProcessorUnsafe call sites (PROCREF010/011/012).
+
+For more information, please go to [https://github.com/Jennal/GoPlay.Net](https://github.com/Jennal/GoPlay.Net)</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net</RepositoryUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>goplay;analyzer;roslyn;processor;actor;thread-safety</PackageTags>
+
+    <NoWarn>$(NoWarn);RS2008;RS1033;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\..\LICENSE"   Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

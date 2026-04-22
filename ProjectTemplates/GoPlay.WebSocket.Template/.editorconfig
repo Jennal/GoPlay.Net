@@ -1,0 +1,18 @@
+root = true
+
+[*.cs]
+
+# GoPlay ProcessorRef 源生成器 + Processor 隔离 Analyzer 诊断规则：
+#   PROCREF010 - 跨 Processor 调用未标 [ProcessorApi] 的方法（默认 Info，仅 IDE 可见）
+#   PROCREF011 - 跨 Processor 调用已标 [ProcessorApi] 的方法但仍走 GetProcessorUnsafe（默认 Info）
+#   PROCREF012 - 跨 Processor 直接访问字段/属性（默认 Warning，CLI/CI 可见）
+#
+# 如果某处确实需要 GetProcessorUnsafe（纯读/只读缓存/单测），可用：
+#   1) 行/块级：#pragma warning disable PROCREF010
+#   2) 目录级：在子目录 .editorconfig 里设置 dotnet_diagnostic.PROCREF010.severity = none
+
+# UnitTests 目录：单元测试同线程执行，不涉及 Processor 线程隔离，关闭全部 PROCREF 诊断
+[**/UnitTests/**/*.cs]
+dotnet_diagnostic.PROCREF010.severity = none
+dotnet_diagnostic.PROCREF011.severity = none
+dotnet_diagnostic.PROCREF012.severity = none

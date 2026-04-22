@@ -11,7 +11,19 @@
     <PackageReference Include="GoPlay.Core.Transport.Ws" Version="0.2.9" />
     <PackageReference Include="GoPlay.Core.Transport.Wss" Version="0.2.9" />
   </ItemGroup>
-  
+
+  <!-- ProcessorRef 源生成器 + Processor 隔离 Analyzer -->
+  <ItemGroup>
+    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="0.9.1">
+      <IncludeAssets>analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Processors.Logic\Processors.Logic.csproj" />

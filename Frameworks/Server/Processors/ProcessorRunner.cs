@@ -25,11 +25,27 @@ namespace GoPlay.Core.Processors
         private readonly ProcessorBase _processor;
         private readonly Server _server;
         private readonly Channel<Package> _incoming;
+        private readonly Channel<Func<Task>> _control;
         private readonly ConcurrentQueue<(uint, int, object)> _broadcastQueue;
         private readonly TaskFactory _scheduler;
         private readonly SemaphoreSlim _concurrencyLimiter;
         private readonly int _maxConcurrency;
         private readonly int _drainBatchSize;
+
+        /// <summary>
+        /// 当前正在执行工作的 Runner。<see cref="ProcessorRef{T}"/> 用它做回环检测：
+        /// 同一 Runner 上的再入调用直接 inline 执行，避免 mailbox 自等死锁。
+        ///
+        /// 由于主循环在 <c>Post</c>-投递的闭包里会 <c>await</c>，必须用 <see cref="AsyncLocal{T}"/>
+        /// 而不是 <c>ThreadStatic</c>——跨 await 之后 OS 线程可能换，但执行上下文跟 Runner 保持一致。
+        /// </summary>
+        internal static readonly AsyncLocal<ProcessorRunner> _current = new AsyncLocal<ProcessorRunner>();
+        internal static ProcessorRunner Current => _current.Value;
+
+        /// <summary>
+        /// 暴露给 <see cref="ProcessorRef{T}"/> 在 Notify 异常路径上调 <c>OnErrorEvent</c>。
+        /// </summary>
+        internal Server Server => _server;
 
         // routeId -> Route 的 O(1) 查表，用于在调度路径上拿到 Method 级 [MaxConcurrency] 配置。
         // 仅在 _maxConcurrency > 1 路径下使用（_maxConcurrency==1 已是严格串行，方法级限流是冗余）。
@@ -46,11 +62,24 @@ namespace GoPlay.Core.Processors
             _processor = processor ?? throw new ArgumentNullException(nameof(processor));
             _server = server ?? throw new ArgumentNullException(nameof(server));
 
+            // 反向注入：DeferCall / DelayCall 用这个字段把闭包 Post 回本 Runner 的邮箱，
+            // 保证跨线程调用时队列结构不会被撕裂。
+            processor._runner = this;
+
             _incoming = Channel.CreateBounded<Package>(new BoundedChannelOptions(capacity)
             {
                 SingleReader = true,
                 SingleWriter = false,
                 FullMode = BoundedChannelFullMode.Wait,
+            });
+
+            // control channel 用于跨 Processor 的 ProcessorRef.Request / Notify 投递。
+            // 无界：跨 Processor 调用是服务端内部行为，背压靠调用方自身节流；
+            // 若做成 bounded，一旦目标 Runner 卡住，发起方也会跟着卡，反而扩散问题。
+            _control = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false,
             });
             _broadcastQueue = new ConcurrentQueue<(uint, int, object)>();
 
@@ -162,6 +191,26 @@ namespace GoPlay.Core.Processors
             return false;
         }
 
+        /// <summary>
+        /// 跨 Processor 投递一段异步工作到本 Runner 邮箱串行执行。
+        /// 由 <see cref="ProcessorRef{T}"/> 调用；业务代码不应直接使用。
+        /// </summary>
+        /// <remarks>
+        /// control channel 是 Unbounded：Request / Notify 的调用量本身应由业务层控制，
+        /// 不做背压是为了避免"目标 Runner 卡住 → 发起方也卡住"的级联失败。
+        /// 若业务上确实需要限流，应在调用方加显式 <c>SemaphoreSlim</c>，而不是靠 Channel 容量。
+        /// </remarks>
+        internal void Post(Func<Task> work)
+        {
+            if (work == null) return;
+            if (!_control.Writer.TryWrite(work))
+            {
+                // 理论上 Unbounded 永不返回 false；走到这里只可能是已经 TryComplete。
+                // 停机期间忽略，业务异常由 ProcessorRef 的回调兜底（TrySetException 已不会被感知，
+                // 但任务本身不会丢入状态不一致——因为 Runner 已经在退场）。
+            }
+        }
+
         private async Task WriteSlowAsync(Package pack)
         {
             try
@@ -195,6 +244,7 @@ namespace GoPlay.Core.Processors
             {
                 _restartCts?.Cancel();
                 _incoming.Writer.TryComplete();
+                _control.Writer.TryComplete();
                 if (_runTask != null) await _runTask.ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
@@ -208,7 +258,13 @@ namespace GoPlay.Core.Processors
 
         private async Task RunAsync(CancellationToken ct)
         {
-            var reader = _incoming.Reader;
+            // 进入主循环即把当前 AsyncLocal 设为本 Runner：
+            // 回环 inline 检测（ProcessorRef.Request 判断 Current == Runner）在周期性任务、
+            // 广播、DeferCall / DelayCall 里都能生效，语义和"消息处理"一致。
+            _current.Value = this;
+
+            var packReader = _incoming.Reader;
+            var ctrlReader = _control.Reader;
 
             while (!ct.IsCancellationRequested)
             {
@@ -224,25 +280,37 @@ namespace GoPlay.Core.Processors
 
                 if (_processor.IsOnlyUpdate)
                 {
+                    // IsOnlyUpdate 的 Processor 不收包，但仍要消费 control（跨 Processor 调用）。
+                    await DrainControlAsync(ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested) break;
+
                     if (!await SafeDelay(_processor.UpdateDeltaTime, ct).ConfigureAwait(false)) break;
                     continue;
                 }
 
-                // 取尽当前可读的包（最多 _drainBatchSize 个），保证周期性任务有机会跑
-                var drained = 0;
-                while (drained < _drainBatchSize && reader.TryRead(out var pack))
+                // 优先清 control：跨 Processor 调用延迟敏感，让它们不被网络洪峰拖住。
+                // 但两边都有 batch 上限，保证不互相饿死。
+                var ctrlDrained = await DrainControlAsync(ct).ConfigureAwait(false);
+                if (ct.IsCancellationRequested) break;
+
+                var packDrained = 0;
+                while (packDrained < _drainBatchSize && packReader.TryRead(out var pack))
                 {
-                    drained++;
+                    packDrained++;
                     await DispatchOne(pack, ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested) break;
                 }
 
-                if (drained == 0)
+                if (ctrlDrained == 0 && packDrained == 0)
                 {
-                    // 没消息：等待新消息或周期超时，然后回到顶部跑周期性任务
+                    // 两边都空：等待任一通道来新消息或周期超时
                     if (!await WaitForSignalAsync(_processor.RecvTimeout, ct).ConfigureAwait(false)) break;
                 }
             }
+
+            // 收尾：把 control channel 里的残留闭包跑完，避免 TaskCompletionSource 永远悬挂导致
+            // 调用方的 await 永不返回。不再受 ct 约束——关闭流程里发起方已经不关心 cancel 了。
+            await DrainControlAsync(CancellationToken.None).ConfigureAwait(false);
 
             // 收尾：等所有 in-flight 完成（仅 MaxConcurrency>1 路径）
             if (_concurrencyLimiter != null)
@@ -253,6 +321,34 @@ namespace GoPlay.Core.Processors
                     catch { }
                 }
             }
+        }
+
+        /// <summary>
+        /// 从 control channel 取至多 <see cref="_drainBatchSize"/> 个闭包串行执行。
+        /// 返回实际执行的条数，供外层判断"本轮是否应该进入等待"。
+        /// </summary>
+        private async Task<int> DrainControlAsync(CancellationToken ct)
+        {
+            var drained = 0;
+            var reader = _control.Reader;
+            while (drained < _drainBatchSize && reader.TryRead(out var work))
+            {
+                drained++;
+                try
+                {
+                    await work().ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { /* IGNORE */ }
+                catch (AggregateException err) when (err.InnerException is OperationCanceledException || err.InnerException is TaskCanceledException) { /* IGNORE */ }
+                catch (Exception err)
+                {
+                    // ProcessorRef.Request 已经在闭包内部 try/catch 把异常写进 TCS；
+                    // 能冒到这里的基本上是 Notify 闭包里 OnErrorEvent 再抛的极端情况，兜底。
+                    _server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+                if (ct.IsCancellationRequested) break;
+            }
+            return drained;
         }
 
         private async Task DoPeriodicWorkAsync(CancellationToken ct)
@@ -341,12 +437,27 @@ namespace GoPlay.Core.Processors
             }
         }
 
+        /// <summary>
+        /// 等待两个 Reader 之一来新消息，或 timeout 过期回去跑周期任务。
+        /// </summary>
         private async Task<bool> WaitForSignalAsync(TimeSpan timeout, CancellationToken ct)
         {
-            var reader = _incoming.Reader;
+            var packReader = _incoming.Reader;
+            var ctrlReader = _control.Reader;
+
+            // 任一 channel 已有可读数据，立刻返回（ReaderDrained=false 时才会调到这里，
+            // 但中间可能有 race：Drain 返回 0 到调 WaitToReadAsync 这段时间里 writer 又塞入了）。
+            if (ctrlReader.TryPeek(out _)) return true;
+
             if (timeout <= TimeSpan.Zero)
             {
-                try { return await reader.WaitToReadAsync(ct).ConfigureAwait(false); }
+                try
+                {
+                    var waitPack = packReader.WaitToReadAsync(ct).AsTask();
+                    var waitCtrl = ctrlReader.WaitToReadAsync(ct).AsTask();
+                    var finished = await Task.WhenAny(waitPack, waitCtrl).ConfigureAwait(false);
+                    return await finished.ConfigureAwait(false);
+                }
                 catch (OperationCanceledException) { return false; }
             }
 
@@ -354,7 +465,10 @@ namespace GoPlay.Core.Processors
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
             try
             {
-                return await reader.WaitToReadAsync(linked.Token).ConfigureAwait(false);
+                var waitPack = packReader.WaitToReadAsync(linked.Token).AsTask();
+                var waitCtrl = ctrlReader.WaitToReadAsync(linked.Token).AsTask();
+                var finished = await Task.WhenAny(waitPack, waitCtrl).ConfigureAwait(false);
+                return await finished.ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
