@@ -19,15 +19,15 @@
        扫 [ProcessorApi] 生成 ProcessorRef<T> 扩展；对 GetProcessorUnsafe 调用给出 PROCREF010/011/012 诊断；
        对 [MaxConcurrency] 值/位置给出 MAXCONC001/002/003 诊断 -->
   <ItemGroup>
-    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="0.9.1">
+    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="0.9.1">
+    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="GoPlay.Analyzers.MaxConcurrency" Version="0.9.1">
+    <PackageReference Include="GoPlay.Analyzers.MaxConcurrency" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

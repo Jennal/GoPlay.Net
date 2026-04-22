@@ -38,8 +38,8 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
     <PackageReference Include="RestSharp" Version="110.2.0" />
     <PackageReference Include="StackExchange.Redis.MultiplexerPool" Version="2.0.1" />
-    <PackageReference Include="GoPlay.Server" Version="0.2.9" />
-    <PackageReference Include="GoPlay.Common.Data" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Server" Version="1.0.1" />
+    <PackageReference Include="GoPlay.Common.Data" Version="1.0.1" />
     <PackageReference Include="YamlDotNet" Version="13.0.1" />
     <PackageReference Include="HDWallet.Core" Version="0.11.0" />
     <PackageReference Include="HDWallet.Tron" Version="0.7.0" />

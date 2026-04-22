@@ -11,22 +11,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GoPlay.Client" Version="0.2.9" />
-    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="0.2.9" />
-    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="0.2.9" />
+    <PackageReference Include="GoPlay.Client" Version="1.0.1" />
+    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="1.0.1" />
+    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="1.0.1" />
   </ItemGroup>
 
   <!-- ProcessorRef 源生成器 + Processor 隔离 Analyzer + MaxConcurrency Analyzer -->
   <ItemGroup>
-    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="0.9.1">
+    <PackageReference Include="GoPlay.Generators.ProcessorRef" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="0.9.1">
+    <PackageReference Include="GoPlay.Analyzers.ProcessorIsolation" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="GoPlay.Analyzers.MaxConcurrency" Version="0.9.1">
+    <PackageReference Include="GoPlay.Analyzers.MaxConcurrency" Version="1.0.1">
       <IncludeAssets>analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
