@@ -1,6 +1,6 @@
 #!/bin/sh -x
 DIR=$(dirname "$0")/..
-VERSION="0.9.0"
+VERSION="0.9.1"
 cd $DIR
 
 # Push nupkg
