@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    GoPlay.Templates 模板包。
+    承载 ProjectTemplates/ 下的两个子模板（Tcp / WebSocket），以 NuGet Template Pack 形式发布。
+
+    安装：  dotnet new install GoPlay.Templates
+    使用：  dotnet new goplay-tcp -n MyGame
+            dotnet new goplay-ws  -n MyGame
+    卸载：  dotnet new uninstall GoPlay.Templates
+
+    设计要点：
+    - 这是一个"仅打包"项目：不产出可执行/程序集，只把子模板目录塞进 content/。
+    - 禁用所有默认的 Compile/Content/None 全局通配，避免 SDK 把模板源码误当作本项目的源码去编译。
+    - 通过显式 <Content Include="..." /> 指定哪些文件要进包；bin/obj 统一剔除。
+  -->
+
+  <PropertyGroup>
+    <PackageType>Template</PackageType>
+    <PackageId>GoPlay.Templates</PackageId>
+    <Title>GoPlay.Net Project Templates</Title>
+    <Authors>Jennal</Authors>
+    <Description>dotnet new templates for GoPlay.Net server solutions (TCP / WebSocket). After install, use `dotnet new goplay-tcp -n MyGame` or `dotnet new goplay-ws -n MyGame` to scaffold.
+
+For more information, please go to [https://github.com/Jennal/GoPlay.Net](https://github.com/Jennal/GoPlay.Net)</Description>
+    <Copyright>Copyright © What2d Ltd. 2023</Copyright>
+    <PackageProjectUrl>https://github.com/Jennal/GoPlay.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Jennal/GoPlay.Net</RepositoryUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>dotnet-new;templates;goplay;tcp;websocket</PackageTags>
+
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128;NU5100;NU5110;NU5111</NoWarn>
+
+    <!-- 禁止 SDK 的默认 glob 把模板源码当作本项目源码编译 -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 两个子模板作为 content 打包；bin/obj 剔除 -->
+    <Content Include="GoPlay.Tcp.Template\**\*"
+             Exclude="**\bin\**;**\obj\**" />
+    <Content Include="GoPlay.WebSocket.Template\**\*"
+             Exclude="**\bin\**;**\obj\**" />
+
+    <!-- 兜底：显式清空其它通配入口，杜绝 SDK 把周边文件误带进来 -->
+    <Compile Remove="**\*" />
+    <None Remove="**\*" />
+    <EmbeddedResource Remove="**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE"   Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\README.md" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

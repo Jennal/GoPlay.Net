@@ -85,7 +85,7 @@ internal class GoPlayProjService : IHostedService
 
     public Server<WsServer> InitServer()
     {
-        _server = new Server<WsServer>();
+        _server = new Server<WsServer>(Environment.ProcessorCount);
         Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff)}] Server<{_server.TransportType.Name}> starting: {_host}:{_port}");
 
         _server.RegisterFilter(new LoggerFilter());

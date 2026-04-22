@@ -84,7 +84,7 @@ internal class GoPlayProjService : IHostedService
 
     public Server<NcServer> InitServer()
     {
-        _server = new Server<NcServer>();
+        _server = new Server<NcServer>(Environment.ProcessorCount);
         Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff)}] Server<{_server.TransportType.Name}> starting: {_host}:{_port}");
 
         _server.RegisterFilter(new LoggerFilter());

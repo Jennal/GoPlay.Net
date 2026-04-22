@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Generator.ProcessorRef", ".
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Analyzer.ProcessorIsolation", "..\Tools\Analyzer.ProcessorIsolation\Analyzer.ProcessorIsolation.csproj", "{EC1FF979-4B71-4815-8675-BE02BED33685}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Analyzer.MaxConcurrency", "..\Tools\Analyzer.MaxConcurrency\Analyzer.MaxConcurrency.csproj", "{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -259,6 +261,18 @@ Global
 		{EC1FF979-4B71-4815-8675-BE02BED33685}.Release|x64.Build.0 = Release|Any CPU
 		{EC1FF979-4B71-4815-8675-BE02BED33685}.Release|x86.ActiveCfg = Release|Any CPU
 		{EC1FF979-4B71-4815-8675-BE02BED33685}.Release|x86.Build.0 = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|x64.Build.0 = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Debug|x86.Build.0 = Debug|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|x64.ActiveCfg = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|x64.Build.0 = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|x86.ActiveCfg = Release|Any CPU
+		{6AEEDC08-23BF-49FB-9DDE-D13E2B20D1FD}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
