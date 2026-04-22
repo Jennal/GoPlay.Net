@@ -37,7 +37,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
             }
             else
             {
-                ClientIP = ep.Address.ToString();    
+                ClientIP = ep.Address.ToString();
             }
         }
 
@@ -45,6 +45,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
         {
             AppendToStash(buffer, (int)offset, (int)size);
             DrainStash();
+        }
+
+        protected override void OnDisconnected()
+        {
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
+            }
         }
 
         private void AppendToStash(byte[] buffer, int offset, int size)
@@ -94,16 +104,6 @@ namespace GoPlay.Core.Transport.NetCoreServer
             m_stashLen = remaining;
         }
 
-        protected override void OnDisconnected()
-        {
-            if (m_stash != null)
-            {
-                ArrayPool<byte>.Shared.Return(m_stash);
-                m_stash = null;
-                m_stashLen = 0;
-            }
-        }
-
         protected override void OnError(SocketError error)
         {
             Console.WriteLine($"Session[{ClientId}] caught an error with code {error}");
@@ -124,11 +124,40 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override TcpSession CreateSession() { return new PackSession(this, m_idGen.Next()); }
 
+        /// <summary>
+        /// 缺陷 4 修复：在 <see cref="TcpSession.Connect"/> 调用 <c>TryReceive()</c> 之前注册 session。
+        ///
+        /// <para>
+        /// <b>原 bug 的场景</b>：100 并发 client 连上来，每个 client Connect 完立刻发 HandshakeReq。
+        /// 服务端 <see cref="TcpSession.Connect"/> 里先 <c>TryReceive()</c>（line 139）再 <c>OnConnectedInternal()</c>（line 149）。
+        /// <c>TryReceive()</c> 在当前 IOCP 线程 post 了 WSARecv；如果此时 client 的 HandshakeReq 已经
+        /// 躺在内核 recv buffer 里（loopback 下这极容易发生），另一条 IOCP 线程可立刻完成该 WSARecv 并
+        /// 同步回调 <see cref="PackSession.OnReceived"/>→<see cref="DrainStash"/>→
+        /// <see cref="PackServer.OnRecvSpan"/>→Server&lt;T&gt; 握手回调→<see cref="NcServer.SendAsync"/>→
+        /// <see cref="SendFramed"/>→<see cref="GetSession"/>。而原来 <c>m_sessions[clientId] = session</c>
+        /// 是在 <c>OnConnected(session)</c>（即 <c>OnConnectedInternal</c>）里做的，时序上还没跑到，
+        /// 导致 <c>GetSession</c> 返回 false → HandshakeResp 被 silently drop → client 卡 10s 超时。
+        /// </para>
+        ///
+        /// <para>
+        /// <b>修复思路</b>：把"注册到查找表"这个只读字典 insert 上移到 <see cref="OnConnecting"/>。
+        /// 按 NetCoreServer 里 <c>TcpSession.Connect</c> 的实际顺序，<see cref="OnConnecting"/> 在
+        /// <c>IsConnected=true</c>、<c>TryReceive()</c> 之前触发（line 130/133 vs 139），彻底消除竞态。
+        /// 外部事件 <see cref="NcServer.OnConnected"/> 保留在 <see cref="OnConnected"/> 里：这是业务语义
+        /// （连接真正建立完成），不是 session lookup，不能提前。
+        /// </para>
+        /// </summary>
+        protected override void OnConnecting(TcpSession session)
+        {
+            if (session is PackSession packSession == false) return;
+
+            m_sessions[packSession.ClientId] = packSession;
+        }
+
         protected override void OnConnected(TcpSession session)
         {
             if (session is PackSession packSession == false) return;
-            
-            m_sessions[packSession.ClientId] = packSession;
+
             m_ncServer.OnConnected(packSession.ClientId);
         }
 
