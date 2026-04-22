@@ -32,6 +32,12 @@ namespace GoPlay.Core.Processors
         private readonly int _maxConcurrency;
         private readonly int _drainBatchSize;
 
+        // 广播队列峰值观测（采样峰值，不是生产者侧真实峰值）：
+        // - Runner 在每轮周期 tick 里顺手采样一次 _broadcastQueue.Count，若超过历史峰值则更新。
+        // - 这是"机制"，不是"策略"：Runner 不做阈值判断、不打日志，外部根据 ProcessorStatus 自行决定。
+        // - 由于 Runner 主循环（写入方）和外部监控（读取/重置方）在不同线程，使用 Interlocked 原子更新。
+        private int _broadcastPeakDepth;
+
         /// <summary>
         /// 当前正在执行工作的 Runner。<see cref="ProcessorRef{T}"/> 用它做回环检测：
         /// 同一 Runner 上的再入调用直接 inline 执行，避免 mailbox 自等死锁。
@@ -57,7 +63,11 @@ namespace GoPlay.Core.Processors
         private CancellationTokenSource _linkedCts;
         private Task _runTask;
 
-        public ProcessorRunner(ProcessorBase processor, Server server, int capacity = ushort.MaxValue, int drainBatchSize = 64)
+        public ProcessorRunner(
+            ProcessorBase processor,
+            Server server,
+            int capacity = ushort.MaxValue,
+            int drainBatchSize = 64)
         {
             _processor = processor ?? throw new ArgumentNullException(nameof(processor));
             _server = server ?? throw new ArgumentNullException(nameof(server));
@@ -172,6 +182,45 @@ namespace GoPlay.Core.Processors
         public ProcessorBase Processor => _processor;
 
         public ConcurrentQueue<(uint, int, object)> BroadcastQueue => _broadcastQueue;
+
+        /// <summary>
+        /// 广播队列的当前深度（瞬时值）。多线程安全。
+        /// </summary>
+        public int BroadcastQueueCount => _broadcastQueue.Count;
+
+        /// <summary>
+        /// 广播队列的采样峰值深度：自 Runner 启动（或上次 <see cref="ResetBroadcastPeakDepth"/>）以来，
+        /// Runner 在周期 tick 里观察到的最大深度。
+        /// <para>
+        /// 采样非生产者侧，两次 tick 之间的瞬时尖峰可能被错过。
+        /// 这个指标用于回答："这段时间里，消费端落后得最严重的一刻有多严重？"
+        /// 外部监控可据此决定是否打日志 / 告警 / 熔断，<b>Runner 本身不做任何策略判断</b>。
+        /// </para>
+        /// </summary>
+        public int BroadcastPeakDepth => Volatile.Read(ref _broadcastPeakDepth);
+
+        /// <summary>
+        /// 原子地读出当前采样峰值并重置为当前队列深度。
+        /// <para>
+        /// 推荐的采样窗口用法：外部监控周期性调用，得到"自上次采样以来的窗口峰值"，
+        /// 用于滑动窗口统计，而不是"自 Runner 启动以来的历史峰值"。
+        /// </para>
+        /// <para>
+        /// 重置为 <see cref="BroadcastQueueCount"/> 而不是 0，是为了保证重置后立即读到的峰值
+        /// 不低于真实瞬时深度——否则下一轮 Update 前会有一段"峰值低于实际"的窗口，
+        /// 外部若在此刻读取会被误导。
+        /// </para>
+        /// </summary>
+        public int SampleAndResetBroadcastPeakDepth()
+        {
+            var floor = _broadcastQueue.Count;
+            return Interlocked.Exchange(ref _broadcastPeakDepth, floor);
+        }
+
+        /// <summary>
+        /// 将采样峰值重置为当前队列深度。等价于丢弃 <see cref="SampleAndResetBroadcastPeakDepth"/> 的返回值。
+        /// </summary>
+        public void ResetBroadcastPeakDepth() => Interlocked.Exchange(ref _broadcastPeakDepth, _broadcastQueue.Count);
 
         public int PackageQueueCount => _incoming.Reader.Count;
 
@@ -354,9 +403,39 @@ namespace GoPlay.Core.Processors
         private async Task DoPeriodicWorkAsync(CancellationToken ct)
         {
             await _server.Update(_processor).ConfigureAwait(false);
-            await _server.ResolveBroadCast(_processor, _broadcastQueue).ConfigureAwait(false);
+            // 和 package/control drain 用同一个 batch 上限：一次 tick 内最多消费 _drainBatchSize 条广播，
+            // 剩余留给下一轮，避免广播洪峰独占 Runner 周期 tick 把其他周期任务（DeferCalls/DelayCalls）饿死。
+            await _server.ResolveBroadCast(_processor, _broadcastQueue, _drainBatchSize).ConfigureAwait(false);
+            // 在 drain 之后采样：残留深度反映"本轮消费不掉的部分"，是消费速度跟不上的直接信号。
+            // 这里只做记录，不做决策——策略（是否告警 / 是否熔断）由外部根据 ProcessorStatus 自行判断。
+            UpdateBroadcastPeak();
             await _processor.DoDeferCalls().ConfigureAwait(false);
             await _processor.DoDelayCalls().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 采样一次广播队列深度，若超过当前记录的峰值则更新。
+        /// <para>
+        /// 这是"采样峰值"不是"真实峰值"：Runner 只在周期 tick 里采一次，
+        /// 两次 tick 之间的瞬时尖峰可能被错过（要真实峰值就必须在生产者侧 <c>Server.Broadcast</c>
+        /// 每次 Enqueue 后更新，代价是每次广播多一次原子操作，不划算）。
+        /// </para>
+        /// <para>
+        /// 写入方是 Runner 主循环（单线程），读取/重置方是外部监控线程，
+        /// 使用 <see cref="Interlocked.CompareExchange(ref int, int, int)"/> 做无锁更新。
+        /// </para>
+        /// </summary>
+        private void UpdateBroadcastPeak()
+        {
+            var current = _broadcastQueue.Count;
+            while (true)
+            {
+                var old = Volatile.Read(ref _broadcastPeakDepth);
+                if (current <= old) return;
+                if (Interlocked.CompareExchange(ref _broadcastPeakDepth, current, old) == old) return;
+                // CAS 失败说明外部并发地执行了 Reset 或另一次 Update（理论上单写者不会发生，
+                // 但 Reset 可能把 old 改小），重试直到稳定。
+            }
         }
 
         private Task DispatchOne(Package pack, CancellationToken ct)

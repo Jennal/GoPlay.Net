@@ -65,7 +65,14 @@ namespace GoPlay
         public abstract IEnumerable<ProcessorStatus> GetProcessorQueueStatus();
         
         public abstract string GetRoute(Package pack);
-        public abstract Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue);
+        /// <summary>
+        /// 从广播队列 drain 一批事件到 <paramref name="processor"/>。
+        /// <para>
+        /// 单次调用最多消费 <paramref name="maxItems"/> 条，剩余留给下轮周期 tick——
+        /// 防止广播洪峰把一个 Runner 周期 tick 独占、饿死 <c>Update</c>/<c>DeferCalls</c>/<c>DelayCalls</c>。
+        /// </para>
+        /// </summary>
+        public abstract Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue, int maxItems);
         public abstract Task Update(ProcessorBase processor);
     }
     

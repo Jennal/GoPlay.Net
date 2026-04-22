@@ -184,10 +184,15 @@ namespace GoPlay
             runner.Enqueue(packRaw);
         }
 
-        public override async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue)
+        public override async Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue, int maxItems)
         {
-            while (queue.TryDequeue(out var tuple))
+            // maxItems <= 0 视为不限；正常调用方应显式传一个合理上限，
+            // 避免在一次 tick 内把 Update/DeferCalls/DelayCalls 饿死。
+            var unlimited = maxItems <= 0;
+            var remaining = maxItems;
+            while ((unlimited || remaining > 0) && queue.TryDequeue(out var tuple))
             {
+                if (!unlimited) remaining--;
                 var (clientId, eventId, data) = tuple;
                 try
                 {
@@ -261,7 +266,11 @@ namespace GoPlay
                     Name = name,
                     Status = runner.Status,
                     PackageQueueCount = runner.PackageQueueCount,
-                    BroadcastQueueCount = runner.BroadcastQueue.Count,
+                    BroadcastQueueCount = runner.BroadcastQueueCount,
+                    // 纯读，不 reset——这里的契约是"偷看一眼"。
+                    // 若外部要做滑动窗口峰值，应走 Runner.SampleAndResetBroadcastPeakDepth()，
+                    // 或后续加一个显式的 ResetPeak 重载，而不是在 Status 读取里埋隐式副作用。
+                    BroadcastPeakDepth = runner.BroadcastPeakDepth,
                 };
             }
         }

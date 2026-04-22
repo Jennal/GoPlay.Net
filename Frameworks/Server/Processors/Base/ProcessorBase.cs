@@ -141,7 +141,9 @@ namespace GoPlay.Core.Processors
         public virtual bool PackageLoopFrame(BlockingCollection<Package> packQueue, ConcurrentQueue<(uint, int, object)> broadcastQueue, CancellationToken cancelToken)
         {
             Server.Update(this).Wait(cancelToken);
-            Server.ResolveBroadCast(this, broadcastQueue).Wait(cancelToken);
+            // 过渡期：老的 PackageLoopFrame 路径保留"一次性清空"语义，不限 batch。
+            // 新路径（ProcessorRunner）会传入合理上限进行背压保护。
+            Server.ResolveBroadCast(this, broadcastQueue, int.MaxValue).Wait(cancelToken);
             DoDeferCalls().Wait(cancelToken);
             DoDelayCalls().Wait(cancelToken);
 
