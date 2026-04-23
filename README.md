@@ -5,6 +5,8 @@
 [![NuGet](https://img.shields.io/nuget/v/GoPlay.Tools?label=GoPlay.Tools)](https://www.nuget.org/packages/GoPlay.Tools)
 [![NuGet](https://img.shields.io/nuget/v/GoPlay.Templates?label=GoPlay.Templates)](https://www.nuget.org/packages/GoPlay.Templates)
 
+> 中文版: [README_zh.md](README_zh.md)
+
 > **Write long-connection game servers like ASP.NET — slap an attribute on a function and clients call it like a local method.**
 
 GoPlay.Net is a C# long-connection RPC framework for real-time game servers (and any app that needs push). It takes the route model from **Pomelo**, the Actor model from **ET / Orleans**, and the attribute-routing ergonomics from **ASP.NET Core**, and compresses them into a pragmatic C# stack with full client code generation.
@@ -15,7 +17,7 @@ The name "GoPlay" is historical: the first implementation was in Golang; the cur
 
 ## Performance at a Glance
 
-Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, net10). Full report and regression tripwires in [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md); distilled version in [Docs/en/performance.md](Docs/en/performance.md) · [Docs/zh/performance.md](Docs/zh/performance.md).
+Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, net10). Full report and regression tripwires in [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md); distilled version in [Docs/en/02.performance.md](Docs/en/02.performance.md) · [Docs/zh/02.performance.md](Docs/zh/02.performance.md).
 
 | Metric | net8 LTS | net10 STS |
 |--------|---------:|----------:|
@@ -26,7 +28,7 @@ Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, net10
 | Gen0 / 1k ops | 0.1221 | **0.1221** |
 | Concurrent Echo throughput (`MaxConcurrency=64`, CPU-bound) | — | **~103k req/s** |
 
-- **50× speedup** on delay-bound business via `[MaxConcurrency(N)]`: a `delay=10ms` workload jumps from 68 req/s (serial) to 3 178 req/s (N=64). See [performance.md](Docs/en/performance.md#concurrency-speedup-under-async-business-maxconcurrency64).
+- **50× speedup** on delay-bound business via `[MaxConcurrency(N)]`: a `delay=10ms` workload jumps from 68 req/s (serial) to 3 178 req/s (N=64). See [02.performance.md](Docs/en/02.performance.md#concurrency-speedup-under-async-business-maxconcurrency64).
 - **Zero-alloc hot path**: Header + Body both encode straight into the same `IBufferWriter<byte>` span; each connection allocates one `ArrayBufferWriter` for its entire lifetime.
 - **O(1) route dispatch**: Routes are resolved to `uint` ids during handshake; runtime lookup is a single `Dictionary<uint, ProcessorRunner>` hop into a compiled delegate.
 - **Compile-time safety, runtime speed**: Roslyn analyzers fail the build on illegal `[MaxConcurrency]` combos or cross-processor escape hatches; source generators emit `ProcessorRef<T>` extensions that read like local calls.
@@ -46,27 +48,27 @@ Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, net10
 > Gemini's summary quote:
 > *"Within the managed-language camp (C# / Java / Go) it has closed in on — and in several sub-metrics matched — the ceiling of highly tuned C++ frameworks."*
 >
-> Full per-metric breakdown: [Docs/en/performance.md#third-party-review-what-gemini-31-pro-said](Docs/en/performance.md#third-party-review-what-gemini-31-pro-said) · [Docs/zh/performance.md#第三方评价gemini-31-pro-读过基线后怎么说](Docs/zh/performance.md#第三方评价gemini-31-pro-读过基线后怎么说).
+> Full per-metric breakdown: [Docs/en/02.performance.md#third-party-review-what-gemini-31-pro-said](Docs/en/02.performance.md#third-party-review-what-gemini-31-pro-said) · [Docs/zh/02.performance.md#第三方评价gemini-31-pro-读过基线后怎么说](Docs/zh/02.performance.md#第三方评价gemini-31-pro-读过基线后怎么说).
 
 ---
 
 ## Docs
 
-- 中文文档入口：[Docs/zh](Docs/zh/getting-started.md)
-- English docs: [Docs/en](Docs/en/getting-started.md)
+- 中文文档入口：[Docs/zh](Docs/zh/01.getting-started.md)
+- English docs: [Docs/en](Docs/en/01.getting-started.md)
 
 | Topic | English | 中文 |
 |-------|---------|------|
-| Getting started | [en](Docs/en/getting-started.md) | [zh](Docs/zh/getting-started.md) |
-| Performance | [en](Docs/en/performance.md) | [zh](Docs/zh/performance.md) |
-| Core concepts | [en](Docs/en/concepts.md) | [zh](Docs/zh/concepts.md) |
-| Processor-Actor model | [en](Docs/en/processor-model.md) | [zh](Docs/zh/processor-model.md) |
-| Transport & Encoder | [en](Docs/en/transport-encoder.md) | [zh](Docs/zh/transport-encoder.md) |
-| Tools & Code generation | [en](Docs/en/tools-codegen.md) | [zh](Docs/zh/tools-codegen.md) |
-| Clients (C# / TS / JS) | [en](Docs/en/clients.md) | [zh](Docs/zh/clients.md) |
-| Advanced topics | [en](Docs/en/advanced.md) | [zh](Docs/zh/advanced.md) |
-| Repository structure | [en](Docs/en/structure.md) | [zh](Docs/zh/structure.md) |
-| Wire protocol | [en](Docs/en/protocol.md) | [zh](Docs/zh/protocol.md) |
+| Getting started | [en](Docs/en/01.getting-started.md) | [zh](Docs/zh/01.getting-started.md) |
+| Performance | [en](Docs/en/02.performance.md) | [zh](Docs/zh/02.performance.md) |
+| Core concepts | [en](Docs/en/03.concepts.md) | [zh](Docs/zh/03.concepts.md) |
+| Processor-Actor model | [en](Docs/en/04.processor-model.md) | [zh](Docs/zh/04.processor-model.md) |
+| Transport & Encoder | [en](Docs/en/05.transport-encoder.md) | [zh](Docs/zh/05.transport-encoder.md) |
+| Tools & Code generation | [en](Docs/en/06.tools-codegen.md) | [zh](Docs/zh/06.tools-codegen.md) |
+| Clients (C# / TS / JS) | [en](Docs/en/07.clients.md) | [zh](Docs/zh/07.clients.md) |
+| Advanced topics | [en](Docs/en/08.advanced.md) | [zh](Docs/zh/08.advanced.md) |
+| Repository structure | [en](Docs/en/09.structure.md) | [zh](Docs/zh/09.structure.md) |
+| Wire protocol | [en](Docs/en/10.protocol.md) | [zh](Docs/zh/10.protocol.md) |
 
 ---
 
@@ -118,7 +120,7 @@ var (status, resp) = await client.Echo_Request(new PbString { Value = "Hello" })
 // resp.Value  == "Server reply: Hello"
 ```
 
-Full walk-through: [Getting Started (EN)](Docs/en/getting-started.md) / [快速上手 (中文)](Docs/zh/getting-started.md).
+Full walk-through: [Getting Started (EN)](Docs/en/01.getting-started.md) / [快速上手 (中文)](Docs/zh/01.getting-started.md).
 
 ---
 
@@ -168,13 +170,13 @@ npm install goplay-ws
 - **vs ASP.NET Core**: same attribute-routed ergonomics, but long-connection with Push / Notify / Broadcast; processors are long-lived instances (not per-request DI scopes).
 - **vs Orleans**: Processors are "long-lived strongly-typed grains with configurable per-Actor concurrency"; today single-node, cluster mode on the roadmap (`TO-DO.md`).
 
-Full comparison: [concepts.md](Docs/en/concepts.md#comparison-with-related-frameworks).
+Full comparison: [03.concepts.md](Docs/en/03.concepts.md#comparison-with-related-frameworks).
 
 ---
 
 ## Repository Map
 
-See [Docs/en/structure.md](Docs/en/structure.md) / [Docs/zh/structure.md](Docs/zh/structure.md). Short version:
+See [Docs/en/09.structure.md](Docs/en/09.structure.md) / [Docs/zh/09.structure.md](Docs/zh/09.structure.md). Short version:
 
 ```text
 Frameworks/       C# framework body (Core / Server / Client / Transport*)
