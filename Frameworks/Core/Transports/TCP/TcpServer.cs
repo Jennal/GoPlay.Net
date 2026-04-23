@@ -153,25 +153,40 @@ namespace GoPlay.Core.Transports.TCP
                 var len = ns.Read(buffer, 0, buffer.Length);
                 ms.Write(buffer, 0, len);
 
-                if (ms.Length <= sizeof(ushort)) return;
+                // 一次 Socket.Select 唤醒可能对应内核 buffer 里 N 个 pack 的字节，
+                // 必须在用户态循环把能凑齐的完整 pack 全部 drain 出去，
+                // 否则剩余 pack 会在 nms 里等待下次 socket-readable 事件，
+                // 而 client 若不再发包就永远不会触发，直到 5s request timeout。
+                // 历史实现只 parse 一个 pack，在 client pipeline 连发场景会把 N-1 个请求卡住。
+                var packets = new List<byte[]>();
+                MemoryStream leftover = null;
                 ms.Seek(0, SeekOrigin.Begin);
-                using (var br = new BinaryReader(ms))
+                using (var br = new BinaryReader(ms, System.Text.Encoding.UTF8, leaveOpen: true))
                 {
-                    len = br.ReadUInt16();
-                    if (ms.Length - ms.Position < len)
+                    while (ms.Length - ms.Position >= sizeof(ushort))
                     {
-                        ms.Seek(0, SeekOrigin.Begin);
-                        return;
+                        var posBefore = ms.Position;
+                        var packLen = br.ReadUInt16();
+                        if (ms.Length - ms.Position < packLen)
+                        {
+                            // 半包，回退到长度字段起点，交给下次 read 继续拼
+                            ms.Position = posBefore;
+                            break;
+                        }
+
+                        var packBuffer = new byte[packLen];
+                        ms.Read(packBuffer, 0, packLen);
+                        packets.Add(packBuffer);
                     }
 
-                    var packBuffer = new byte[len];
-                    ms.Read(packBuffer, 0, len);
+                    leftover = new MemoryStream();
+                    ms.CopyTo(leftover);
+                }
 
-                    var nms = new MemoryStream();
-                    ms.CopyTo(nms);
-                    if (!m_readBufferDict.TryUpdate(clientId, nms, ms)) return;
-                        
-                    // m_readChannel.Add((clientId, packBuffer));
+                if (!m_readBufferDict.TryUpdate(clientId, leftover, ms)) return;
+
+                foreach (var packBuffer in packets)
+                {
                     InvokeOnDataReceived(clientId, packBuffer);
                 }
             }

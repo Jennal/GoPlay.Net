@@ -116,4 +116,50 @@ describe('Emitter', () => {
     await emitter.emitAsync('event1', 1, 2, 3);
     expect(count).toBe(1);
   });
+
+  // P1-12: emit/emitAsync 对单个 listener 抛错做 try/catch 隔离，
+  // 保证后续 listener 仍然正常被调用、整个 emit 调用不抛。
+  it('emit: throwing listener should NOT break subsequent listeners', () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const before = jest.fn(() => { throw new Error('boom'); });
+    const after = jest.fn();
+    emitter.on('event1', before);
+    emitter.on('event1', after);
+
+    expect(() => emitter.emit('event1', 'x')).not.toThrow();
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledWith('x');
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it('emitAsync: throwing sync listener should NOT break subsequent async listeners', async () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const before = jest.fn(() => { throw new Error('boom'); });
+    let asyncRan = 0;
+    const after = async () => { await new Promise(r => setTimeout(r, 10)); asyncRan++; };
+    emitter.on('event1', before);
+    emitter.on('event1', after);
+
+    await emitter.emitAsync('event1');
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(asyncRan).toBe(1);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it('emitAsync: rejecting async listener should NOT break sibling listeners', async () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const reject = async () => { throw new Error('async-boom'); };
+    let sibRan = 0;
+    const sibling = async () => { sibRan++; };
+    emitter.on('event1', reject);
+    emitter.on('event1', sibling);
+
+    await emitter.emitAsync('event1');
+    expect(sibRan).toBe(1);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
 });

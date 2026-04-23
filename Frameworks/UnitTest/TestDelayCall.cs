@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using NuGet.Frameworks;
 using NUnit.Framework;
+using UnitTest.Helpers;
 using UnitTest.Processors;
 using GoPlay;
 using GoPlay.Core.Debug;
@@ -13,24 +14,31 @@ namespace UnitTest
 {
     public class TestDelayCall
     {
-        private Server<NcServer> _server = null;
-        private Client<NcClient> _client = null;
+        private Server<NcServer> _server;
+        private Client<NcClient> _client;
+        private int _port;
         
         [SetUp]
         public async Task Setup()
         {
             Profiler.Clear();
-
-            if (_server != null) return;
+            _port = TestPort.GetFree();
             
             _server = new Server<NcServer>();
             _server.Register(new TestProcessor());
-            _server.Start("127.0.0.1", 8686);
+            _server.Start("127.0.0.1", _port);
             
             _client = new Client<NcClient>();
             _client.RequestTimeout = TimeSpan.MaxValue;
             _client.OnConnected += OnClientConnected;
-            await _client.Connect("127.0.0.1", 8686);
+            await _client.Connect("127.0.0.1", _port);
+        }
+
+        [TearDown]
+        public async Task TearDown()
+        {
+            try { if (_client != null) await _client.DisconnectAsync(); } catch { /* ignore */ }
+            try { _server?.Stop(); } catch { /* ignore */ }
         }
 
         private void OnClientConnected()

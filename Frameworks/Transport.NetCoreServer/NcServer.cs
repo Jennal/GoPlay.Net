@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
@@ -12,8 +14,11 @@ namespace GoPlay.Core.Transport.NetCoreServer
 {
     class PackSession : TcpSession
     {
-        private byte[] m_buffer;
-        
+        // ArrayPool-backed stash（同 WsPackSession），避免每次收包 ToArray。
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
+
         public uint ClientId { get; }
         public string ClientIP;
         public PackServer PackServer => Server as PackServer;
@@ -32,57 +37,71 @@ namespace GoPlay.Core.Transport.NetCoreServer
             }
             else
             {
-                ClientIP = ep.Address.ToString();    
+                ClientIP = ep.Address.ToString();
             }
-        }
-
-        protected override void OnDisconnected()
-        {
-            /* DO NOTHING */
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        protected override void OnDisconnected()
+        {
+            if (m_stash != null)
             {
-                m_buffer = data.ToArray();
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
             }
-            else
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
             {
-                using (var ms = new MemoryStream())
-                {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
-                }
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
             }
-
-            using (var ms = new MemoryStream(m_buffer))
+            if (m_stashLen + size > m_stash.Length)
             {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
-
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
-
-                        var packData = br.ReadBytes(len);
-                        PackServer.OnRecv(this, packData);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
             }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
+
+        private void DrainStash()
+        {
+            var pos = 0;
+            while (m_stashLen - pos >= sizeof(ushort))
+            {
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
+
+                // Step 3.14a: 直接以 stash 切片喂给 span 版 on-recv，省掉整帧 byte[] 分配。
+                // 详见 WsServer.DrainStash 的同款注释 / TransportServerBase.InvokeOnDataReceivedSpan。
+                var packSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
+                pos += sizeof(ushort) + len;
+
+                PackServer.OnRecvSpan(this, packSpan);
+            }
+
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
+            {
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
+            }
+            m_stashLen = remaining;
         }
 
         protected override void OnError(SocketError error)
@@ -105,11 +124,40 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override TcpSession CreateSession() { return new PackSession(this, m_idGen.Next()); }
 
+        /// <summary>
+        /// 缺陷 4 修复：在 <see cref="TcpSession.Connect"/> 调用 <c>TryReceive()</c> 之前注册 session。
+        ///
+        /// <para>
+        /// <b>原 bug 的场景</b>：100 并发 client 连上来，每个 client Connect 完立刻发 HandshakeReq。
+        /// 服务端 <see cref="TcpSession.Connect"/> 里先 <c>TryReceive()</c>（line 139）再 <c>OnConnectedInternal()</c>（line 149）。
+        /// <c>TryReceive()</c> 在当前 IOCP 线程 post 了 WSARecv；如果此时 client 的 HandshakeReq 已经
+        /// 躺在内核 recv buffer 里（loopback 下这极容易发生），另一条 IOCP 线程可立刻完成该 WSARecv 并
+        /// 同步回调 <see cref="PackSession.OnReceived"/>→<see cref="DrainStash"/>→
+        /// <see cref="PackServer.OnRecvSpan"/>→Server&lt;T&gt; 握手回调→<see cref="NcServer.SendAsync"/>→
+        /// <see cref="SendFramed"/>→<see cref="GetSession"/>。而原来 <c>m_sessions[clientId] = session</c>
+        /// 是在 <c>OnConnected(session)</c>（即 <c>OnConnectedInternal</c>）里做的，时序上还没跑到，
+        /// 导致 <c>GetSession</c> 返回 false → HandshakeResp 被 silently drop → client 卡 10s 超时。
+        /// </para>
+        ///
+        /// <para>
+        /// <b>修复思路</b>：把"注册到查找表"这个只读字典 insert 上移到 <see cref="OnConnecting"/>。
+        /// 按 NetCoreServer 里 <c>TcpSession.Connect</c> 的实际顺序，<see cref="OnConnecting"/> 在
+        /// <c>IsConnected=true</c>、<c>TryReceive()</c> 之前触发（line 130/133 vs 139），彻底消除竞态。
+        /// 外部事件 <see cref="NcServer.OnConnected"/> 保留在 <see cref="OnConnected"/> 里：这是业务语义
+        /// （连接真正建立完成），不是 session lookup，不能提前。
+        /// </para>
+        /// </summary>
+        protected override void OnConnecting(TcpSession session)
+        {
+            if (session is PackSession packSession == false) return;
+
+            m_sessions[packSession.ClientId] = packSession;
+        }
+
         protected override void OnConnected(TcpSession session)
         {
             if (session is PackSession packSession == false) return;
-            
-            m_sessions[packSession.ClientId] = packSession;
+
             m_ncServer.OnConnected(packSession.ClientId);
         }
 
@@ -125,6 +173,15 @@ namespace GoPlay.Core.Transport.NetCoreServer
         {
             m_ncServer.InvokeOnDataReceived(session.ClientId, data);
             // m_readChannel.Add((session.ClientId, data), m_ncServer.CancellationToken);
+        }
+
+        /// <summary>
+        /// Step 3.14a: span 版 on-recv，直接 forward 到
+        /// <see cref="TransportServerBase.InvokeOnDataReceivedSpan"/>，不做 byte[] 复制。
+        /// </summary>
+        internal void OnRecvSpan(PackSession session, ReadOnlySpan<byte> data)
+        {
+            m_ncServer.InvokeOnDataReceivedSpan(session.ClientId, data);
         }
 
         // public (uint, byte[]) Recv()
@@ -146,6 +203,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
                     session.SendAsync(ms.ToArray());
                 }
             }
+        }
+
+        /// <summary>
+        /// 零拷贝批量发送：<paramref name="framedBytes"/> 已经是 wire bytes（含外层长度前缀），
+        /// 直接 forward 到 session.SendAsync(span)。
+        /// </summary>
+        public void SendFramed(uint clientId, ReadOnlySpan<byte> framedBytes)
+        {
+            if (!GetSession(clientId, out var session)) return;
+            session.SendAsync(framedBytes);
         }
 
         public bool GetSession(uint clientId, out PackSession session)
@@ -186,6 +253,13 @@ namespace GoPlay.Core.Transport.NetCoreServer
         public override void Send(uint clientId, byte[] data)
         {
             m_server.Send(clientId, data);
+        }
+
+        /// <inheritdoc />
+        public override System.Threading.Tasks.ValueTask SendAsync(uint clientId, ReadOnlyMemory<byte> framedBytes, System.Threading.CancellationToken ct)
+        {
+            m_server.SendFramed(clientId, framedBytes.Span);
+            return default;
         }
 
         public override string GetClientIp(uint clientId)

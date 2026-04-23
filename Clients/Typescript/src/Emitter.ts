@@ -98,7 +98,13 @@ export default class Emitter {
         if (callbacks) {
             callbacks = callbacks.slice(0);
             for (var i = 0, len = callbacks.length; i < len; ++i) {
-                callbacks[i].apply(this, args);
+                // 用户 listener 抛错不能把 WebSocket onmessage 调用栈一起掐掉；
+                // 就地吞并 log，继续派发给剩余 listener。
+                try {
+                    callbacks[i].apply(this, args);
+                } catch (err) {
+                    console.error('[goplay] listener error:', event, err);
+                }
             }
         }
 
@@ -118,9 +124,13 @@ export default class Emitter {
         if (callbacks) {
             callbacks = callbacks.slice(0);
             for (var i = 0, len = callbacks.length; i < len; ++i) {
-                let result = callbacks[i].apply(this, args);
-                if (result instanceof Promise) {
-                    await result;
+                try {
+                    let result = callbacks[i].apply(this, args);
+                    if (result instanceof Promise) {
+                        await result;
+                    }
+                } catch (err) {
+                    console.error('[goplay] async listener error:', event, err);
                 }
             }
         }

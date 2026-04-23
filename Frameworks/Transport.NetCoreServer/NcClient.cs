@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -13,12 +14,14 @@ namespace GoPlay.Core.Transport.NetCoreServer
     class PackClient : TcpClient
     {
         private NcClient m_client;
-        
-        public BlockingCollection<byte[]> RecvChannel = new BlockingCollection<byte[]>(byte.MaxValue);
+
         public SocketError LastError;
 
         private CancellationToken m_token;
-        private byte[] m_buffer;
+
+        private byte[] m_stash;
+        private int m_stashLen;
+        private const int InitialStashCapacity = 4096;
         
         public PackClient(NcClient client, IPAddress address, int port, CancellationToken token) : base(address, port)
         {
@@ -33,51 +36,76 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override void OnDisconnected()
         {
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
+            }
             m_client.InvokeOnDisconnected();
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
-            var data = new ReadOnlySpan<byte>(buffer, (int)offset, (int)size);
-            if (m_buffer == null)
+            AppendToStash(buffer, (int)offset, (int)size);
+            DrainStash();
+        }
+
+        private void AppendToStash(byte[] buffer, int offset, int size)
+        {
+            if (size <= 0) return;
+            if (m_stash == null)
             {
-                m_buffer = data.ToArray();
+                m_stash = ArrayPool<byte>.Shared.Rent(Math.Max(size, InitialStashCapacity));
+                m_stashLen = 0;
             }
-            else
+            if (m_stashLen + size > m_stash.Length)
             {
-                using (var ms = new MemoryStream())
+                var newCap = m_stash.Length;
+                while (newCap < m_stashLen + size) newCap *= 2;
+                var newBuf = ArrayPool<byte>.Shared.Rent(newCap);
+                if (m_stashLen > 0) System.Buffer.BlockCopy(m_stash, 0, newBuf, 0, m_stashLen);
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = newBuf;
+            }
+            System.Buffer.BlockCopy(buffer, offset, m_stash, m_stashLen, size);
+            m_stashLen += size;
+        }
+
+        private void DrainStash()
+        {
+            var pos = 0;
+            while (m_stashLen - pos >= sizeof(ushort))
+            {
+                var len = BinaryPrimitives.ReadUInt16LittleEndian(
+                    new ReadOnlySpan<byte>(m_stash, pos, sizeof(ushort)));
+                if (m_stashLen - pos - sizeof(ushort) < len) break;
+
+                // Step 3.15（客户端侧对称）：span 切片直接 push 到 Client<T>，消除 pull-over-push 双缓冲。
+                // 生命周期契约：frameSpan 只在 InvokeOnDataReceivedSpan 返回前有效，Client 侧同步
+                // ParseRaw(ReadOnlySpan<byte>) 解码；body 如需 async 持有已在 ParseRaw 内 ToArray 拷出。
+                // socket 完成回调线程上执行，未处理异常会让进程 failfast（net8 下尤其明显）——用 try 兜底，
+                // 错误走 transport 的 OnError 路径（同老逻辑：Disconnect 期间丢弃未消费数据）。
+                try
                 {
-                    ms.Write(m_buffer);
-                    ms.Write(data);
-                    m_buffer = ms.ToArray();
+                    if (m_token.IsCancellationRequested) return;
+                    var frameSpan = new ReadOnlySpan<byte>(m_stash, pos + sizeof(ushort), len);
+                    m_client.DispatchSpan(frameSpan);
                 }
+                catch (OperationCanceledException) { return; }
+                catch (ObjectDisposedException) { return; }
+                catch (InvalidOperationException) { return; }
+
+                pos += sizeof(ushort) + len;
             }
 
-            using (var ms = new MemoryStream(m_buffer))
+            if (pos == 0) return;
+            var remaining = m_stashLen - pos;
+            if (remaining > 0)
             {
-                using (var br = new BinaryReader(ms))
-                {
-                    while (ms.Position < ms.Length)
-                    {
-                        if (ms.Length - ms.Position < sizeof(ushort)) break;
-
-                        var lastPos = ms.Position;
-                        var len = br.ReadUInt16();
-                        if (ms.Length - ms.Position < len)
-                        {
-                            ms.Seek(lastPos, SeekOrigin.Begin);
-                            break;
-                        }
-
-                        var packData = br.ReadBytes(len);
-                        RecvChannel.Add(packData, m_token);
-                    }
-
-                    data = new ReadOnlySpan<byte>(m_buffer, (int)ms.Position, (int)(ms.Length - ms.Position));
-                    m_buffer = data.ToArray();
-
-                }
+                System.Buffer.BlockCopy(m_stash, pos, m_stash, 0, remaining);
             }
+            m_stashLen = remaining;
         }
 
         protected override void OnError(SocketError error)
@@ -88,7 +116,12 @@ namespace GoPlay.Core.Transport.NetCoreServer
         protected override void Dispose(bool disposingManagedResources)
         {
             base.Dispose(disposingManagedResources);
-            RecvChannel.Dispose();
+            if (m_stash != null)
+            {
+                ArrayPool<byte>.Shared.Return(m_stash);
+                m_stash = null;
+                m_stashLen = 0;
+            }
         }
     }
     
@@ -99,7 +132,33 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         public override bool IsConnected => m_client?.IsConnected ?? false;
 
+        /// <summary>
+        /// IOCP 回调线程直 push：NcClient 经 NetCoreServer 底层 TcpClient.OnReceived 触发 DrainStash，
+        /// Client&lt;T&gt; 的 span handler 同步解码 + 分发，消除 <c>RecvChannel&lt;byte[]&gt;</c> 过境一跳。
+        /// </summary>
+        public override bool SupportPush => true;
+
         public override void Connect(string host, int port, TimeSpan timeout)
+        {
+            // 兼容保留：少数场景调用方仍走同步路径。内部委托给 async 版本再 GetAwaiter().GetResult()，
+            // 避免两套实现分叉。高并发场景请走 ConnectAsync（Client<T> 已切到它）。
+            try
+            {
+                ConnectAsync(host, port, timeout).GetAwaiter().GetResult();
+            }
+            catch (AggregateException ae) when (ae.InnerException != null)
+            {
+                throw ae.InnerException;
+            }
+        }
+
+        /// <summary>
+        /// 真异步 Connect：用 <see cref="TaskCompletionSource{TResult}"/> 监听 <c>OnConnected</c> 事件，
+        /// <see cref="CancellationTokenSource.CancelAfter"/> 负责 timeout。整条等待链不占 ThreadPool worker，
+        /// 从根上消除 "100 并发 Task.Run + 同步 Connect → worker 饥饿 → socket 回调无线程可用" 的
+        /// 死锁类 flaky（<c>BenchmarkMultiClientRequest</c> 是典型场景）。
+        /// </summary>
+        public override async Task ConnectAsync(string host, int port, TimeSpan timeout)
         {
             m_cancelSource = new CancellationTokenSource();
 
@@ -108,29 +167,46 @@ namespace GoPlay.Core.Transport.NetCoreServer
             {
                 if (address.AddressFamily != AddressFamily.InterNetwork) continue;
                 if (m_client != null) m_client.Dispose();
-                
+
+                // 每个地址一次独立的 TCS：多地址尝试（IPv4 多条 A 记录）互不污染。
+                // RunContinuationsAsynchronously：防止 OnConnected 触发线程被后续 await 续跑拖住，
+                // 保持事件回调线程干净（与 NetCoreServer IOCP 线程池语义一致）。
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Action onConn = () => tcs.TrySetResult(true);
+                OnConnected += onConn;
+
+                using var timeoutCts = new CancellationTokenSource();
+                using var _ = timeoutCts.Token.Register(() => tcs.TrySetResult(false));
+
                 try
                 {
                     m_client = new PackClient(this, address, port, m_cancelSource.Token);
-
                     m_client.ConnectAsync();
-                    var startTime = DateTime.UtcNow;
-                    while (!m_client.IsConnected)
+
+                    // race guard：PackClient.ConnectAsync 理论上可在 ConnectAsync 返回前同步触发
+                    // OnConnected（比如 loopback 极速路径）。订阅先于 ConnectAsync 调用保证 onConn
+                    // 能接到；这里冗余补一刀 TrySetResult 纯粹保险。
+                    if (m_client.IsConnected) tcs.TrySetResult(true);
+
+                    timeoutCts.CancelAfter(timeout);
+
+                    var ok = await tcs.Task.ConfigureAwait(false);
+                    if (!ok)
                     {
-                        Thread.Yield();
-                        var ts = DateTime.UtcNow.Subtract(startTime);
-                        if (ts > timeout)
-                        {
-                            Console.WriteLine($"Connect timeout: {ts}");
-                            throw new Exception("Connect timeout!");
-                        }
+                        Console.WriteLine($"Connect timeout: {timeout}");
+                        throw new Exception("Connect timeout!");
                     }
 
                     return;
                 }
                 catch
                 {
+                    // 旧同步实现也是吞异常→下一个地址，保持语义一致
                     continue;
+                }
+                finally
+                {
+                    OnConnected -= onConn;
                 }
             }
 
@@ -148,9 +224,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
             m_client = null;
         }
 
+        /// <summary>
+        /// Push transport 不走 pull 路径。Client&lt;T&gt; 在 Connect 里检查 <see cref="SupportPush"/>=true
+        /// 后只启动 SendLoop+TimeoutLoop，不会调此方法；保留签名供 <see cref="TransportClientBase"/>
+        /// 抽象契约满足，走到说明上层有 bug。
+        /// </summary>
         public override ValueTask<byte[]> Recv(CancellationTokenSource cancelSource)
         {
-            return new ValueTask<byte[]>(m_client.RecvChannel.Take(cancelSource.Token));
+            throw new NotSupportedException(
+                "NcClient is a push transport (SupportPush=true); Recv() is unused. " +
+                "Check that Client<T>.Connect correctly branches on Transport.SupportPush.");
         }
 
         public override ValueTask Send(byte[] data, CancellationTokenSource cancelSource)
@@ -171,6 +254,21 @@ namespace GoPlay.Core.Transport.NetCoreServer
             return new ValueTask();
         }
 
+        /// <summary>
+        /// 零拷贝发送：<paramref name="data"/> 已经是完整 wire frame（含 outer ushort 长度前缀，
+        /// 由 <see cref="GoPlay.Core.Protocols.Package.WriteTo"/> 直接写入 <see cref="ArrayBufferWriter{T}"/> 得到）。
+        /// 直接 forward 到 NetCoreServer 底层 <c>SendAsync(ReadOnlySpan&lt;byte&gt;)</c>，
+        /// 完全跳过 byte[] 老路径 <c>Send(byte[])</c> 里的 <see cref="MemoryStream"/> + <see cref="BinaryWriter"/> + <c>ms.ToArray()</c>。
+        /// 与 Server 端 <c>NcServer.SendAsync(clientId, ReadOnlyMemory)</c> 走的是同一契约。
+        /// </summary>
+        public override ValueTask Send(ReadOnlyMemory<byte> data, CancellationTokenSource cancelSource)
+        {
+            if (cancelSource.IsCancellationRequested) return new ValueTask();
+
+            m_client.SendAsync(data.Span);
+            return new ValueTask();
+        }
+
         public override void Dispose()
         {
             m_client?.Dispose();
@@ -185,6 +283,15 @@ namespace GoPlay.Core.Transport.NetCoreServer
         internal new void InvokeOnDisconnected()
         {
             base.InvokeOnDisconnected();
+        }
+
+        /// <summary>
+        /// 供 inner <see cref="PackClient"/> 的 IOCP 回调线程调用，把一帧 inner bytes 直接推给 Client 的 span handler。
+        /// base 方法是 <c>protected</c>，inner class 无法直接访问，这里转发。
+        /// </summary>
+        internal void DispatchSpan(ReadOnlySpan<byte> data)
+        {
+            InvokeOnDataReceivedSpan(data);
         }
     }
 }

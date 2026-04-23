@@ -1,84 +1,55 @@
 import {describe, expect, it, beforeEach, jest} from '@jest/globals';
 import goplay from '../src/goplay';
 
-describe('Emitter', () => {
-  let emitter;
-
+/**
+ * goplay 对 Emitter 的静态转发层"存在性 + 贯通性"冒烟测试。
+ * 底层 Emitter 的完整契约由 Emitter.test.ts 负责；这里只回答一个问题：
+ *   goplay.on / off / once / emit / removeAllListeners / listeners / hasListeners
+ *   这些静态方法是否真的把调用转交给了内部 emitter 实例。
+ *
+ * 一旦 goplay.ts 不小心把转发方法误删或误改签名，这个文件会第一时间红。
+ */
+describe('goplay Emitter facade', () => {
   beforeEach(() => {
-    emitter = goplay;
-    emitter.removeAllListeners();
+    goplay.removeAllListeners();
   });
 
-  it('emitter should not be null', () => {
+  it('exposes internal emitter instance with callbacks map', () => {
     expect(goplay.emitter).not.toBeNull();
     expect(goplay.emitter.callbacks).not.toBeNull();
   });
 
-  it('should add and remove event listeners', () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
-    emitter.on('event1', listener1);
-    emitter.on('event2', listener2);
-    emitter.emit('event1');
-    emitter.emit('event2');
-    expect(listener1).toHaveBeenCalled();
-    expect(listener2).toHaveBeenCalled();
-    emitter.off('event1', listener1);
-    emitter.emit('event1');
-    expect(listener1).toHaveBeenCalledTimes(1);
-    expect(listener2).toHaveBeenCalledTimes(1);
-    emitter.off('event2');
-    emitter.emit('event2');
-    expect(listener1).toHaveBeenCalledTimes(1);
-    expect(listener2).toHaveBeenCalledTimes(1);
+  it('on + emit + off round-trip through the facade', () => {
+    const fn = jest.fn();
+
+    goplay.on('evt', fn);
+    expect(goplay.hasListeners('evt')).toBe(true);
+    expect(goplay.listeners('evt')).toContain(fn);
+
+    goplay.emit('evt', 'payload');
+    expect(fn).toHaveBeenCalledWith('payload');
+
+    goplay.off('evt', fn);
+    expect(goplay.hasListeners('evt')).toBe(false);
   });
 
-  it('should add and remove one-time event listeners', () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
-    emitter.once('event1', listener1);
-    emitter.once('event2', listener2);
-    emitter.emit('event1');
-    emitter.emit('event1');
-    emitter.emit('event2');
-    emitter.emit('event2');
-    expect(listener1).toHaveBeenCalledTimes(1);
-    expect(listener2).toHaveBeenCalledTimes(1);
+  it('once through the facade fires exactly once', () => {
+    const fn = jest.fn();
+    goplay.once('evt', fn);
+    goplay.emit('evt');
+    goplay.emit('evt');
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('should remove all event listeners', () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
-    emitter.on('event1', listener1);
-    emitter.on('event2', listener2);
-    emitter.removeAllListeners();
-    emitter.emit('event1');
-    emitter.emit('event2');
-    expect(listener1).not.toHaveBeenCalled();
-    expect(listener2).not.toHaveBeenCalled();
-  });
-
-  it('should return an array of event listeners', () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
-    emitter.on('event1', listener1);
-    emitter.on('event1', listener2);
-    const listeners = emitter.listeners('event1');
-    expect(listeners).toContain(listener1);
-    expect(listeners).toContain(listener2);
-  });
-
-  it('should check if an event has listeners', () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
-    emitter.on('event1', listener1);
-    expect(emitter.hasListeners('event1')).toBe(true);
-    expect(emitter.hasListeners('event2')).toBe(false);
-    emitter.on('event2', listener2);
-    expect(emitter.hasListeners('event2')).toBe(true);
-    emitter.off('event1', listener1);
-    expect(emitter.hasListeners('event1')).toBe(false);
-    emitter.off('event2');
-    expect(emitter.hasListeners('event2')).toBe(false);
+  it('removeAllListeners clears everything', () => {
+    const fn1 = jest.fn();
+    const fn2 = jest.fn();
+    goplay.on('a', fn1);
+    goplay.on('b', fn2);
+    goplay.removeAllListeners();
+    goplay.emit('a');
+    goplay.emit('b');
+    expect(fn1).not.toHaveBeenCalled();
+    expect(fn2).not.toHaveBeenCalled();
   });
 });
