@@ -285,7 +285,12 @@ namespace GoPlay.Core.Processors
         }
 
         /// <summary>
-        /// 触发重启：取消当前主循环，等待结束。调用者负责再 Start。
+        /// 触发重启/强制停机：取消当前主循环，等待结束。调用者负责再 Start。
+        /// <para>
+        /// 语义："立即"——Cancel token 打断主循环任何 await；<see cref="_incoming"/> / <see cref="_control"/> 里
+        /// 未消费的条目会丢失（只有 control 会在主循环退出 tail 里被尝试 drain 一次）。
+        /// 若希望让 Runner 先把残留吃完再停，请改用 <see cref="StopAsync(TimeSpan)"/>。
+        /// </para>
         /// </summary>
         public async Task StopAsync()
         {
@@ -295,6 +300,64 @@ namespace GoPlay.Core.Processors
                 _incoming.Writer.TryComplete();
                 _control.Writer.TryComplete();
                 if (_runTask != null) await _runTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (AggregateException err) when (err.InnerException is OperationCanceledException) { }
+            finally
+            {
+                _restartCts?.Dispose();
+                _linkedCts?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 优雅停机：先关闭两个 Writer（不再接受新 pack / 新 control 闭包），
+        /// 然后给主循环至多 <paramref name="gracefulDrainTimeout"/> 时间把残留吃干净：
+        /// <list type="bullet">
+        ///   <item><see cref="_incoming"/> 里已排队的业务 Package</item>
+        ///   <item><see cref="_control"/> 里已排队的跨 Processor 闭包</item>
+        ///   <item><see cref="_broadcastQueue"/> 里已排队的广播事件</item>
+        /// </list>
+        /// 超时到期仍未退出则硬 Cancel（取消 token），打断任何 in-flight 的 await。
+        /// <para>
+        /// 注意：<see cref="_broadcastQueue"/> 是 <see cref="ConcurrentQueue{T}"/>，没有 "complete" 标记；
+        /// 如果调用期间仍有生产者往里 Enqueue，超时兜底是唯一保护。调用方应在 <see cref="StopAsync(TimeSpan)"/>
+        /// 前保证 broadcast 的生产者已经静默（典型位置：Server.Stop 中 DrainActiveClients 之后）。
+        /// </para>
+        /// <para>
+        /// <see cref="DelayCall"/> 注册的未到期任务**不会**被强制执行——它们绑定了未来的 DateTime，
+        /// 优雅窗口内只有到期的会被 <see cref="ProcessorBase.DoDelayCalls"/> 正常消费。
+        /// </para>
+        /// </summary>
+        public async Task StopAsync(TimeSpan gracefulDrainTimeout)
+        {
+            if (_runTask == null)
+            {
+                _incoming.Writer.TryComplete();
+                _control.Writer.TryComplete();
+                _restartCts?.Dispose();
+                _linkedCts?.Dispose();
+                return;
+            }
+
+            try
+            {
+                // 1. 关闭输入端：主循环读到空后会自动通过 RunAsync 的 graceful-exit 分支退出。
+                _incoming.Writer.TryComplete();
+                _control.Writer.TryComplete();
+
+                // 2. 最多等 gracefulDrainTimeout，让主循环把三个队列吃干净自然退出。
+                var graceful = Task.WhenAny(_runTask, Task.Delay(gracefulDrainTimeout)).ConfigureAwait(false);
+                var finished = await graceful;
+
+                if (finished != _runTask)
+                {
+                    // 3. 窗口用完主循环还没退：硬 Cancel 打断 in-flight await，等它收尾。
+                    _restartCts?.Cancel();
+                    try { await _runTask.ConfigureAwait(false); }
+                    catch (OperationCanceledException) { }
+                    catch (AggregateException err) when (err.InnerException is OperationCanceledException) { }
+                }
             }
             catch (OperationCanceledException) { }
             catch (AggregateException err) when (err.InnerException is OperationCanceledException) { }
@@ -333,6 +396,9 @@ namespace GoPlay.Core.Processors
                     await DrainControlAsync(ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested) break;
 
+                    // 优雅停机对 IsOnlyUpdate：control channel 关闭且 broadcast 也空，退出。
+                    if (ctrlReader.Completion.IsCompleted && _broadcastQueue.IsEmpty) break;
+
                     if (!await SafeDelay(_processor.UpdateDeltaTime, ct).ConfigureAwait(false)) break;
                     continue;
                 }
@@ -352,8 +418,36 @@ namespace GoPlay.Core.Processors
 
                 if (ctrlDrained == 0 && packDrained == 0)
                 {
-                    // 两边都空：等待任一通道来新消息或周期超时
-                    if (!await WaitForSignalAsync(_processor.RecvTimeout, ct).ConfigureAwait(false)) break;
+                    // 优雅停机：两个 Reader 的 Completion 都完成（writer 已 TryComplete 且 channel 已读空）
+                    if (packReader.Completion.IsCompleted && ctrlReader.Completion.IsCompleted)
+                    {
+                        // broadcast 也空 -> 三队列全部 drained，干净退出
+                        if (_broadcastQueue.IsEmpty) break;
+
+                        // broadcast 还有残留：不能进 WaitForSignalAsync（两个 Reader 都已完成，
+                        // 它会立刻返回 false 误判为退出）。让主循环 continue 回顶部，
+                        // 由下一轮 DoPeriodicWorkAsync 的 ResolveBroadCast 继续消费。
+                        try { await Task.Delay(1, ct).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { break; }
+                        continue;
+                    }
+
+                    // 常规：等待任一通道来新消息或周期超时
+                    if (!await WaitForSignalAsync(_processor.RecvTimeout, ct).ConfigureAwait(false))
+                    {
+                        // 返回 false 的场景有两种：
+                        //   (a) ct 被 Cancel（硬停机路径）
+                        //   (b) 在 Wait 期间 StopAsync(TimeSpan) 关掉了两个 writer，让 WaitToReadAsync 返 false
+                        // 对于 (b)，必须回到 loop 顶让上面的"优雅停机"分支来判定 broadcast 是否还需要 drain；
+                        // 直接 break 会把 _broadcastQueue 里的残留丢掉。
+                        if (!ct.IsCancellationRequested
+                            && packReader.Completion.IsCompleted
+                            && ctrlReader.Completion.IsCompleted)
+                        {
+                            continue;
+                        }
+                        break;
+                    }
                 }
             }
 

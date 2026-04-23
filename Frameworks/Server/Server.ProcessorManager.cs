@@ -55,6 +55,8 @@ namespace GoPlay
 
         protected virtual void ProcessorOnClientConnect(uint clientId)
         {
+            // Per-processor try/catch：任一 Processor 的 OnClientConnected 抛异常，都不能让后续 Processor 漏事件。
+            // 异常走 OnErrorEvent 统一上报，便于业务侧做告警 / 补偿。
             foreach (var processor in Processors)
             {
                 try { processor.OnClientConnected(clientId); }
@@ -64,6 +66,8 @@ namespace GoPlay
 
         protected virtual void ProcessorOnClientDisconnect(uint clientId)
         {
+            // 同 Connect：一个 Processor 抛异常不能阻断后续 Processor 的 Disconnect 回调，
+            // 否则跨服务器在线数 Redis -1 会在中途漏掉，导致永久偏差。
             foreach (var processor in Processors)
             {
                 try { processor.OnClientDisconnected(clientId); }
@@ -73,9 +77,11 @@ namespace GoPlay
 
         protected virtual void ProcessorOnHandShake(ServerTag serverTag, Package<ReqHankShake> pack)
         {
+            // 同 Connect / Disconnect：单个 Processor 异常不得吞掉后续 Processor 的 HandShake 事件
             foreach (var processor in Processors)
             {
-                processor.OnHandShake(pack, serverTag);
+                try { processor.OnHandShake(pack, serverTag); }
+                catch (Exception err) { OnErrorEvent(pack.Header.ClientId, err); }
             }
         }
         
@@ -154,24 +160,61 @@ namespace GoPlay
             return m_processors.OfType<TP>().FirstOrDefault();
         }
         
-        protected void StopProcessors()
+        /// <summary>
+        /// Stop 每个 Processor 的默认 graceful drain 预算。
+        /// 选 5s 的依据：既给业务 Processor 足够窗口把 <see cref="ProcessorRunner._incoming"/> /
+        /// <see cref="ProcessorRunner._control"/> / <see cref="ProcessorRunner._broadcastQueue"/> 吃干净，
+        /// 又给 Server.Stop 后续 (StopAllSenders + Transport.Stop + m_stoppers.OnStop) 留出预算，
+        /// 保证整体 Stop 不超过 k8s 典型 terminationGracePeriodSeconds（30s）。
+        /// 调用方想要更长/更短可以改用 <see cref="StopProcessors(TimeSpan)"/>。
+        /// </summary>
+        private static readonly TimeSpan DefaultStopProcessorsDrainTimeout = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// 默认预算版：等价 <see cref="StopProcessors(TimeSpan)"/> 传入 <see cref="DefaultStopProcessorsDrainTimeout"/>。
+        /// </summary>
+        protected void StopProcessors() => StopProcessors(DefaultStopProcessorsDrainTimeout);
+
+        /// <summary>
+        /// 并行停止所有 <see cref="ProcessorRunner"/>：给每个 Runner 传入同一个
+        /// <paramref name="gracefulDrainTimeout"/>，让它们自行排干内部三队列。
+        /// <para>
+        /// 并行而非串行的原因：假如有 10 个 Processor、每个 drain 最多 5s，串行最坏 50s，
+        /// 并行是 5s。Runner 之间彼此无依赖，并行是安全的。
+        /// </para>
+        /// <para>
+        /// 整体等待上限：<c>gracefulDrainTimeout + 1s</c>。多出的 1s 给 StopAsync 内部硬 Cancel
+        /// 后 await runTask 收尾的时间，避免恰好卡在窗口边界时 Task.WaitAll 自己先超时。
+        /// </para>
+        /// </summary>
+        protected void StopProcessors(TimeSpan gracefulDrainTimeout)
         {
+            if (m_runners.Count == 0) return;
+
+            var tasks = new List<Task>(m_runners.Count);
             foreach (var pair in m_runners)
             {
-                try
+                tasks.Add(pair.Value.StopAsync(gracefulDrainTimeout));
+            }
+
+            try
+            {
+                // 整体等一个 Runner-drain-window + 缓冲。各 Runner StopAsync 内部已经自带硬超时兜底，
+                // 这里的 Task.WaitAll 超时只是"所有人都在硬超时边界上"的极端兜底。
+                Task.WaitAll(tasks.ToArray(), gracefulDrainTimeout + TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException err)
+            {
+                foreach (var inner in err.InnerExceptions)
                 {
-                    pair.Value.StopAsync().Wait();
+                    if (inner is OperationCanceledException) continue;
+                    if (inner is TaskCanceledException) continue;
+                    OnErrorEvent(IdLoopGenerator.INVALID, inner);
                 }
-                catch (AggregateException err)
-                {
-                    if (err.InnerException is OperationCanceledException) continue;
-                    if (err.InnerException is TaskCanceledException) continue;
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
-                catch (Exception err)
-                {
-                    OnErrorEvent(IdLoopGenerator.INVALID, err);
-                }
+            }
+            catch (Exception err)
+            {
+                OnErrorEvent(IdLoopGenerator.INVALID, err);
             }
         }
         
