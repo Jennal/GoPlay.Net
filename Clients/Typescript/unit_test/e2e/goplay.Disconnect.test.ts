@@ -1,6 +1,6 @@
 import {describe, expect, it, afterEach} from '@jest/globals';
-import goplay from '../src/goplay';
-import { GoPlay } from '../src/pkg.pb';
+import goplay from '../../src/goplay';
+import { GoPlay } from '../../src/pkg.pb';
 
 /**
  * 覆盖 P0-3 / P0-4：

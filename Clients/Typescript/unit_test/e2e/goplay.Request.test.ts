@@ -1,6 +1,6 @@
 import {describe, expect, it, beforeAll, afterAll} from '@jest/globals';
-import goplay from '../src/goplay';
-import { GoPlay } from '../src/pkg.pb';
+import goplay from '../../src/goplay';
+import { GoPlay } from '../../src/pkg.pb';
 
 /**
  * 覆盖 P0-1/3/6 + 端到端请求回路：

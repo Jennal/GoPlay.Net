@@ -1,5 +1,5 @@
 import {describe, expect, it, afterAll} from '@jest/globals';
-import goplay from '../src/goplay';
+import goplay from '../../src/goplay';
 
 describe('goplay', () => {
   afterAll(async () => {

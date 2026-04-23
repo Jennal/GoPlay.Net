@@ -1,6 +1,6 @@
 import {describe, expect, it, beforeAll, afterAll} from '@jest/globals';
-import goplay from '../src/goplay';
-import { GoPlay } from '../src/pkg.pb';
+import goplay from '../../src/goplay';
+import { GoPlay } from '../../src/pkg.pb';
 
 /**
  * 覆盖 P1-11 waitFor 与 push 链路：

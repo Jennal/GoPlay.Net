@@ -71,5 +71,6 @@ const deadline = Date.now() + 30000;
 }
 echo "[test.sh] Server ready."
 
-echo "[test.sh] Running jest..."
-npm test -- --runInBand
+echo "[test.sh] Running jest (incl. unit_test/e2e)..."
+# jest.config.js 默认把 unit_test/e2e 排除（没服务端时别误跑）；这里显式把它放回来。
+npx jest --runInBand --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=/dist/
