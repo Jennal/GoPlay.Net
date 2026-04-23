@@ -3,7 +3,7 @@ import { getEncoder } from "./Encoder";
 import { ByteArray } from "./ByteArray";
 import IdGen from "./IdGen";
 
-let idGen = new IdGen(255);
+let idGen = new IdGen(0xFFFFFFFF);
 const MAX_CHUNK_SIZE = 65535 - 2048;
 
 export default class Package<T> {

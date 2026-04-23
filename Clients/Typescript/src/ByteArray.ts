@@ -44,22 +44,15 @@ export function strdecode(buffer) {
 };
 
 export function copyArray(dest, doffset, src, soffset, length) {
-    // Uint8Array
+    // Uint8Array.set 走底层 memmove，替代原本两次 O(n) 手写拷贝。
     var result = dest;
     if (dest.length < (doffset + length)) {
         result = new ByteArray(doffset + length);
         result.woffset = dest.woffset;
         result.roffset = dest.roffset;
+        result.data.set(dest.data);
     }
-
-    for (var i = 0; i < dest.length; i++) {
-        result.data[i] = dest.data[i];
-    }
-
-    for (var index = 0; index < length; index++) {
-        result.data[doffset++] = src.data[soffset++];
-    }
-
+    result.data.set(src.data.subarray(soffset, soffset + length), doffset);
     return result;
 }
 

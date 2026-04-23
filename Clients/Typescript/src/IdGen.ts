@@ -8,10 +8,8 @@ export default class IdGen {
     }
 
     public next(): number {
-        if (this.id++ > this.max) {
-            this.id = 0;
-        }
-
+        this.id = (this.id + 1) >>> 0;
+        if (this.id > this.max || this.id === 0) this.id = 1;
         return this.id;
     }
 }
