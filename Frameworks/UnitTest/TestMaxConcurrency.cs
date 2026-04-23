@@ -198,6 +198,154 @@ namespace UnitTest
                 try { server.Stop(); } catch { /* ignore */ }
             }
         }
+
+        /// <summary>
+        /// 验证"单人通道"语义：class 级 [MaxConcurrency(8)] + 方法级 [MaxConcurrency(1)]，
+        /// 跨客户端 [Request] 和 ProcessorRef 两条路径合计 in-flight 严格为 1。
+        /// 这同时也是 MAXCONC001 不再对该配置 warn 的正当性依据——配置是有意义的。
+        /// </summary>
+        [Test]
+        public async Task TestMethodLevelOneIsSingleLane()
+        {
+            var port = TestPort.GetFree();
+            var server = new Server<TcpServer>();
+            Client<TcpClient> client = null;
+
+            SingleLaneTarget.Reset();
+
+            try
+            {
+                server.Register(new SingleLaneTarget());
+                server.Register(new SingleLaneDriver());
+                server.Start("127.0.0.1", port);
+
+                client = new Client<TcpClient>();
+                await client.Connect("127.0.0.1", port);
+
+                var tasks = new List<Task>();
+                for (int i = 0; i < 6; i++)
+                {
+                    tasks.Add(client.Request<PbString, PbString>("lane_target.solo",
+                        new PbString { Value = $"c{i}" }));
+                }
+                tasks.Add(client.Request<PbString, PbString>("lane_driver.fan_out",
+                    new PbString { Value = "6" }));
+
+                await Task.WhenAll(tasks);
+
+                Assert.AreEqual(1, SingleLaneTarget.SoloMaxObserved,
+                    $"Solo 同时在飞数 {SingleLaneTarget.SoloMaxObserved} != 1，单人通道语义失效");
+                Assert.GreaterOrEqual(SingleLaneTarget.SoloTotalInvocations, 12,
+                    $"Solo 总调用数 {SingleLaneTarget.SoloTotalInvocations} < 12，路径没跑全");
+            }
+            finally
+            {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                try { server.Stop(); } catch { /* ignore */ }
+            }
+        }
+
+        /// <summary>
+        /// 验证：方法级 [MaxConcurrency(N)] 的限流对 ProcessorRef 跨 Processor 调用同样生效，
+        /// 且与客户端 [Request] 路径共享同一把 semaphore。
+        /// 场景：Target.Limited 同时是 [Request("limited_x")]+[MaxConcurrency(2)]；
+        ///      客户端并发 8 条 limited_x，同时 Trigger 另一 Processor 派发 10 条跨调用——
+        ///      两条路径合计 18 条 in-flight，方法级上限仍应为 2。
+        /// </summary>
+        [Test]
+        public async Task TestMethodLevelLimitCoversProcessorRefPath()
+        {
+            var port = TestPort.GetFree();
+            var server = new Server<TcpServer>();
+            Client<TcpClient> client = null;
+
+            MethodLimitTarget.Reset();
+
+            try
+            {
+                server.Register(new MethodLimitTarget());
+                server.Register(new MethodLimitDriver());
+                server.Start("127.0.0.1", port);
+
+                client = new Client<TcpClient>();
+                await client.Connect("127.0.0.1", port);
+
+                var tasks = new List<Task>();
+                // 客户端直连路径：8 条
+                for (int i = 0; i < 8; i++)
+                {
+                    tasks.Add(client.Request<PbString, PbString>("limit_target.limited_x",
+                        new PbString { Value = $"c{i}" }));
+                }
+                // Driver 内部再 fire 10 条跨 Processor 调用到 MethodLimitTarget.Limited
+                tasks.Add(client.Request<PbString, PbString>("limit_driver.trigger",
+                    new PbString { Value = "10" }));
+
+                await Task.WhenAll(tasks);
+
+                Assert.LessOrEqual(MethodLimitTarget.LimitedMaxObserved, 2,
+                    $"Limited 同时在飞数 {MethodLimitTarget.LimitedMaxObserved} 超过 [MaxConcurrency(2)]，" +
+                    "方法级 sem 没有覆盖 ProcessorRef 跨调用路径。");
+                Assert.GreaterOrEqual(MethodLimitTarget.LimitedMaxObserved, 2,
+                    $"Limited 同时在飞数始终 {MethodLimitTarget.LimitedMaxObserved}，限流闸看起来没拉开。");
+                Assert.GreaterOrEqual(MethodLimitTarget.LimitedTotalInvocations, 18,
+                    $"Limited 总调用数 {MethodLimitTarget.LimitedTotalInvocations} < 18，路径没跑全。");
+            }
+            finally
+            {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                try { server.Stop(); } catch { /* ignore */ }
+            }
+        }
+
+        /// <summary>
+        /// 验证：纯 [ProcessorApi] + [MaxConcurrency] 方法（不是 [Request]/[Notify]）
+        /// 通过 ProcessorRef 跨 Processor 调用时同样受方法级 semaphore 约束。
+        /// 这对应 Runner 侧扫描纯 ProcessorApi 方法并建方法级 sem 的新分支，
+        /// 以及 Generator 侧 ComputeRouteKey 对纯 ProcessorApi fallback 到 method.Name 的策略。
+        /// </summary>
+        [Test]
+        public async Task TestPureProcessorApiIsThrottled()
+        {
+            var port = TestPort.GetFree();
+            var server = new Server<TcpServer>();
+            Client<TcpClient> client = null;
+
+            PureApiTarget.Reset();
+
+            try
+            {
+                server.Register(new PureApiTarget());
+                server.Register(new PureApiDriver());
+                server.Start("127.0.0.1", port);
+
+                client = new Client<TcpClient>();
+                await client.Connect("127.0.0.1", port);
+
+                // 客户端无法直接调 PureApiTarget.Work（它不是 [Request]），全部走 Driver 的跨调用
+                var tasks = new List<Task>();
+                for (int i = 0; i < 3; i++)
+                {
+                    tasks.Add(client.Request<PbString, PbString>("pure_driver.trigger",
+                        new PbString { Value = "6" }));
+                }
+
+                await Task.WhenAll(tasks);
+
+                Assert.LessOrEqual(PureApiTarget.WorkMaxObserved, 2,
+                    $"Work 同时在飞数 {PureApiTarget.WorkMaxObserved} 超过 [MaxConcurrency(2)]，" +
+                    "方法级 sem 没覆盖纯 [ProcessorApi] 路径。");
+                Assert.GreaterOrEqual(PureApiTarget.WorkMaxObserved, 2,
+                    $"Work 同时在飞数始终 {PureApiTarget.WorkMaxObserved}，限流闸看起来没拉开。");
+                Assert.GreaterOrEqual(PureApiTarget.WorkTotalInvocations, 18,
+                    $"Work 总调用数 {PureApiTarget.WorkTotalInvocations} < 18（3*6），路径没跑全。");
+            }
+            finally
+            {
+                try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                try { server.Stop(); } catch { /* ignore */ }
+            }
+        }
     }
 
     [Processor("toolarge")]
@@ -297,6 +445,197 @@ namespace UnitTest
                 snapshot = Volatile.Read(ref slot);
                 if (candidate <= snapshot) return;
             } while (Interlocked.CompareExchange(ref slot, candidate, snapshot) != snapshot);
+        }
+    }
+
+    /// <summary>
+    /// "单人通道"测试目标：class 级 8，方法级 1，预期 <see cref="Solo"/> 任何时刻
+    /// 只能有 1 个 in-flight（客户端直连 + 跨 Processor 调用合计）。
+    /// </summary>
+    [Processor("lane_target")]
+    [MaxConcurrency(8)]
+    internal class SingleLaneTarget : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        public static int SoloConcurrent;
+        public static int SoloMaxObserved;
+        public static int SoloTotalInvocations;
+
+        public static void Reset()
+        {
+            SoloConcurrent = 0;
+            SoloMaxObserved = 0;
+            SoloTotalInvocations = 0;
+        }
+
+        [Request("solo")]
+        [MaxConcurrency(1)]
+        public async Task<PbString> Solo(Header h, PbString s)
+        {
+            Interlocked.Increment(ref SoloTotalInvocations);
+            var c = Interlocked.Increment(ref SoloConcurrent);
+            ConcurrencyTestUtil.BumpMax(ref SoloMaxObserved, c);
+            await Task.Delay(30);
+            Interlocked.Decrement(ref SoloConcurrent);
+            return new PbString { Value = s.Value };
+        }
+    }
+
+    [Processor("lane_driver")]
+    [MaxConcurrency(8)]
+    internal class SingleLaneDriver : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        [Request("fan_out")]
+        public async Task<PbString> FanOut(Header h, PbString s)
+        {
+            if (!int.TryParse(s.Value, out var n)) n = 6;
+            var targetRef = Server.GetProcessor<SingleLaneTarget>();
+
+            var tasks = new List<Task<PbString>>(n);
+            for (int i = 0; i < n; i++)
+            {
+                var idx = i;
+                tasks.Add(targetRef.Request("lane_target.solo",
+                    p => p.Solo(null, new PbString { Value = $"x{idx}" })));
+            }
+
+            await Task.WhenAll(tasks);
+            return new PbString { Value = s.Value };
+        }
+    }
+
+    /// <summary>
+    /// 被限流的目标 Processor：<see cref="Limited"/> 同时是 [Request] 和跨 Processor 调用入口。
+    /// 方法级 [MaxConcurrency(2)] 应同时约束两条路径。
+    /// </summary>
+    [Processor("limit_target")]
+    [MaxConcurrency(8)]
+    internal class MethodLimitTarget : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        public static int LimitedConcurrent;
+        public static int LimitedMaxObserved;
+        public static int LimitedTotalInvocations;
+
+        public static void Reset()
+        {
+            LimitedConcurrent = 0;
+            LimitedMaxObserved = 0;
+            LimitedTotalInvocations = 0;
+        }
+
+        // 注意：[ProcessorApi] 是给 Source Generator 用的——本测试 UnitTest 项目没挂 generator，
+        // 所以下面 Driver 里用 ProcessorRef<T>.Request(routeKey, fn) 手动发起调用来模拟
+        // generator 会生成的代码，直接覆盖 Runner 侧按 routeKey 查方法级 sem 的行为。
+        [Request("limited_x")]
+        [MaxConcurrency(2)]
+        public async Task<PbString> Limited(Header h, PbString s)
+        {
+            Interlocked.Increment(ref LimitedTotalInvocations);
+            var c = Interlocked.Increment(ref LimitedConcurrent);
+            ConcurrencyTestUtil.BumpMax(ref LimitedMaxObserved, c);
+            await Task.Delay(60);
+            Interlocked.Decrement(ref LimitedConcurrent);
+            return new PbString { Value = s.Value };
+        }
+    }
+
+    /// <summary>
+    /// 驱动 Processor：收到客户端 trigger 后，向 <see cref="MethodLimitTarget"/> 派发 N 条
+    /// ProcessorRef 跨调用。派发时带 routeKey "limit_target.limited_x"，和 Route.RouteString 一致。
+    /// </summary>
+    [Processor("limit_driver")]
+    [MaxConcurrency(8)]
+    internal class MethodLimitDriver : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        [Request("trigger")]
+        public async Task<PbString> Trigger(Header h, PbString s)
+        {
+            if (!int.TryParse(s.Value, out var n)) n = 10;
+            var targetRef = Server.GetProcessor<MethodLimitTarget>();
+
+            var tasks = new List<Task<PbString>>(n);
+            for (int i = 0; i < n; i++)
+            {
+                var idx = i;
+                // routeKey 必须和 Route.RouteString 一致："{processorName}.{methodName}".ToLower()
+                tasks.Add(targetRef.Request("limit_target.limited_x",
+                    p => p.Limited(null, new PbString { Value = $"x{idx}" })));
+            }
+
+            await Task.WhenAll(tasks);
+            return new PbString { Value = s.Value };
+        }
+    }
+
+    /// <summary>
+    /// 纯 [ProcessorApi] + [MaxConcurrency] 目标：<see cref="Work"/> 不是 [Request]/[Notify]，
+    /// 只能从其他 Processor 通过 ProcessorRef 触达。方法级 sem 仍应按 routeKey 命中。
+    /// </summary>
+    [Processor("pure_target")]
+    [MaxConcurrency(8)]
+    internal class PureApiTarget : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        public static int WorkConcurrent;
+        public static int WorkMaxObserved;
+        public static int WorkTotalInvocations;
+
+        public static void Reset()
+        {
+            WorkConcurrent = 0;
+            WorkMaxObserved = 0;
+            WorkTotalInvocations = 0;
+        }
+
+        [ProcessorApi]
+        [MaxConcurrency(2)]
+        public async Task<PbString> Work(PbString s)
+        {
+            Interlocked.Increment(ref WorkTotalInvocations);
+            var c = Interlocked.Increment(ref WorkConcurrent);
+            ConcurrencyTestUtil.BumpMax(ref WorkMaxObserved, c);
+            await Task.Delay(40);
+            Interlocked.Decrement(ref WorkConcurrent);
+            return new PbString { Value = s.Value };
+        }
+    }
+
+    /// <summary>
+    /// 调用 <see cref="PureApiTarget.Work"/> 的发起方。UnitTest 项目未挂 generator，
+    /// 这里手动以 <c>ProcessorRef.Request(routeKey, fn)</c> 模拟 generator 会生成的代码，
+    /// routeKey 与 Runner 侧对纯 <c>[ProcessorApi]</c> 方法建表的 key 严格一致：
+    /// <c>"{procName}.{methodName}".ToLower()</c>。
+    /// </summary>
+    [Processor("pure_driver")]
+    [MaxConcurrency(8)]
+    internal class PureApiDriver : ProcessorBase
+    {
+        public override string[] Pushes => Array.Empty<string>();
+
+        [Request("trigger")]
+        public async Task<PbString> Trigger(Header h, PbString s)
+        {
+            if (!int.TryParse(s.Value, out var n)) n = 6;
+            var targetRef = Server.GetProcessor<PureApiTarget>();
+
+            var tasks = new List<Task<PbString>>(n);
+            for (int i = 0; i < n; i++)
+            {
+                var idx = i;
+                tasks.Add(targetRef.Request("pure_target.work",
+                    p => p.Work(new PbString { Value = $"x{idx}" })));
+            }
+
+            await Task.WhenAll(tasks);
+            return new PbString { Value = s.Value };
         }
     }
 }

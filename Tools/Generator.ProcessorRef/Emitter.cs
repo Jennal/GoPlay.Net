@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace GoPlay.Generators.ProcessorRef
 {
@@ -91,13 +93,21 @@ namespace GoPlay.Generators.ProcessorRef
             }
             sb.AppendLine(")");
 
-            // 方法体
+            // 方法体：所有 [ProcessorApi] 方法都带 routeKey 走 @ref.Request/Notify 的"带 routeKey"重载。
+            // Runner 侧在邮箱分派时按 key 查方法级 sem：
+            //   - 同时标 [Request]/[Notify]：命中 Route.MethodConcurrencySem，与客户端请求路径共享
+            //   - 纯 [ProcessorApi]（无 Request/Notify）：命中 Runner 额外扫描建立的方法级 sem
+            // ComputeRouteKey 对三种情况都返回非 null，所以理论上 routeKeyLit 恒非 null；
+            // 保留 null 分支是为了兼容未来可能出现的"手写不想带 key"场景。
+            var routeKeyLit = m.RouteKey is null ? null : SymbolDisplay.FormatLiteral(m.RouteKey, quote: true);
+
             sb.Append("            => ");
             switch (dispatch)
             {
                 case Dispatch.NotifyVoid:
                     // 返回 void：包一层 async lambda 把同步调用包成 Task.CompletedTask
-                    sb.Append("@ref.Notify(__p => { __p.").Append(m.MethodName).Append('(');
+                    AppendInvocationHead(sb, "Notify", routeKeyLit);
+                    sb.Append("__p => { __p.").Append(m.MethodName).Append('(');
                     AppendArgs(sb, m);
                     sb.AppendLine("); return global::System.Threading.Tasks.Task.CompletedTask; });");
                     break;
@@ -105,13 +115,15 @@ namespace GoPlay.Generators.ProcessorRef
                     // 返回 Task 或 ValueTask：Fire=true 强制 Notify
                     if (m.ReturnKind == ReturnKind.ValueTask)
                     {
-                        sb.Append("@ref.Notify(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Notify", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine(").AsTask());");
                     }
                     else
                     {
-                        sb.Append("@ref.Notify(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Notify", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine("));");
                     }
@@ -119,13 +131,15 @@ namespace GoPlay.Generators.ProcessorRef
                 case Dispatch.RequestVoid:
                     if (m.ReturnKind == ReturnKind.ValueTask)
                     {
-                        sb.Append("@ref.Request(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Request", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine(").AsTask());");
                     }
                     else
                     {
-                        sb.Append("@ref.Request(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Request", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine("));");
                     }
@@ -133,24 +147,40 @@ namespace GoPlay.Generators.ProcessorRef
                 case Dispatch.RequestWithResult:
                     if (m.ReturnKind == ReturnKind.ValueTaskOfT)
                     {
-                        sb.Append("@ref.Request(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Request", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine(").AsTask());");
                     }
                     else
                     {
-                        sb.Append("@ref.Request(__p => __p.").Append(m.MethodName).Append('(');
+                        AppendInvocationHead(sb, "Request", routeKeyLit);
+                        sb.Append("__p => __p.").Append(m.MethodName).Append('(');
                         AppendArgs(sb, m);
                         sb.AppendLine("));");
                     }
                     break;
                 case Dispatch.RequestSyncResult:
                     // 同步返回值：用 Task.FromResult 包装，仍走 Request 走 mailbox
-                    sb.Append("@ref.Request(__p => global::System.Threading.Tasks.Task.FromResult(__p.")
+                    AppendInvocationHead(sb, "Request", routeKeyLit);
+                    sb.Append("__p => global::System.Threading.Tasks.Task.FromResult(__p.")
                       .Append(m.MethodName).Append('(');
                     AppendArgs(sb, m);
                     sb.AppendLine(")));");
                     break;
+            }
+        }
+
+        /// <summary>
+        /// 生成 <c>@ref.Request(</c> 或 <c>@ref.Request("routekey", </c> 的开头片段。
+        /// 有 routeKey 时走带 key 的重载，让 Runner 侧能匹配方法级 <c>[MaxConcurrency]</c>。
+        /// </summary>
+        private static void AppendInvocationHead(StringBuilder sb, string apiName, string? routeKeyLiteral)
+        {
+            sb.Append("@ref.").Append(apiName).Append('(');
+            if (routeKeyLiteral != null)
+            {
+                sb.Append(routeKeyLiteral).Append(", ");
             }
         }
 

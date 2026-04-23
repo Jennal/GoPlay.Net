@@ -127,6 +127,105 @@ namespace GoPlay.Core.Processors
             });
         }
 
+        /// <summary>
+        /// 带 <paramref name="routeKey"/> 的 <c>Request</c> 重载：把闭包投递到目标 Runner 邮箱串行执行，
+        /// 同时让 Runner 在邮箱分派阶段按 <paramref name="routeKey"/> 查到对应 <see cref="Routers.Route"/>
+        /// 的方法级 <see cref="System.Threading.SemaphoreSlim"/>，让跨 Processor 调用也遵守
+        /// 方法级 <c>[MaxConcurrency]</c> 限流，和客户端 <c>[Request]</c> 路径共享同一把 sem。
+        /// <para>
+        /// <paramref name="routeKey"/> 应和 <see cref="Routers.Route.RouteString"/> 完全一致
+        /// （<c>"{processorName}.{methodName}".ToLower()</c>）。
+        /// 此重载主要由 <c>[ProcessorApi]</c> 驱动的 Source Generator 调用，业务代码一般不直接用。
+        /// 传 null 或找不到对应 Route 时行为等价于不带 <paramref name="routeKey"/> 的重载。
+        /// </para>
+        /// </summary>
+        public Task<TResult> Request<TResult>(string routeKey, Func<T, Task<TResult>> fn)
+        {
+            EnsureValid();
+            if (fn == null) throw new ArgumentNullException(nameof(fn));
+
+            if (ProcessorRunner.Current == Runner) return fn(Target);
+
+            var tcs = new TaskCompletionSource<TResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var target = Target;
+            Runner.Post(async () =>
+            {
+                try
+                {
+                    var result = await fn(target).ConfigureAwait(false);
+                    tcs.TrySetResult(result);
+                }
+                catch (OperationCanceledException oce)
+                {
+                    tcs.TrySetCanceled(oce.CancellationToken);
+                }
+                catch (Exception err)
+                {
+                    tcs.TrySetException(err);
+                }
+            }, routeKey);
+            return tcs.Task;
+        }
+
+        /// <summary>
+        /// 带 <paramref name="routeKey"/> 的无返回值 <c>Request</c> 重载，语义见
+        /// <see cref="Request{TResult}(string, Func{T, Task{TResult}})"/>。
+        /// </summary>
+        public Task Request(string routeKey, Func<T, Task> fn)
+        {
+            EnsureValid();
+            if (fn == null) throw new ArgumentNullException(nameof(fn));
+
+            if (ProcessorRunner.Current == Runner) return fn(Target);
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var target = Target;
+            Runner.Post(async () =>
+            {
+                try
+                {
+                    await fn(target).ConfigureAwait(false);
+                    tcs.TrySetResult(true);
+                }
+                catch (OperationCanceledException oce)
+                {
+                    tcs.TrySetCanceled(oce.CancellationToken);
+                }
+                catch (Exception err)
+                {
+                    tcs.TrySetException(err);
+                }
+            }, routeKey);
+            return tcs.Task;
+        }
+
+        /// <summary>
+        /// 带 <paramref name="routeKey"/> 的 <c>Notify</c> 重载。
+        /// 语义：fire-and-forget，异常就地走 <c>Server.OnErrorEvent</c>；
+        /// 并和 <see cref="Request{TResult}(string, Func{T, Task{TResult}})"/> 一样在邮箱分派阶段
+        /// 按 <paramref name="routeKey"/> 解析方法级 sem，和客户端路径共享限流。
+        /// </summary>
+        public void Notify(string routeKey, Func<T, Task> fn)
+        {
+            EnsureValid();
+            if (fn == null) throw new ArgumentNullException(nameof(fn));
+
+            var runner = Runner;
+            var target = Target;
+            runner.Post(async () =>
+            {
+                try
+                {
+                    await fn(target).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { /* shutting down */ }
+                catch (Exception err)
+                {
+                    runner.Server?.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+            }, routeKey);
+        }
+
         private void EnsureValid()
         {
             if (Target == null || Runner == null)

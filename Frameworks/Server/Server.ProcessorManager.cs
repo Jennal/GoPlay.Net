@@ -162,8 +162,9 @@ namespace GoPlay
         
         /// <summary>
         /// Stop 每个 Processor 的默认 graceful drain 预算。
-        /// 选 5s 的依据：既给业务 Processor 足够窗口把 <see cref="ProcessorRunner._incoming"/> /
-        /// <see cref="ProcessorRunner._control"/> / <see cref="ProcessorRunner._broadcastQueue"/> 吃干净，
+        /// 选 5s 的依据：既给业务 Processor 足够窗口把 <see cref="ProcessorRunner._incoming"/>
+        /// （Package + 跨 Processor 调用闭包的统一邮箱）与 <see cref="ProcessorRunner._broadcastQueue"/>
+        /// 吃干净，
         /// 又给 Server.Stop 后续 (StopAllSenders + Transport.Stop + m_stoppers.OnStop) 留出预算，
         /// 保证整体 Stop 不超过 k8s 典型 terminationGracePeriodSeconds（30s）。
         /// 调用方想要更长/更短可以改用 <see cref="StopProcessors(TimeSpan)"/>。

@@ -27,6 +27,9 @@ namespace GoPlay.Generators.ProcessorRef
     public sealed class ProcessorRefGenerator : IIncrementalGenerator
     {
         private const string ProcessorApiAttributeFullName = "GoPlay.Core.Attributes.ProcessorApiAttribute";
+        private const string ProcessorAttributeFullName = "GoPlay.Core.Attributes.ProcessorAttribute";
+        private const string RequestAttributeFullName = "GoPlay.Core.Attributes.RequestAttribute";
+        private const string NotifyAttributeFullName = "GoPlay.Core.Attributes.NotifyAttribute";
         private const string ProcessorBaseFullName = "GoPlay.Core.Processors.ProcessorBase";
         private const string GeneratedNamespace = "GoPlay.Generated.ProcessorRefs";
 
@@ -178,6 +181,16 @@ namespace GoPlay.Generators.ProcessorRef
                 ? string.Empty
                 : containingType.ContainingNamespace!.ToDisplayString();
 
+            // 和 Route.GetRoute() 对齐的 route key 生成公式，用作 ProcessorRunner 侧
+            // 方法级 [MaxConcurrency] semaphore 的查表 key。
+            // 三种情况都产出 key：
+            //   - [Request("x")]：key = "{procName}.x".ToLower()
+            //   - [Notify("x")]： key = "{procName}.x".ToLower()
+            //   - 纯 [ProcessorApi]：key = "{procName}.{methodName}".ToLower()（fallback，无 attr name）
+            // Runner 侧有与之对齐的建表逻辑（Route.RouteString + 纯 ProcessorApi 扫描），
+            // 两边 key 空间互不重叠且命中同一把 sem。
+            var routeKey = ComputeRouteKey(containingType, methodSymbol);
+
             return new MethodCandidate(
                 MethodName: methodSymbol.Name,
                 ProcessorNamespace: containingNs,
@@ -189,7 +202,82 @@ namespace GoPlay.Generators.ProcessorRef
                 Fire: fire,
                 Parameters: paramBuilder.ToImmutable(),
                 Diagnostics: diagnostics.ToImmutable(),
-                HasBlockingError: hasBlockingError);
+                HasBlockingError: hasBlockingError,
+                RouteKey: routeKey);
+        }
+
+        /// <summary>
+        /// 按 <c>Route.GetRoute()</c> 及 <c>ProcessorRunner.RegisterProcessorApiMethodSems</c>
+        /// 三方一致的 key 公式：<c>"{processorName}.{methodName}".ToLower()</c>。
+        /// <list type="bullet">
+        /// <item>processorName 取自 <c>[Processor("name")]</c>（缺省 type.Name）</item>
+        /// <item>methodName 取自 <c>[Request("name")]</c>/<c>[Notify("name")]</c>；
+        ///       两者都没有（纯 <c>[ProcessorApi]</c>）时 fallback 到 C# 方法名</item>
+        /// </list>
+        /// 只要是 <c>[ProcessorApi]</c> 方法（能走到这里的都是，generator 按该属性过滤）就返回非 null，
+        /// 让 ProcessorRef 侧始终带 routeKey 投递，纯 <c>[ProcessorApi]</c> + <c>[MaxConcurrency]</c>
+        /// 也能命中方法级 sem。
+        /// </summary>
+        private static string ComputeRouteKey(INamedTypeSymbol containingType, IMethodSymbol methodSymbol)
+        {
+            string? requestName = null;
+            string? notifyName = null;
+            bool hasRequest = false, hasNotify = false;
+            foreach (var attr in methodSymbol.GetAttributes())
+            {
+                var name = attr.AttributeClass?.ToDisplayString();
+                if (name == RequestAttributeFullName)
+                {
+                    hasRequest = true;
+                    requestName = ReadNameCtorArg(attr);
+                }
+                else if (name == NotifyAttributeFullName)
+                {
+                    hasNotify = true;
+                    notifyName = ReadNameCtorArg(attr);
+                }
+            }
+
+            // 优先级：Request attr name > Notify attr name > C# method name（纯 ProcessorApi fallback）
+            string methodName;
+            if (hasRequest)
+            {
+                methodName = string.IsNullOrEmpty(requestName) ? methodSymbol.Name : requestName!;
+            }
+            else if (hasNotify)
+            {
+                methodName = string.IsNullOrEmpty(notifyName) ? methodSymbol.Name : notifyName!;
+            }
+            else
+            {
+                methodName = methodSymbol.Name;
+            }
+
+            string processorName = containingType.Name;
+            foreach (var attr in containingType.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() == ProcessorAttributeFullName)
+                {
+                    var n = ReadNameCtorArg(attr);
+                    if (!string.IsNullOrEmpty(n)) processorName = n!;
+                    break;
+                }
+            }
+
+            // 对齐 Route 侧 `.ToLower()`（CurrentCulture）的行为：在 generator 里用
+            // `.ToLower()` 保持一致，避免土耳其语等 culture 下的大小写不对齐。
+            return (processorName + "." + methodName).ToLower();
+        }
+
+        /// <summary>
+        /// 读 <c>NameAttribute</c> 派生类（<c>[Processor]</c>/<c>[Request]</c>/<c>[Notify]</c>）的
+        /// 第一个构造参数 <c>name</c>。可能为 null（调用方传 null 或缺省）。
+        /// </summary>
+        private static string? ReadNameCtorArg(AttributeData attr)
+        {
+            if (attr.ConstructorArguments.Length == 0) return null;
+            var arg = attr.ConstructorArguments[0];
+            return arg.Value as string;
         }
 
         private static bool IsProcessorSubtype(INamedTypeSymbol type)
@@ -284,5 +372,6 @@ namespace GoPlay.Generators.ProcessorRef
         bool Fire,
         ImmutableArray<ParameterInfo> Parameters,
         ImmutableArray<Diagnostic> Diagnostics,
-        bool HasBlockingError);
+        bool HasBlockingError,
+        string? RouteKey);
 }
