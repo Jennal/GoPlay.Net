@@ -57,7 +57,8 @@ namespace GoPlay
         {
             foreach (var processor in Processors)
             {
-                processor.OnClientConnected(clientId);
+                try { processor.OnClientConnected(clientId); }
+                catch (Exception err) { OnErrorEvent(clientId, err); }
             }
         }
 
@@ -65,7 +66,8 @@ namespace GoPlay
         {
             foreach (var processor in Processors)
             {
-                processor.OnClientDisconnected(clientId);
+                try { processor.OnClientDisconnected(clientId); }
+                catch (Exception err) { OnErrorEvent(clientId, err); }
             }
         }
 
