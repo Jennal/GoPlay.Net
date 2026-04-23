@@ -3,7 +3,7 @@ DIR=$(dirname "$0")/..
 PROJ="Server.sln"
 TPL_DIR="../ProjectTemplates"
 TPL="$TPL_DIR/GoPlay.Templates.csproj"
-VERSION="1.0.1"
+VERSION="1.0.2"
 rm -f $DIR/packages/*
 cd $DIR
 
