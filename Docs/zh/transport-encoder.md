@@ -1,0 +1,204 @@
+# Transport 与 Encoder
+
+> English version: [transport-encoder.md](../en/transport-encoder.md)
+
+GoPlay 把**传输层**和**编码层**都做成了正交可替换的接口。Server 和 Client 通过泛型参数选定 Transport，Encoder 通过 `EncodingType` 或直接实例化替换。这让你可以在不动业务代码的前提下改 TCP → WebSocket、Protobuf → Json。
+
+## 总览
+
+```text
+  Business Processor
+        │
+   ┌────┴────┐
+   │ Server  │         ← partial class，只处理 Route/Processor 语义
+   └────┬────┘
+        │   泛型 T : TransportServerBase
+   ┌────┴────┐
+   │Transport│         ← TcpServer / NcServer / WsServer / WssServer
+   └────┬────┘
+        │
+     socket / websocket
+```
+
+```text
+  Package (框架帧)
+        │
+   ┌────┴────┐
+   │ Encoder │         ← IEncoder：Protobuf / Json，Header 与 Body 用同一编码
+   └────┬────┘
+        │
+   wire bytes
+```
+
+## Transport 抽象
+
+### 基类与关键接口
+
+- [`TransportServerBase`](../../Frameworks/Core/Transports/Base/TransportServerBase.cs)：服务端侧抽象，暴露 `OnClientConnected/Disconnected/Error/DataReceived` 事件与 `Start/Stop/Send/DisconnectClient` 操作。
+- [`TransportClientBase`](../../Frameworks/Core/Transports/Base/TransportClientBase.cs)：客户端侧抽象，提供 `ConnectAsync/Disconnect/Send/Recv/SupportPush` 等。
+
+### Push 语义 vs Pull 语义
+
+关键字段 `SupportPush`（默认 `true`）决定收包路径：
+
+- **Push（推）**：Transport 收到数据后**主动**回调 `OnDataReceived` / `OnDataReceivedSpan`。NC / Ws / Wss 属于此类，基于 IOCP 或事件回调，**无需 Recv 循环**。
+- **Pull（拉）**：框架需要自起一条 `RecvLoop` 不停调 `Transport.Recv`。内置 `TcpClient` / `TcpServer` 属于此类，方便对接纯 socket 实现。
+
+客户端 `Client.cs` 根据 `Transport.SupportPush` 自动选路：Push 路径只跑 `SendLoopAsync` + `TimeoutLoop`；Pull 路径再加一条 `RecvLoop`。
+
+### 内置四种实现
+
+| 实现 | 程序集 | 底层 | 语义 | 适用场景 |
+|------|--------|------|------|----------|
+| `TcpServer` / `TcpClient` | `GoPlay.Core`（内置） | `System.Net.Sockets.TcpClient` | Pull | 教学 / 小型服务 |
+| `NcServer` / `NcClient` | `GoPlay.Core.Transport.NetCoreServer` | [NetCoreServer](https://github.com/chronoxor/NetCoreServer) | Push | **生产推荐（TCP）** |
+| `WsServer` / `WsClient` | `GoPlay.Core.Transport.Ws` | NetCoreServer WebSocket | Push | 浏览器 / 小游戏 |
+| `WssServer` / `WssClient` | `GoPlay.Core.Transport.Wss` | NetCoreServer Secure WebSocket | Push | 生产浏览器（TLS） |
+
+选择方法：
+
+```csharp
+var server = new Server<NcServer>();              // TCP
+var server = new Server<WsServer>();              // WebSocket
+var server = new Server<WssServer>();             // WSS
+
+var client = new Client<NcClient>();              // 对应的客户端
+```
+
+## Wire Frame（一帧的字节布局）
+
+```text
+  +-----------+-----------+---------+---------+
+  | outerLen  | headerLen | Header  |  Body   |
+  |  ushort   |  ushort   | bytes   |  bytes  |
+  +-----------+-----------+---------+---------+
+              \____________ innerLen ________/
+```
+
+- 所有长度都是 LE `ushort`（<=65535）。
+- 单包超限必须分包，见 [protocol.md](./protocol.md#chunk-分包)。
+- 实现入口：[Frameworks/Core/Protocols/Package.cs](../../Frameworks/Core/Protocols/Package.cs) 的 `WriteTo(IBufferWriter<byte>)` 与 `ParseRaw(ReadOnlySpan<byte>)`。
+
+### 零分配热路径
+
+框架在发送侧做了一整条零拷贝组包：
+
+1. `SendChannel` 拿到一个 `Package` 后，`SendLoopAsync` 调 `pack.WriteTo(writer)`，把 `[outerLen][headerLen][header][body]` 直接原地写进**连接生命周期复用**的 `ArrayBufferWriter<byte>`。
+2. `IEncoder.EncodeTo` 让 Protobuf 的 `IMessage.WriteTo(IBufferWriter<byte>)` 把 header/body 直接落到同一块 span，无中间 `byte[]` 分配。
+3. `Transport.SendAsync(writer.WrittenMemory, ct)` 一次性下发；Transport 子类需**在返回 ValueTask 之前**把字节拷进自己的 pending buffer，以便上层 reset writer。
+
+接收侧对称：[`TransportServerBase.InvokeOnDataReceivedSpan`](../../Frameworks/Core/Transports/Base/TransportServerBase.cs) 把 stash 里的一帧以 `ReadOnlySpan<byte>` 喂给 Server，`Package.ParseRaw(ReadOnlySpan<byte>)` 同步解码。
+
+## Encoder 抽象
+
+### 接口
+
+```csharp
+// Frameworks/Core/Interfaces/IEncoder.cs
+public interface IEncoder
+{
+    EncodingType Type { get; }
+    void AssertTypeValid<T>();
+
+    byte[] Encode<T>(T data);
+    T Decode<T>(byte[] data);
+
+    int GetEncodedSize<T>(T data);
+    int EncodeTo<T>(T data, Memory<byte> dest);
+}
+```
+
+- `GetEncodedSize`：热路径上先预测长度，再在 `IBufferWriter` 上预留，再 `EncodeTo` 原地写入，避免中间 buffer。Protobuf 下走 `IMessage.CalculateSize()`，0 分配；Json 回退到 `Encode(data).Length`。
+- `EncodeTo`：与 `GetEncodedSize` 配对；Protobuf 实现通过 `MessageExtensions.WriteTo(IBufferWriter<byte>)` 直接落 span。
+
+### 内置两个实现
+
+| Encoder | EncodingType | 优点 | 场景 |
+|---------|-------------|------|------|
+| `ProtobufEncoder` | `Protobuf = 0`（默认） | 快、小、零分配热路径 | 生产 |
+| `JsonEncoder` | `Json = 1`（LitJson） | 人眼可读、跨脚本 | 调试 / 嵌入式脚本语言 |
+
+切换：
+
+```csharp
+var server = new Server<NcServer>
+{
+    EncodingType = EncodingType.Json,
+};
+```
+
+客户端与服务端要一致；切换会在一个 Handshake 起全局生效。
+
+## Chunk 分包
+
+- 上层业务只管 `Send(pack)`；`Package.Split()` 在 `SendLoopAsync` 之前把大包切成多帧。
+- 每帧共享 `Id`/`Route`，用 `ChunkCount` 与 `ChunkIndex` 标识分片。
+- 接收侧用 [Client.Chunk.cs](../../Frameworks/Client/Client.Chunk.cs) 的 `ResolveChunk` 按 `Id` 重组。
+- Server 与 Client 的实现对称。
+
+详细协议见 [protocol.md](./protocol.md#chunk-分包)。
+
+## 自定义 Transport
+
+想接 KCP / QUIC / SSE / IPC 等？实现两个基类：
+
+```csharp
+// 服务端
+public class MyTransportServer : TransportServerBase
+{
+    public override bool SupportPush => true;     // 建议所有新 transport 都走 push 语义
+
+    public override void Start(string host, int port, CancellationTokenSource cancelSource = null)
+    {
+        // 建立 listener；收到新连接时 InvokeOnClientConnected(clientId)
+        // 每收到一帧完整 framed 字节 InvokeOnDataReceivedSpan(clientId, span)
+    }
+
+    public override void Stop() { ... }
+    public override void Send(uint clientId, byte[] data) { ... }
+    public override ValueTask SendAsync(uint clientId, ReadOnlyMemory<byte> framedBytes, CancellationToken ct) { ... }
+    public override void DisconnectClient(uint clientId, Exception err) { ... }
+    public override string GetClientIp(uint clientId) { ... }
+}
+
+// 客户端
+public class MyTransportClient : TransportClientBase
+{
+    public override bool SupportPush => true;
+    public override Task<bool> ConnectAsync(string host, int port, TimeSpan timeout) { ... }
+    public override void Disconnect() { ... }
+    public override ValueTask Send(ReadOnlyMemory<byte> framedBytes, CancellationTokenSource cts) { ... }
+    // 收到数据时触发 SetDataReceivedSpanHandler 绑定的回调
+}
+```
+
+然后使用方式与内置 Transport 完全一致：
+
+```csharp
+var server = new Server<MyTransportServer>();
+var client = new Client<MyTransportClient>();
+```
+
+参考实现：[`NcServer`](../../Frameworks/Transport.NetCoreServer/NcServer.cs)、[`WsServer`](../../Frameworks/Transport.Ws/WsServer.cs) —— 生产级的 push 语义 transport 模板。
+
+## 自定义 Encoder
+
+实现 `IEncoder` 接口并注册到 `EncoderFactory`。例如要加个 MessagePack：
+
+```csharp
+public class MsgPackEncoder : IEncoder
+{
+    public EncodingType Type => (EncodingType)42;   // 扩展枚举或新增
+    public void AssertTypeValid<T>() { ... }
+    public byte[] Encode<T>(T data) => MessagePackSerializer.Serialize(data);
+    public T Decode<T>(byte[] data) => MessagePackSerializer.Deserialize<T>(data);
+    public int GetEncodedSize<T>(T data) { ... }
+    public int EncodeTo<T>(T data, Memory<byte> dest) { ... }
+}
+```
+
+注：Header 本身是 Protobuf message，业务切 Encoder 需要同步处理 header 的解码 —— 目前框架假设 header 始终 Protobuf，切只切 body encoding 是更轻量的路径（一般够用）。
+
+## 性能参考
+
+具体数字见 [Frameworks/Benchmark/README.md](../../Frameworks/Benchmark/README.md)，涵盖 `Package.WriteTo` 零分配路径、Handshake、Request round-trip、大包 chunking 等微基准。
