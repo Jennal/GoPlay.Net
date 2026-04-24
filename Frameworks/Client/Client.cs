@@ -207,7 +207,12 @@ namespace GoPlay
             m_port = port;
             
             m_cancelSource = new CancellationTokenSource();
-            m_connectionTask = new TaskCompletionSource<bool>();
+            // RunContinuationsAsynchronously 必备：push 模式下 SetResult 跑在 socket IOCP 完成回调线程
+            // （NcClient/WsClient/WssClient 的 OnDataReceivedSpan → DispatchPack → 此 TCS）。
+            // 不加这个 flag，await 之后的 continuation（含外层 Connect 的调用方、async [SetUp] 之后的
+            // NUnit 调度）会同步反向占用 IOCP 线程，既拖慢收包又导致 Rider 在 IOCP 线程上 step 跟丢，
+            // 表现为 "Debug 永远 step 不进下一个测试方法、Run 正常"。
+            m_connectionTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             try
             {
@@ -283,7 +288,9 @@ namespace GoPlay
                 return;
             }
 
-            m_disconnectionTask = new TaskCompletionSource<bool>();
+            // 同 m_connectionTask：DisconnectAsync 的 SetResult 调用点可能在 IOCP 回调线程链上
+            // （TransportDisconnected → 上层 await DisconnectAsync 的反向触发），保持 continuation 排回 ThreadPool。
+            m_disconnectionTask = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             m_status = ClientStatus.Disconnecting;
             m_cancelSource.Cancel();
 
