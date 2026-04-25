@@ -67,6 +67,33 @@ namespace GoPlay.Core.Processors
         private readonly ProcessorBase _processor;
         private readonly Server _server;
         private readonly Channel<RunnerWorkItem> _incoming;
+
+        /// <summary>
+        /// <c>_maxConcurrency == 1</c> 路径专用的同步邮箱（与 <see cref="_incoming"/> 二选一）。
+        ///
+        /// <para>
+        /// 选用 <see cref="BlockingCollection{T}"/> 而非 <see cref="Channel{T}"/> 的核心理由是
+        /// **不让 idle 等待路径产生异常**：<see cref="BlockingCollection{T}.TryTake(out T, int, CancellationToken)"/>
+        /// 是 <see cref="SemaphoreSlim"/> 的内核 wait，timeout 到期返回 false 不抛异常，仅取消 token
+        /// 才会抛 <see cref="OperationCanceledException"/>。
+        /// </para>
+        ///
+        /// <para>
+        /// 与之对比，<see cref="WaitForSignalAsync"/> 用 <c>Channel.WaitToReadAsync(linkedToken)</c> +
+        /// <see cref="CancellationTokenSource"/>(<c>RecvTimeout</c>) 实现 timeout：idle 时每 <c>RecvTimeout</c>
+        /// 抛一次 <see cref="OperationCanceledException"/> 做"超时信号"。N 个 Processor × 20Hz 量级的
+        /// first-chance exception 在 IDE Debug 模式下会触发巨量 stack walk / filter 求值，把 debugger
+        /// event 队列打爆——业务侧 EF Core / DI cold-path 实测被放大 100x+。
+        /// </para>
+        ///
+        /// <para>
+        /// 行为与 1c1cbe8 之前的 <c>BlockingCollection.TryTake(timeout)</c> 路径一致；
+        /// <c>_maxConcurrency &gt; 1</c> 时仍走 <see cref="_incoming"/> Channel——流水线并发场景下
+        /// async 归还 ThreadPool worker 是必要的，且这种 Processor 数量极少，异常风暴贡献可忽略。
+        /// </para>
+        /// </summary>
+        private readonly BlockingCollection<RunnerWorkItem> _incomingSync;
+
         private readonly ConcurrentQueue<(uint, int, object)> _broadcastQueue;
         private readonly TaskFactory _scheduler;
         private readonly SemaphoreSlim _concurrencyLimiter;
@@ -139,16 +166,29 @@ namespace GoPlay.Core.Processors
             // - 背压：网络洪峰下 Enqueue 会在 WriteSlowAsync 异步等位，不阻塞 IO 线程。
             // - 跨 Processor 调用也共享这个容量，极端情况下目标 Runner 卡住时，发起方的
             //   Post 会通过 WriteSlowAsync 异步等位；这是合并邮箱换来"严格限流保证"的代价。
-            _incoming = Channel.CreateBounded<RunnerWorkItem>(new BoundedChannelOptions(capacity)
-            {
-                SingleReader = true,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.Wait,
-            });
             _broadcastQueue = new ConcurrentQueue<(uint, int, object)>();
 
             _maxConcurrency = ResolveMaxConcurrency(processor, server);
             _drainBatchSize = Math.Max(1, drainBatchSize);
+
+            // 邮箱二选一：_maxConcurrency==1 走 BlockingCollection 同步路径（IDE Debug 友好），
+            // _maxConcurrency>1 走 Channel async 路径（流水线归还 ThreadPool）。
+            // 详见 _incomingSync 字段注释。
+            if (_maxConcurrency == 1)
+            {
+                _incomingSync = new BlockingCollection<RunnerWorkItem>(capacity);
+                _incoming = null;
+            }
+            else
+            {
+                _incoming = Channel.CreateBounded<RunnerWorkItem>(new BoundedChannelOptions(capacity)
+                {
+                    SingleReader = true,
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.Wait,
+                });
+                _incomingSync = null;
+            }
 
             // 启动期 lint：扫描 Processor 类型检测 [MaxConcurrency] 误用，仅打 Warning 不抛错
             WarnOnMaxConcurrencyMisuse(processor);
@@ -376,7 +416,7 @@ namespace GoPlay.Core.Processors
         /// 邮箱当前深度（瞬时值）。包括客户端 Package 和跨 Processor 调用闭包的总和。
         /// 历史版本仅统计 Package；合并邮箱后语义变更为"邮箱总深度"，更准确反映消费压力。
         /// </summary>
-        public int PackageQueueCount => _incoming.Reader.Count;
+        public int PackageQueueCount => _incomingSync != null ? _incomingSync.Count : _incoming.Reader.Count;
 
         public Task RunTask => _runTask;
 
@@ -388,6 +428,22 @@ namespace GoPlay.Core.Processors
         public bool Enqueue(Package pack)
         {
             var item = new RunnerWorkItem(pack);
+            if (_incomingSync != null)
+            {
+                // 同步邮箱：BlockingCollection 容量上限是构造时给的 capacity（默认 ushort.MaxValue），
+                // 满时 TryAdd 会立即返回 false。背压交给上层 Server 决定（IO 线程不应阻塞）。
+                if (_incomingSync.IsAddingCompleted) return false;
+                try
+                {
+                    return _incomingSync.TryAdd(item);
+                }
+                catch (InvalidOperationException)
+                {
+                    // CompleteAdding 与 TryAdd 之间的极小竞态：吞掉，等同投递失败
+                    return false;
+                }
+            }
+
             if (_incoming.Writer.TryWrite(item)) return true;
 
             // 满了：异步等位以保留 back-pressure 语义；不要在 IO 线程同步阻塞
@@ -414,6 +470,13 @@ namespace GoPlay.Core.Processors
         {
             if (work == null) return;
             var item = new RunnerWorkItem(work, methodSem: null);
+            if (_incomingSync != null)
+            {
+                if (_incomingSync.IsAddingCompleted) return;
+                try { _incomingSync.TryAdd(item); }
+                catch (InvalidOperationException) { /* 关闭中 */ }
+                return;
+            }
             if (!_incoming.Writer.TryWrite(item))
             {
                 _ = WriteSlowAsync(item);
@@ -439,6 +502,13 @@ namespace GoPlay.Core.Processors
         {
             if (work == null) return;
             var item = new RunnerWorkItem(work, ResolveMethodSemaphore(routeKey));
+            if (_incomingSync != null)
+            {
+                if (_incomingSync.IsAddingCompleted) return;
+                try { _incomingSync.TryAdd(item); }
+                catch (InvalidOperationException) { /* 关闭中 */ }
+                return;
+            }
             if (!_incoming.Writer.TryWrite(item))
             {
                 _ = WriteSlowAsync(item);
@@ -476,10 +546,183 @@ namespace GoPlay.Core.Processors
             _restartCts = new CancellationTokenSource();
             _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(serverToken, _restartCts.Token);
 
-            // 不能用 TaskCreationOptions.LongRunning：那会绑定一根独占线程，
-            // 我们恰恰希望主循环 await 时把 OS 线程归还。
             var token = _linkedCts.Token;
-            _runTask = _scheduler.StartNew(() => RunAsync(token), token).Unwrap();
+
+            // _maxConcurrency == 1：独占 OS 线程 + 同步邮箱。详见 _incomingSync / RunSyncLoop 注释。
+            // _maxConcurrency > 1：保持 ExclusiveScheduler + Channel async 路径不变。
+            if (_maxConcurrency == 1)
+            {
+                _runTask = Task.Factory.StartNew(
+                    () => RunSyncLoop(token),
+                    token,
+                    TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default);
+            }
+            else
+            {
+                _runTask = _scheduler.StartNew(() => RunAsync(token), token).Unwrap();
+            }
+        }
+
+        /// <summary>
+        /// 同步阻塞版主循环：仅 <c>_maxConcurrency == 1</c> 路径使用，跑在 LongRunning 独占线程上，
+        /// idle 用 <see cref="BlockingCollection{T}.TryTake(out RunnerWorkItem, int, CancellationToken)"/>
+        /// 做内核 wait——整条 idle 路径不走 async/await、不抛异常、不创建 state machine。
+        /// 详见 <see cref="_incomingSync"/> 注释。
+        ///
+        /// <para>
+        /// 有消息时 <see cref="DispatchWorkItem"/> 仍是 async（业务必要），通过
+        /// <see cref="Task.Wait(CancellationToken)"/> 折叠为同步阻塞执行；业务 await 后的 continuation
+        /// 仍按 default scheduler 回 ThreadPool。
+        /// </para>
+        /// </summary>
+        private void RunSyncLoop(CancellationToken ct)
+        {
+            _current.Value = this;
+
+            var queue = _incomingSync;
+            // idle 唤醒间隔：用 RecvTimeout（默认 50ms）跑一次周期任务循环，
+            // 与 1c1cbe8 之前的 BlockingCollection.TryTake(RecvTimeout) 行为一致。
+            var idleTimeoutMs = (int)_processor.RecvTimeout.TotalMilliseconds;
+            if (idleTimeoutMs <= 0) idleTimeoutMs = 1;
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    DoPeriodicWorkAsync(ct).Wait(ct);
+                }
+                catch (OperationCanceledException) { break; }
+                catch (AggregateException err) when (err.InnerException is OperationCanceledException) { break; }
+                catch (Exception err)
+                {
+                    _server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+
+                if (ct.IsCancellationRequested) break;
+
+                // drain：从 _incomingSync 一次最多消费 _drainBatchSize 条
+                var drained = 0;
+                while (drained < _drainBatchSize)
+                {
+                    if (!TryTakeNonBlocking(queue, out var item)) break;
+                    drained++;
+                    try
+                    {
+                        DispatchWorkItem(item, ct).Wait(ct);
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (AggregateException err) when (err.InnerException is OperationCanceledException) { break; }
+                    catch (Exception err)
+                    {
+                        // DispatchWorkItem 内部已经把每条业务异常落到 OnErrorEvent；
+                        // 能冒到这里基本上是 Cancel 之外的奇葩，兜底。
+                        var clientId = item.Pack?.Header?.ClientId ?? IdLoopGenerator.INVALID;
+                        _server.OnErrorEvent(clientId, err);
+                    }
+                    if (ct.IsCancellationRequested) break;
+                }
+
+                if (ct.IsCancellationRequested) break;
+
+                if (drained == 0)
+                {
+                    // 优雅停机：邮箱已 CompleteAdding 且为空
+                    if (queue.IsCompleted)
+                    {
+                        if (_broadcastQueue.IsEmpty) break;
+                        // broadcast 还有残留：让下一轮 DoPeriodicWorkAsync 的 ResolveBroadCast 继续消费。
+                        // 用纯线程 sleep，不走 Task.Delay 的 async 路径。
+                        try { Thread.Sleep(1); }
+                        catch (ThreadInterruptedException) { break; }
+                        continue;
+                    }
+
+                    if (_processor.IsOnlyUpdate)
+                    {
+                        // IsOnlyUpdate：定步长 tick，不等邮箱信号。纯 Thread.Sleep，不走 async。
+                        var deltaMs = (int)_processor.UpdateDeltaTime.TotalMilliseconds;
+                        if (deltaMs <= 0) deltaMs = 1;
+                        try { Thread.Sleep(deltaMs); }
+                        catch (ThreadInterruptedException) { break; }
+                        continue;
+                    }
+
+                    // 内核 wait：timeout 返回 false 不抛异常；ct 取消才抛 OCE。
+                    bool got;
+                    RunnerWorkItem item;
+                    try
+                    {
+                        got = queue.TryTake(out item, idleTimeoutMs, ct);
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (InvalidOperationException)
+                    {
+                        // queue 已 CompleteAdding 且 empty：等同 IsCompleted 路径
+                        continue;
+                    }
+
+                    if (got)
+                    {
+                        try
+                        {
+                            DispatchWorkItem(item, ct).Wait(ct);
+                        }
+                        catch (OperationCanceledException) { break; }
+                        catch (AggregateException err) when (err.InnerException is OperationCanceledException) { break; }
+                        catch (Exception err)
+                        {
+                            var clientId = item.Pack?.Header?.ClientId ?? IdLoopGenerator.INVALID;
+                            _server.OnErrorEvent(clientId, err);
+                        }
+                    }
+                    // 不论 got 与否，回到 loop 顶继续周期任务
+                }
+            }
+
+            // 收尾：与 RunAsync 一致——把邮箱里残留的"跨 Processor 调用闭包"跑完，
+            // 避免 TaskCompletionSource 永远悬挂导致发起方 await 永不返回。
+            DrainRemainingInvokesSync();
+        }
+
+        /// <summary>
+        /// 非阻塞 take：仅消费已经在队列里的消息，不阻塞等待新的。
+        /// <see cref="BlockingCollection{T}.TryTake(out T)"/> 的 0 超时变体。
+        /// </summary>
+        private static bool TryTakeNonBlocking(BlockingCollection<RunnerWorkItem> queue, out RunnerWorkItem item)
+        {
+            try
+            {
+                return queue.TryTake(out item);
+            }
+            catch (InvalidOperationException)
+            {
+                item = default;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="DrainRemainingInvokesAsync"/> 的同步版本，专供 <see cref="RunSyncLoop"/> 收尾使用，
+        /// 避免在独占线程关停路径上再开 async state machine。仅消费 Invoke 闭包，跳过 Package。
+        /// </summary>
+        private void DrainRemainingInvokesSync()
+        {
+            if (_incomingSync == null) return;
+            while (TryTakeNonBlocking(_incomingSync, out var item))
+            {
+                if (!item.IsInvoke) continue;
+                try
+                {
+                    item.Work().Wait();
+                }
+                catch (OperationCanceledException) { /* IGNORE */ }
+                catch (AggregateException err) when (err.InnerException is OperationCanceledException || err.InnerException is TaskCanceledException) { /* IGNORE */ }
+                catch (Exception err)
+                {
+                    _server.OnErrorEvent(IdLoopGenerator.INVALID, err);
+                }
+            }
         }
 
         /// <summary>
@@ -496,7 +739,7 @@ namespace GoPlay.Core.Processors
             try
             {
                 _restartCts?.Cancel();
-                _incoming.Writer.TryComplete();
+                CompleteMailbox();
                 if (_runTask != null) await _runTask.ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
@@ -505,6 +748,23 @@ namespace GoPlay.Core.Processors
             {
                 _restartCts?.Dispose();
                 _linkedCts?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 关闭邮箱写入端：依据当前 Runner 用的是 Channel（多并发路径）还是 BlockingCollection（单并发路径）
+        /// 选择正确的 "no more producers" 信号，避免空指针。
+        /// </summary>
+        private void CompleteMailbox()
+        {
+            if (_incomingSync != null)
+            {
+                try { _incomingSync.CompleteAdding(); }
+                catch (ObjectDisposedException) { /* 已停 */ }
+            }
+            else
+            {
+                _incoming?.Writer.TryComplete();
             }
         }
 
@@ -530,7 +790,7 @@ namespace GoPlay.Core.Processors
         {
             if (_runTask == null)
             {
-                _incoming.Writer.TryComplete();
+                CompleteMailbox();
                 _restartCts?.Dispose();
                 _linkedCts?.Dispose();
                 return;
@@ -539,7 +799,7 @@ namespace GoPlay.Core.Processors
             try
             {
                 // 1. 关闭输入端：主循环读到空后会自动通过 RunAsync 的 graceful-exit 分支退出。
-                _incoming.Writer.TryComplete();
+                CompleteMailbox();
 
                 // 2. 最多等 gracefulDrainTimeout，让主循环把邮箱和广播吃干净自然退出。
                 var graceful = Task.WhenAny(_runTask, Task.Delay(gracefulDrainTimeout)).ConfigureAwait(false);

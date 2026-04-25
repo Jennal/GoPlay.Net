@@ -17,22 +17,25 @@ GoPlay.Net 是一个面向实时游戏服务器（以及任何需要主动推送
 
 ## 性能一眼看
 
-数据来自官方 BDN 基线（Intel Core i9-14900K / Windows 11, net10）。完整报表与回归红线见 [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md)；精简版见 [Docs/en/02.performance.md](Docs/en/02.performance.md) · [Docs/zh/02.performance.md](Docs/zh/02.performance.md)。
+数据来自官方 BDN 基线（Intel Core i9-14900K / Windows 11, Step 3.15）。完整报表与回归红线见 [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md)；精简版见 [Docs/en/02.performance.md](Docs/en/02.performance.md) · [Docs/zh/02.performance.md](Docs/zh/02.performance.md)。
 
 | 指标 | net8 LTS | net10 STS |
 |------|---------:|----------:|
-| 单连接串行 Echo RTT（7 B payload） | 48.13 µs | **42.24 µs** |
-| 串行吞吐上限（单连接） | ~20.8 kreq/s | **~23.7 kreq/s** |
+| 单连接串行 Echo RTT（7 B payload） | **42.10 µs** | 44.89 µs |
+| 串行吞吐上限（单连接） | **~23.8 kreq/s** | ~22.3 kreq/s |
 | Route 分发热路径（`InvokeRoute`） | 146.5 ns | **97.0 ns** |
-| 端到端 Echo 每次分配 | 4.00 KB | **3.84 KB** |
+| 端到端 Echo 每次分配 | 3.13 KB | **2.85 KB** |
 | Gen0 / 1k ops | 0.1221 | **0.1221** |
 | 并发 Echo 吞吐（`MaxConcurrency=64`，CPU-bound） | — | **~103k req/s** |
 
+- **IDE Debug 模式零额外开销**：Step 3.15 把单并发 `ProcessorRunner` 的 idle 等待路径从 `Channel + WaitToReadAsync(linkedToken)` 换成 `BlockingCollection.TryTake(timeout)` 的内核 wait。旧路径每个 Processor 每 `RecvTimeout`（默认 50 ms）会抛一次 first-chance `OperationCanceledException` 当超时信号——按默认 16 个 Processor 算就是 320 Hz 的 OCE，Rider/VS debugger 必须截获每一个（stack walk + filter 求值），把业务侧 cold-path 代码（EF Core 首次 query、DI 首次解析等）在 **Debug** 模式下放大 100×+（实测 Run 100 ms / Debug 13 s）。3.15 之后 Debug RTT 与 Run 同阶，断点恢复秒级响应而不是几分钟。
 - **延迟型业务 50× 加速**：靠 `[MaxConcurrency(N)]`，`delay=10ms` 的负载从串行 68 req/s 抬到 3 178 req/s（N=64）。见 [02.performance.md](Docs/zh/02.performance.md)。
 - **热路径零分配**：Header + Body 都直接编码到同一个 `IBufferWriter<byte>` span 里；每条连接整个生命周期只分配一个 `ArrayBufferWriter`。
 - **O(1) 路由分发**：Route 在握手时就解析成 `uint` id；运行时只是一次 `Dictionary<uint, ProcessorRunner>` 查表后进入编译好的 delegate。
 - **编译期安全 + 运行期速度**：Roslyn 分析器在非法的 `[MaxConcurrency]` 组合或跨 Processor 逃逸上直接让编译失败；Source Generator 生成的 `ProcessorRef<T>` 扩展读起来就像本地调用。
-- **四个运行时、一份代码**：net7 / net8 / net9 / net10 全部跑绿 36/36 端到端测试；客户端库额外支持 `netstandard2.1`（Unity）。
+- **四个运行时、一份代码**：net7 / net8 / net9 / net10 全部跑绿 63/63 端到端测试；客户端库额外支持 `netstandard2.1`（Unity）。
+
+> **为什么 net8 现在串行 RTT 反超 net10**：Step 3.15 把 hot processor 的 `Channel` async 信号路径换成同步 `BlockingCollection` take。net8 没有 Dynamic PGO，是净收益（RTT −12.5%，分配 −22%）；net10 上原来的 `Channel` 路径已经被 PGO 深度优化，换同步 take 多了一对 Monitor.Wait/Pulse（RTT +6.3%），但仍省下 26% 分配（去掉 `IValueTaskSource` / linked-CTS 的盒装）。**选 net10**：分配 / Gen0 压力最低、`InvokeRoute` 最快；**选 net8 LTS**：串行 RTT 最低、生命周期最长。
 
 ### 和其他游戏服务器栈相比
 

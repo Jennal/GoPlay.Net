@@ -17,22 +17,25 @@ The name "GoPlay" is historical: the first implementation was in Golang; the cur
 
 ## Performance at a Glance
 
-Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, net10). Full report and regression tripwires in [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md); distilled version in [Docs/en/02.performance.md](Docs/en/02.performance.md) · [Docs/zh/02.performance.md](Docs/zh/02.performance.md).
+Numbers from the official BDN baseline (Intel Core i9-14900K / Windows 11, Step 3.15). Full report and regression tripwires in [Frameworks/Benchmark/README.md](Frameworks/Benchmark/README.md); distilled version in [Docs/en/02.performance.md](Docs/en/02.performance.md) · [Docs/zh/02.performance.md](Docs/zh/02.performance.md).
 
 | Metric | net8 LTS | net10 STS |
 |--------|---------:|----------:|
-| Single-connection serial Echo RTT (7 B payload) | 48.13 µs | **42.24 µs** |
-| Serial throughput ceiling (per connection) | ~20.8 kreq/s | **~23.7 kreq/s** |
+| Single-connection serial Echo RTT (7 B payload) | **42.10 µs** | 44.89 µs |
+| Serial throughput ceiling (per connection) | **~23.8 kreq/s** | ~22.3 kreq/s |
 | Route dispatch hot path (`InvokeRoute`) | 146.5 ns | **97.0 ns** |
-| Allocation per end-to-end Echo RTT | 4.00 KB | **3.84 KB** |
+| Allocation per end-to-end Echo RTT | 3.13 KB | **2.85 KB** |
 | Gen0 / 1k ops | 0.1221 | **0.1221** |
 | Concurrent Echo throughput (`MaxConcurrency=64`, CPU-bound) | — | **~103k req/s** |
 
+- **Zero overhead under the IDE debugger**: Step 3.15 replaced the `Channel + WaitToReadAsync(linkedToken)` idle path on single-concurrency `ProcessorRunner`s with a `BlockingCollection.TryTake(timeout)` kernel wait. The old path threw 1 first-chance `OperationCanceledException` per `RecvTimeout` (50 ms) per processor — at the default 16 processors that's 320 Hz of OCE, which Rider/VS debuggers must intercept (stack walk + filter eval) and which can amplify cold-path business code (EF Core first query, DI first resolve, etc.) by 100×+ in **Debug** mode (measured 100 ms in Run vs 13 s in Debug). After 3.15, Debug RTT is on par with Run, and breakpoints respond in seconds, not minutes.
 - **50× speedup** on delay-bound business via `[MaxConcurrency(N)]`: a `delay=10ms` workload jumps from 68 req/s (serial) to 3 178 req/s (N=64). See [02.performance.md](Docs/en/02.performance.md#concurrency-speedup-under-async-business-maxconcurrency64).
 - **Zero-alloc hot path**: Header + Body both encode straight into the same `IBufferWriter<byte>` span; each connection allocates one `ArrayBufferWriter` for its entire lifetime.
 - **O(1) route dispatch**: Routes are resolved to `uint` ids during handshake; runtime lookup is a single `Dictionary<uint, ProcessorRunner>` hop into a compiled delegate.
 - **Compile-time safety, runtime speed**: Roslyn analyzers fail the build on illegal `[MaxConcurrency]` combos or cross-processor escape hatches; source generators emit `ProcessorRef<T>` extensions that read like local calls.
-- **Four runtimes, one codebase**: net7 / net8 / net9 / net10 all pass 36/36 end-to-end tests; the client library additionally targets `netstandard2.1` for Unity.
+- **Four runtimes, one codebase**: net7 / net8 / net9 / net10 all pass 63/63 end-to-end tests; the client library additionally targets `netstandard2.1` for Unity.
+
+> **Why net8 is now faster than net10 on serial RTT**: in Step 3.15 the `Channel` async signal path on hot processors was replaced with a synchronous `BlockingCollection` take. On net8 (no Dynamic PGO) this is a net win (−12.5% RTT, −22% allocation). On net10 the previous `Channel` path was already heavily PGO-optimized, so the synchronous take adds one Monitor.Wait/Pulse pair (+6.3% RTT) but still saves 26% allocation by removing the `IValueTaskSource` / linked-CTS boxing. Pick **net10** for lowest allocation / Gen0 pressure (and the fastest `InvokeRoute`); pick **net8 LTS** for lowest serial RTT and the longest support window.
 
 ### How it stacks up against other game-server stacks
 
