@@ -173,6 +173,8 @@ namespace GoPlay.Generators.Extension
                 ? new[] { PROCESSOR_BASE }
                 : _baseClasses;
 
+            if (type.AllInterfaces.Any(o => baseClasses.Contains(o.Name))) return true;
+
             var baseType = type.BaseType;
             while (baseType != null)
             {
