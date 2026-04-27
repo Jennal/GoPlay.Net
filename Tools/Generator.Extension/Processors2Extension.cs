@@ -27,7 +27,7 @@ namespace GoPlay.Generators.Extension
         private static string[] BASIC_NAMESPACES = GeneratorUtils.GetBasicConf("basic_ns_ext");
         private static string TPL_FRONTEND = GeneratorUtils.GetTpl("tpl_frontend");
         private static string TPL_BACKEND = GeneratorUtils.GetTpl("tpl_backend");
-        
+
         private static List<TemplateData> _frontends;
         private static List<TemplateData> _backends;
 
@@ -36,14 +36,14 @@ namespace GoPlay.Generators.Extension
 
         private static List<string> _frontNs;
         private static List<string> _backNs;
-        
+
         private static string _outFrontFile;
         private static string _outBackFile;
         private static string[] _baseClasses;
         private static string[] _ignoreTypes;
         private static string[] _ignoreMethods;
-        
-        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath="", string backendTplPath="", string frontendNs="", string backendNs="", string ignoreTypes="", string ignoreMethods="")
+
+        public static async Task Generate(string slnFolder, string outputFrontendFile, string outputBackendFile, string baseClasses, string frontendTplPath = "", string backendTplPath = "", string frontendNs = "", string backendNs = "", string ignoreTypes = "", string ignoreMethods = "")
         {
             _outFrontFile = outputFrontendFile;
             _outBackFile = outputBackendFile;
@@ -56,7 +56,7 @@ namespace GoPlay.Generators.Extension
             {
                 throw new Exception("FrontendFile or BackendFile must be set!");
             }
-            
+
             _frontends = new List<TemplateData>();
             _backends = new List<TemplateData>();
 
@@ -67,7 +67,7 @@ namespace GoPlay.Generators.Extension
             _backNs = CreateNs(backendNs);
             _ignoreTypes = ignoreTypes.Split(",", StringSplitOptions.RemoveEmptyEntries);
             _ignoreMethods = ignoreMethods.Split(",", StringSplitOptions.RemoveEmptyEntries);
-            
+
             var files = Directory.EnumerateFiles(slnFolder, "*.csproj", SearchOption.AllDirectories);
             foreach (var csprojPath in files)
             {
@@ -75,14 +75,14 @@ namespace GoPlay.Generators.Extension
                 await ResolveProject(csprojPath);
             }
 
-            if(!string.IsNullOrEmpty(_outFrontFile)) Write(_outFrontFile, frontendTpl, _frontends, _frontPushes, _frontNs);
-            if(!string.IsNullOrEmpty(_outBackFile)) Write(_outBackFile, backendTpl, _backends, _backPushes, _backNs);
+            if (!string.IsNullOrEmpty(_outFrontFile)) Write(_outFrontFile, frontendTpl, _frontends, _frontPushes, _frontNs);
+            if (!string.IsNullOrEmpty(_outBackFile)) Write(_outBackFile, backendTpl, _backends, _backPushes, _backNs);
         }
 
         private static List<string> CreateNs(string ns)
         {
             if (string.IsNullOrEmpty(ns)) return BASIC_NAMESPACES.ToList();
-            
+
             var nsList = ns.Split(",", StringSplitOptions.RemoveEmptyEntries)
                 .Select(o => o.Trim())
                 .Where(o => !string.IsNullOrEmpty(o));
@@ -120,14 +120,14 @@ namespace GoPlay.Generators.Extension
             {
                 project = project.AddDocument(file, await File.ReadAllTextAsync(file)).Project;
             }
-            
+
             var compilation = await project.GetCompilationAsync();
             // var semanticModel = compilation!.GetSemanticModel(compilation.SyntaxTrees.FirstOrDefault()!);
             var symbolsWithNames = compilation!.GetSymbolsWithName((string name) => true, SymbolFilter.Type);
             var types = symbolsWithNames.OfType<INamedTypeSymbol>().ToArray();
             foreach (var type in types)
             {
-                if (!CheckType(compilation, type)) continue;
+                if (!CheckType(type)) continue;
 
                 var isFrontEnd = ProcessorIsFrontEnd(type);
                 var isBackEnd = ProcessorIsBackEnd(type);
@@ -140,7 +140,7 @@ namespace GoPlay.Generators.Extension
 
                     var isMethodFrontEnd = MethodIsFrontEnd(method);
                     var isMethodBackEnd = MethodIsBackEnd(method);
-                    
+
                     if (isFrontEnd && isMethodFrontEnd) _frontends.Add(data);
                     if (isBackEnd && isMethodBackEnd) _backends.Add(data);
                 }
@@ -158,26 +158,29 @@ namespace GoPlay.Generators.Extension
 
             var processorName = type.Name;
             var methodName = method.Identifier.ValueText;
-            
+
             var methodFullName = $"{processorName}.{methodName}";
             return !_ignoreMethods.Contains(methodFullName);
         }
 
-        private static bool CheckType(Compilation compilation, INamedTypeSymbol type)
+        private static bool CheckType(INamedTypeSymbol type)
         {
             if (type.Name == PROCESSOR_BASE) return false;
             if (_baseClasses?.Contains(type.Name) ?? false) return false;
             if (_ignoreTypes?.Contains(type.Name) ?? false) return false;
 
-            var types = type.DeclaringSyntaxReferences
-                .Select(o => o.GetSyntax() as ClassDeclarationSyntax)
-                .Where(o => o != null)
-                .Select(o => compilation.GetSemanticModel(o.SyntaxTree).GetDeclaredSymbol(o) as ITypeSymbol)
-                .ToList();
-            var baseTypes = types.SelectMany(o => o.AllInterfaces).Union(types.Select(o => o.BaseType)).Where(o => o != null).ToList();
-            if (!baseTypes.Any(t => t.Name == PROCESSOR_BASE || (_baseClasses?.Contains(t.Name) ?? false))) return false;
-            
-            return true;
+            var baseClasses = _baseClasses == null || _baseClasses.Length <= 0
+                ? new[] { PROCESSOR_BASE }
+                : _baseClasses;
+
+            var baseType = type.BaseType;
+            while (baseType != null)
+            {
+                if (baseClasses.Contains(baseType.Name)) return true;
+                baseType = baseType.BaseType;
+            }
+
+            return false;
         }
 
         private static IEnumerable<PushData> GetPushes(INamedTypeSymbol type)
@@ -241,7 +244,7 @@ namespace GoPlay.Generators.Extension
 
             return false;
         }
-        
+
         private static bool MethodIsBackEnd(MethodDeclarationSyntax method)
         {
             var attr = GetAttribute(method, SERVER_TAG);
@@ -281,7 +284,7 @@ namespace GoPlay.Generators.Extension
             var processorName = processor.Name;
             if (processorName.StartsWith(PROCESSOR)) processorName = processorName.Substring(PROCESSOR.Length);
             if (processorName.EndsWith(PROCESSOR)) processorName = processorName.Substring(0, processorName.Length - PROCESSOR.Length);
-            
+
             //fill route
             data.route = $"{GetProcessorName(processor)}.{GetMethodName(method)}";
 
@@ -289,7 +292,7 @@ namespace GoPlay.Generators.Extension
             data.returnType = GetReturnType(method.ReturnType.ToString());
             data.paramType = param?.Type?.ToString();
             data.isNeedLogin = GetIsNeedLogin(method);
-            
+
             return data;
         }
 
@@ -313,7 +316,7 @@ namespace GoPlay.Generators.Extension
 
                 return parameter;
             }
-            
+
             return null;
         }
 
@@ -364,7 +367,7 @@ namespace GoPlay.Generators.Extension
                                                              .FirstOrDefault(o => o.Name.ToString() == attrName));
             return attrs.FirstOrDefault(o => o != null);
         }
-        
+
         private static AttributeSyntax GetAttribute(MethodDeclarationSyntax method, string attrName)
         {
             var attr = method
