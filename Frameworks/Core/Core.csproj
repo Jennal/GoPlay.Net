@@ -26,8 +26,23 @@ For more information, please go to [https://github.com/Jennal/GoPlay.Net](https:
 
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.25.0" />
-    <PackageReference Include="LitJson" Version="0.18.0" />
+    <Reference Include="LitJson">
+      <HintPath>..\ThirdParty\Dlls\LitJson.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\ThirdParty\Dlls\LitJson.dll" Pack="true" PackagePath="lib\net7.0" Visible="false" />
+    <None Include="..\ThirdParty\Dlls\LitJson.dll" Pack="true" PackagePath="lib\net8.0" Visible="false" />
+    <None Include="..\ThirdParty\Dlls\LitJson.dll" Pack="true" PackagePath="lib\net9.0" Visible="false" />
+    <None Include="..\ThirdParty\Dlls\LitJson.dll" Pack="true" PackagePath="lib\net10.0" Visible="false" />
+    <None Include="..\ThirdParty\Dlls\LitJson.dll" Pack="true" PackagePath="lib\netstandard2.1" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="CopyLitJsonToOutputDirectory" AfterTargets="Build" Condition="'$(TargetDir)' != ''">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\ThirdParty\Dlls\LitJson.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath=""/>
