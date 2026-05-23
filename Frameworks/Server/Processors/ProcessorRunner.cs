@@ -137,6 +137,7 @@ namespace GoPlay.Core.Processors
         private CancellationTokenSource _restartCts;
         private CancellationTokenSource _linkedCts;
         private Task _runTask;
+        private Task<bool> _pendingReadSignal;
 
         public ProcessorRunner(
             ProcessorBase processor,
@@ -1137,25 +1138,33 @@ namespace GoPlay.Core.Processors
         {
             var reader = _incoming.Reader;
 
-            if (timeout <= TimeSpan.Zero)
-            {
-                try { return await reader.WaitToReadAsync(ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return false; }
-            }
-
             try
             {
-                var waitTask = reader.WaitToReadAsync(ct).AsTask();
-                var delayTask = Task.Delay(timeout);
+                var waitTask = _pendingReadSignal ?? (_pendingReadSignal = reader.WaitToReadAsync(ct).AsTask());
+
+                if (timeout <= TimeSpan.Zero)
+                {
+                    _pendingReadSignal = null;
+                    return await waitTask.ConfigureAwait(false);
+                }
+
+                var delayTask = Task.Delay(timeout, ct);
                 var completed = await Task.WhenAny(waitTask, delayTask).ConfigureAwait(false);
 
                 if (completed == waitTask)
                 {
+                    _pendingReadSignal = null;
                     return await waitTask.ConfigureAwait(false);
                 }
 
-                // 周期超时，回到顶部跑周期任务
-                return !ct.IsCancellationRequested;
+                if (ct.IsCancellationRequested)
+                {
+                    _pendingReadSignal = null;
+                    return false;
+                }
+
+                // 周期超时，回到顶部跑周期任务；未完成的 waitTask 留到下一轮复用。
+                return true;
             }
             catch (OperationCanceledException)
             {
