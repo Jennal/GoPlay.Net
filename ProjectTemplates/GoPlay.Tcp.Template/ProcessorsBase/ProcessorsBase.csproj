@@ -11,8 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="1.0.3" />
-    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="1.0.3" />
+    <PackageReference Include="GoPlay.Core.Transport.Ws" Version="1.0.4" />
+    <PackageReference Include="GoPlay.Core.Transport.Wss" Version="1.0.4" />
   </ItemGroup>
 
 </Project>
