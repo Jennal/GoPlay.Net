@@ -163,12 +163,15 @@ namespace GoPlay.Core.Transport.Ws
         public override void OnWsDisconnected()
         {
             Console.WriteLine($"WebSocket session with Id {Id} disconnected!");
-            if (m_stash != null)
-            {
-                ArrayPool<byte>.Shared.Return(m_stash);
-                m_stash = null;
-                m_stashLen = 0;
-            }
+            ReturnStash();
+        }
+
+        private void ReturnStash()
+        {
+            var stash = Interlocked.Exchange(ref m_stash, null);
+            if (stash == null) return;
+            m_stashLen = 0;
+            ArrayPool<byte>.Shared.Return(stash);
         }
 
         protected override void OnError(SocketError error)

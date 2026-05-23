@@ -79,17 +79,9 @@ namespace GoPlay.Core.Processors
         /// </para>
         ///
         /// <para>
-        /// 与之对比，<see cref="WaitForSignalAsync"/> 用 <c>Channel.WaitToReadAsync(linkedToken)</c> +
-        /// <see cref="CancellationTokenSource"/>(<c>RecvTimeout</c>) 实现 timeout：idle 时每 <c>RecvTimeout</c>
-        /// 抛一次 <see cref="OperationCanceledException"/> 做"超时信号"。N 个 Processor × 20Hz 量级的
-        /// first-chance exception 在 IDE Debug 模式下会触发巨量 stack walk / filter 求值，把 debugger
-        /// event 队列打爆——业务侧 EF Core / DI cold-path 实测被放大 100x+。
-        /// </para>
-        ///
-        /// <para>
-        /// 行为与 1c1cbe8 之前的 <c>BlockingCollection.TryTake(timeout)</c> 路径一致；
         /// <c>_maxConcurrency &gt; 1</c> 时仍走 <see cref="_incoming"/> Channel——流水线并发场景下
-        /// async 归还 ThreadPool worker 是必要的，且这种 Processor 数量极少，异常风暴贡献可忽略。
+        /// async 归还 ThreadPool worker 是必要的；其 idle timeout 由 <see cref="WaitForSignalAsync"/>
+        /// 使用 <c>Task.WhenAny</c> 实现，不再靠取消异常表达常态超时。
         /// </para>
         /// </summary>
         private readonly BlockingCollection<RunnerWorkItem> _incomingSync;
@@ -1151,16 +1143,19 @@ namespace GoPlay.Core.Processors
                 catch (OperationCanceledException) { return false; }
             }
 
-            using var timeoutCts = new CancellationTokenSource(timeout);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
             try
             {
-                return await reader.WaitToReadAsync(linked.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
+                var waitTask = reader.WaitToReadAsync(ct).AsTask();
+                var delayTask = Task.Delay(timeout);
+                var completed = await Task.WhenAny(waitTask, delayTask).ConfigureAwait(false);
+
+                if (completed == waitTask)
+                {
+                    return await waitTask.ConfigureAwait(false);
+                }
+
                 // 周期超时，回到顶部跑周期任务
-                return true;
+                return !ct.IsCancellationRequested;
             }
             catch (OperationCanceledException)
             {

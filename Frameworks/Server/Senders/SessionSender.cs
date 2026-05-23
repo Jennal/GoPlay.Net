@@ -38,6 +38,7 @@ namespace GoPlay.Core.Senders
         private readonly Channel<Package> _outgoing;
         private readonly int _flushBytesThreshold;
         private readonly CancellationTokenSource _stopCts;
+        private CancellationTokenSource _runLinkedCts;
         private Task _runTask;
 
         public int QueueCount => _outgoing.Reader.Count;
@@ -62,15 +63,17 @@ namespace GoPlay.Core.Senders
 
         public void Start(CancellationToken serverToken)
         {
-            var linked = CancellationTokenSource.CreateLinkedTokenSource(serverToken, _stopCts.Token);
+            _runLinkedCts?.Dispose();
+            _runLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(serverToken, _stopCts.Token);
+            var token = _runLinkedCts.Token;
             // 100 client 同时连入时，100 个 SessionSender 同时 Task.Run(RunAsync) 排 ThreadPool 队列；
             // 而 server 的 handshake resp 靠这里的 RunAsync 第一轮 drain channel 发出——排队导致
             // handshake resp 延迟 >10s，client 侧 RequestTimeout 触发 Connect 返回 false。
             // 改 TaskUtil.LongRun（LongRunning 专用线程），与 Client.SendLoop / RecvLoop / TimeoutLoop 对称，
             // 每 session 一个发送线程，换取 handshake 阶段零排队。
             _runTask = TaskUtil.LongRun(
-                () => RunAsync(linked.Token).GetAwaiter().GetResult(),
-                linked.Token);
+                () => RunAsync(token).GetAwaiter().GetResult(),
+                token);
         }
 
         /// <summary>
@@ -79,10 +82,11 @@ namespace GoPlay.Core.Senders
         public async Task StopAsync(TimeSpan drainTimeout)
         {
             _outgoing.Writer.TryComplete();
-            if (_runTask == null) return;
 
             try
             {
+                if (_runTask == null) return;
+
                 var completed = await Task.WhenAny(_runTask, Task.Delay(drainTimeout)).ConfigureAwait(false);
                 if (completed != _runTask)
                 {
@@ -92,6 +96,12 @@ namespace GoPlay.Core.Senders
             }
             catch (OperationCanceledException) { /* IGNORE */ }
             catch (AggregateException err) when (err.InnerException is OperationCanceledException) { /* IGNORE */ }
+            finally
+            {
+                _runLinkedCts?.Dispose();
+                _runLinkedCts = null;
+                _stopCts.Dispose();
+            }
         }
 
         /// <summary>

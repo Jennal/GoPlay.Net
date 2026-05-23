@@ -36,13 +36,16 @@ namespace GoPlay.Core.Transport.NetCoreServer
 
         protected override void OnDisconnected()
         {
-            if (m_stash != null)
-            {
-                ArrayPool<byte>.Shared.Return(m_stash);
-                m_stash = null;
-                m_stashLen = 0;
-            }
+            ReturnStash();
             m_client.InvokeOnDisconnected();
+        }
+
+        private void ReturnStash()
+        {
+            var stash = Interlocked.Exchange(ref m_stash, null);
+            if (stash == null) return;
+            m_stashLen = 0;
+            ArrayPool<byte>.Shared.Return(stash);
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
@@ -116,12 +119,7 @@ namespace GoPlay.Core.Transport.NetCoreServer
         protected override void Dispose(bool disposingManagedResources)
         {
             base.Dispose(disposingManagedResources);
-            if (m_stash != null)
-            {
-                ArrayPool<byte>.Shared.Return(m_stash);
-                m_stash = null;
-                m_stashLen = 0;
-            }
+            ReturnStash();
         }
     }
     

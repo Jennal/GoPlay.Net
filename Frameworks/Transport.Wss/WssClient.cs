@@ -67,13 +67,16 @@ namespace GoPlay.Core.Transport.Wss
         {
             // Console.WriteLine($"WebSocket client disconnected a session with Id {Id}");
             m_wsConnected = false;
-            if (m_stash != null)
-            {
-                ArrayPool<byte>.Shared.Return(m_stash);
-                m_stash = null;
-                m_stashLen = 0;
-            }
+            ReturnStash();
             m_client.InvokeOnDisconnected();
+        }
+
+        private void ReturnStash()
+        {
+            var stash = Interlocked.Exchange(ref m_stash, null);
+            if (stash == null) return;
+            m_stashLen = 0;
+            ArrayPool<byte>.Shared.Return(stash);
         }
         
         public override void OnWsReceived(byte[] buffer, long offset, long size)
