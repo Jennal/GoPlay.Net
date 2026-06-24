@@ -340,7 +340,8 @@ namespace GoPlay
                         {
                             OnErrorEvent(new HandshakeTimeoutException());
                             DisconnectAsync().ConfigureAwait(false);
-                            m_connectionTask.SetResult(false);
+                            // TrySet*：握手应答可能恰在此刻到达并已 set，避免 SetResult 二次设置抛 InvalidOperationException。
+                            m_connectionTask?.TrySetResult(false);
                             return;
                         }
                     }
@@ -601,7 +602,7 @@ namespace GoPlay
                     {
                         OnErrorEvent(new HandshakeException(pack.Header.Status.Message));
                         DisconnectAsync().ConfigureAwait(false);
-                        m_connectionTask.SetResult(false);
+                        m_connectionTask?.TrySetResult(false);
                         break;
                     }
 
@@ -612,7 +613,9 @@ namespace GoPlay
                         OnConnectedEvent();
                         StartHeartbeat();
                         FilterOnClientConnect(0);
-                        m_connectionTask.SetResult(true);
+                        // TrySet*：与 TimeoutLoop 的超时置 false 之间存在 TOCTOU，用 Try 避免二次设置抛异常。
+                        // 注意 m_handshake 已在 ResolveHandShake 中先于此处赋值，Connect 返回 true 时路由表必然就绪。
+                        m_connectionTask.TrySetResult(true);
                     }
 
                     break;

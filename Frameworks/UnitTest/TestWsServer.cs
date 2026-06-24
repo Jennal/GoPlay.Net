@@ -94,11 +94,16 @@ namespace UnitTest
             var timer = new System.Diagnostics.Stopwatch();
             
             var client = new Client<WsClient>();
+            // RequestTimeout 必须在 Connect 之前设置：握手完成的等待窗口由 RequestTimeout 决定，
+            // 否则握手仍受默认 5s 约束，高负载下可能超时 → Connect 返回 false → 首个请求报 "route not exists"。
+            client.RequestTimeout = TimeSpan.MaxValue;
+            client.OnError += err => Console.WriteLine($"ERROR: {err.Message}\n{err.StackTrace}");
             try
             {
-                await client.Connect("127.0.0.1", _port);
-                client.RequestTimeout = TimeSpan.MaxValue;
-                client.OnError += err => Console.WriteLine($"ERROR: {err.Message}\n{err.StackTrace}");
+                if (!await client.Connect("127.0.0.1", _port))
+                {
+                    throw new Exception("connect failed!");
+                }
 
                 timer.Start();
                 for (var i = 0; i < count; i++)
