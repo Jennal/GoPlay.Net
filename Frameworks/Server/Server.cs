@@ -19,6 +19,17 @@ namespace GoPlay
         
         public EncodingType EncodingType = EncodingType.Protobuf;
 
+        private static readonly AsyncLocal<CancellationToken> s_currentClientToken = new AsyncLocal<CancellationToken>();
+
+        /// <summary>
+        /// 当前正在 Processor 上处理的请求所属客户端的取消令牌(ambient)。
+        /// 客户端断开时该令牌被取消。业务 handler 可自愿读取并传入自己的异步 IO，
+        /// 实现"断线即中止"；非处理上下文读取返回 <see cref="CancellationToken.None"/>。
+        /// </summary>
+        public static CancellationToken CurrentClientToken => s_currentClientToken.Value;
+
+        internal static void SetCurrentClientToken(CancellationToken token) => s_currentClientToken.Value = token;
+
         /// <summary>
         /// 默认每个 Processor 允许的最大并发 in-flight 请求数。
         /// 业务可在 Processor class 上标 [MaxConcurrency(N)] 单独覆盖。
@@ -49,6 +60,17 @@ namespace GoPlay
         public abstract uint ToRouteId(string route);
         public abstract string ToRouteName(ServerTag serverTag, uint route);
         public abstract string GetClientIp(uint clientId);
+
+        /// <summary>
+        /// 客户端连接是否仍然存活(底层 socket 会话还在)。存活闸门的统一判活入口。
+        /// </summary>
+        public abstract bool IsClientAlive(uint clientId);
+
+        /// <summary>
+        /// 取每客户端取消令牌：连接登记时创建、断开时取消。取不到返回 false + <see cref="CancellationToken.None"/>。
+        /// </summary>
+        internal abstract bool TryGetClientToken(uint clientId, out CancellationToken token);
+
         public abstract void Dispose();
         public abstract void RegisterFilter(IFilter filter);
         public abstract void UnregisterFilter(IFilter filter);
@@ -117,8 +139,22 @@ namespace GoPlay
         /// Stop 时对这张表里的所有票据 <see cref="Task.WhenAll(Task[])"/>，即可确保每个 clientId 的 Disconnect 链跑到底。
         /// </para>
         /// </summary>
-        private readonly ConcurrentDictionary<uint, TaskCompletionSource<bool>> m_liveClients
-            = new ConcurrentDictionary<uint, TaskCompletionSource<bool>>();
+        private readonly ConcurrentDictionary<uint, ClientLifetime> m_liveClients
+            = new ConcurrentDictionary<uint, ClientLifetime>();
+
+        /// <summary>
+        /// 每个活跃连接的生命周期凭据：
+        /// <list type="bullet">
+        ///   <item><see cref="Done"/>：断开回调链(Filter/Processor/Session/Sender)全部跑完才 set，供 Stop 时 WhenAll。</item>
+        ///   <item><see cref="Cts"/>：每客户端取消令牌(链到 Server 的 m_cancelSource)，断开时 Cancel，
+        ///         驱动 P2 in-flight checkpoint 与 ambient <see cref="CurrentClientToken"/>。</item>
+        /// </list>
+        /// </summary>
+        private sealed class ClientLifetime
+        {
+            public TaskCompletionSource<bool> Done;
+            public CancellationTokenSource Cts;
+        }
 
         public override Type TransportType => typeof(T);
         
@@ -173,11 +209,16 @@ namespace GoPlay
             }
 
             // 先登记票据，再触发任何业务回调：避免极端 race 下 OnDisconnected 抢跑导致找不到票据漏减。
-            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            if (!m_liveClients.TryAdd(clientId, tcs))
+            var lifetime = new ClientLifetime
+            {
+                Done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+                Cts = CancellationTokenSource.CreateLinkedTokenSource(m_cancelSource.Token),
+            };
+            if (!m_liveClients.TryAdd(clientId, lifetime))
             {
                 // 罕见：同一 clientId 重入（IdLoopGenerator 绕回且旧票据还没销）。
                 // 为了避免污染现存票据，直接忽略这次 Connect。
+                lifetime.Cts.Dispose();
                 return;
             }
 
@@ -198,9 +239,6 @@ namespace GoPlay
 
         protected virtual void OnClientDisconnectEvent(uint clientId)
         {
-            // 先取出票据引用，finally 里销毁；即使登记缺失（Stop 期混入的 session）也要让清理链跑完。
-            m_liveClients.TryGetValue(clientId, out var tcs);
-
             try
             {
                 FilterOnClientDisconnect(clientId);
@@ -216,11 +254,32 @@ namespace GoPlay
             }
             finally
             {
-                if (tcs != null)
+                // 用 TryRemove 做原子认领：同一 clientId 可能被传输层重复回调断开
+                // (NetCoreServer 的 Disconnect 路径就会重入)，只有抢到票据的那次负责
+                // 取消令牌 + 完成 Done + 销毁，确保 Cancel/Dispose 恰好执行一次。
+                if (m_liveClients.TryRemove(clientId, out var lifetime))
                 {
-                    m_liveClients.TryRemove(clientId, out _);
-                    tcs.TrySetResult(true);
+                    // 先取消每客户端令牌：唤醒任何读了 ambient token 的 in-flight 业务，让其尽早收手。
+                    SafeCancel(lifetime.Cts);
+                    lifetime.Done.TrySetResult(true);
+                    lifetime.Cts?.Dispose();
                 }
+            }
+        }
+
+        /// <summary>
+        /// 取消令牌，吞掉已 Dispose 的竞态(并发清理时 Cancel 会抛 ObjectDisposedException)。
+        /// </summary>
+        private static void SafeCancel(CancellationTokenSource cts)
+        {
+            if (cts == null) return;
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // 已被另一路清理销毁，忽略。
             }
         }
 
@@ -314,7 +373,7 @@ namespace GoPlay
                 catch (Exception err) { OnErrorEvent(id, err); }
             }
 
-            var pending = m_liveClients.Values.Select(t => t.Task).ToArray();
+            var pending = m_liveClients.Values.Select(t => t.Done.Task).ToArray();
             if (pending.Length == 0) return;
 
             try
@@ -329,11 +388,16 @@ namespace GoPlay
                             $"Server.Stop drain timeout after {StopDrainTimeout.TotalSeconds}s, " +
                             $"leaked clients: [{string.Join(",", leaked)}]"));
 
-                    foreach (var kv in m_liveClients)
+                    // 用 TryRemove 原子认领，避免与并发 OnClientDisconnectEvent 重复 Cancel/Dispose。
+                    foreach (var key in m_liveClients.Keys.ToArray())
                     {
-                        kv.Value.TrySetResult(false);
+                        if (m_liveClients.TryRemove(key, out var lifetime))
+                        {
+                            SafeCancel(lifetime.Cts);
+                            lifetime.Done.TrySetResult(false);
+                            lifetime.Cts?.Dispose();
+                        }
                     }
-                    m_liveClients.Clear();
                 }
             }
             catch (AggregateException)
@@ -358,9 +422,21 @@ namespace GoPlay
             catch { /* best-effort */ }
         }
 
+        /// <summary>
+        /// 只取不建：发送路径专用，绝不为已断开客户端复活 sender（杜绝僵尸 sender + 独占线程泄漏）。
+        /// </summary>
+        private bool TryGetSender(uint clientId, out SessionSender sender)
+        {
+            return m_senders.TryGetValue(clientId, out sender);
+        }
+
         private SessionSender GetOrCreateSender(uint clientId)
         {
             if (m_senders.TryGetValue(clientId, out var sender)) return sender;
+
+            // 防线：只为已登记的活跃连接创建 sender。发送路径已改用 TryGetSender，
+            // 这里只在 OnClientConnectEvent 的合法创建点命中；其余场景拒绝创建，返回 null。
+            if (!m_liveClients.ContainsKey(clientId)) return null;
 
             var created = new SessionSender(clientId, this, Transport, capacity: SessionSenderCapacity);
             if (m_senders.TryAdd(clientId, created))
@@ -555,7 +631,9 @@ namespace GoPlay
                 var list = package.Split();
                 foreach (var p in list)
                 {
-                    var sender = GetOrCreateSender(p.Header.ClientId);
+                    // P0: 发送前判活 + 只取不建。死客户端的回包直接丢弃，绝不复活 sender。
+                    if (!IsClientAlive(p.Header.ClientId)) continue;
+                    if (!TryGetSender(p.Header.ClientId, out var sender)) continue;
                     sender.Enqueue(p);
                 }
             }
@@ -570,8 +648,13 @@ namespace GoPlay
             var package = Package.Create(0, PackageType.Kick, EncodingType);
             package.Header.ClientId = clientId;
             package.Header.Status.Message = reason;
-            var sender = GetOrCreateSender(clientId);
-            sender.Enqueue(package);
+
+            // 仅在客户端仍存活且 sender 在时投递 Kick 包；死 socket 不复活 sender。
+            // 无论是否成功投递，都照常调度兜底断开。
+            if (IsClientAlive(clientId) && TryGetSender(clientId, out var sender))
+            {
+                sender.Enqueue(package);
+            }
 
             TaskUtil.DelayRun(Consts.TimeOut.KickDelayDisconnect, () =>
             {
@@ -594,6 +677,37 @@ namespace GoPlay
         {
             return Transport.GetClientIp(clientId);
         }
+
+        /// <inheritdoc />
+        public override bool IsClientAlive(uint clientId)
+        {
+            return Transport.IsAlive(clientId);
+        }
+
+        /// <inheritdoc />
+        internal override bool TryGetClientToken(uint clientId, out CancellationToken token)
+        {
+            if (m_liveClients.TryGetValue(clientId, out var lifetime) && lifetime.Cts != null)
+            {
+                try
+                {
+                    token = lifetime.Cts.Token;
+                    return true;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 竞态：票据刚被断开清理销毁。视作不可用。
+                }
+            }
+
+            token = CancellationToken.None;
+            return false;
+        }
+
+        /// <summary>
+        /// 当前活跃 SessionSender 数量。诊断/测试用：断开后应回落，且发送路径不会为已断开客户端复活 sender。
+        /// </summary>
+        public int SenderCount => m_senders.Count;
 
         public override uint ToRouteId(string route)
         {

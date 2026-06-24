@@ -16,6 +16,19 @@ namespace GoPlay.Core.Transports
     /// </summary>
     public delegate void DataReceivedSpanHandler(uint clientId, ReadOnlySpan<byte> data);
 
+    /// <summary>
+    /// 三个传输层(Ws/Wss/Nc)共享的 TCP KeepAlive 默认值，避免各处硬编码漂移。
+    /// 默认 ~11s 感知半开连接：空闲 5s 首探、间隔 2s、3 次无响应判死。
+    /// 各传输以 virtual 属性暴露这些值，便于宿主子类化调参。
+    /// </summary>
+    public static class TcpKeepAliveDefaults
+    {
+        public const bool Enabled = true;
+        public const int TimeSeconds = 5;
+        public const int IntervalSeconds = 2;
+        public const int RetryCount = 3;
+    }
+
     public abstract class TransportServerBase
     {
         public event Action<uint> OnClientConnected;
@@ -68,6 +81,13 @@ namespace GoPlay.Core.Transports
         }
 
         public abstract string GetClientIp(uint clientId);
+
+        /// <summary>
+        /// 客户端是否仍然存活(底层 socket 会话是否还在)。
+        /// 默认 fail-open 返回 true(未覆盖的传输不参与存活闸门，保持旧行为)；
+        /// 在用的传输(Ws/Wss/Nc)各自 override，查自己的 session 表，O(1)。
+        /// </summary>
+        public virtual bool IsAlive(uint clientId) => true;
 
         public abstract void DisconnectClient(uint clientId, Exception err);
         

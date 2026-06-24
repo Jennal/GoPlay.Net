@@ -221,6 +221,9 @@ namespace GoPlay
         
         protected virtual void OnDataReceived(Package packRaw)
         {
+            // P1 辅助：入队前轻量速判。已断开客户端的包不必入队（主闸门仍在出队点 DispatchWorkItem）。
+            if (!IsClientAlive(packRaw.Header.ClientId)) return;
+
             if (!m_routeIdToRunner.TryGetValue(packRaw.Header.PackageInfo.Route, out var runner))
             {
                 OnErrorEvent(packRaw.Header.ClientId, new RouteNotExistsException(packRaw.Header.PackageInfo.Route));

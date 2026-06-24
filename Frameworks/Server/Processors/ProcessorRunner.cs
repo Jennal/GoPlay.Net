@@ -987,6 +987,14 @@ namespace GoPlay.Core.Processors
                 return DispatchInvoke(item.Work, item.MethodSem, ct);
             }
 
+            // P1: 出队即判活。客户端在"入队后、出队前"断开时，这里直接丢弃其排队包，
+            // 前置于 semaphore 申请（>1 并发路径），避免为死客户端浪费名额/处理时间。
+            var clientId = item.Pack?.Header?.ClientId ?? IdLoopGenerator.INVALID;
+            if (!_server.IsClientAlive(clientId))
+            {
+                return Task.CompletedTask;
+            }
+
             if (_maxConcurrency == 1)
             {
                 return ProcessOne(item.Pack, ct);
@@ -1104,8 +1112,14 @@ namespace GoPlay.Core.Processors
 
         private async Task ProcessOne(Package pack, CancellationToken ct)
         {
+            var clientId = pack?.Header?.ClientId ?? IdLoopGenerator.INVALID;
+            // P2: 取每客户端取消令牌。断线即取消，驱动 Invoke 前/后的 checkpoint 与 ambient token。
+            _server.TryGetClientToken(clientId, out var clientCt);
             try
             {
+                // Invoke 前 checkpoint：客户端已断开就不处理。
+                if (clientCt.IsCancellationRequested) return;
+
                 var pre = _processor.OnPreRecv(pack);
                 if (pre != null)
                 {
@@ -1114,8 +1128,22 @@ namespace GoPlay.Core.Processors
                     return;
                 }
 
-                var result = await _processor.Invoke(pack).ConfigureAwait(false);
+                // 暴露 ambient token 供业务自愿读取（不读则等价 checkpoint-only，零侵入）。
+                Server.SetCurrentClientToken(clientCt);
+                Package result;
+                try
+                {
+                    result = await _processor.Invoke(pack).ConfigureAwait(false);
+                }
+                finally
+                {
+                    Server.SetCurrentClientToken(default);
+                }
+
+                // 回包前再判活/判取消：跑完才发现客户端已断开时，丢弃回包，不复活 sender。
                 if (ct.IsCancellationRequested) return;
+                if (clientCt.IsCancellationRequested) return;
+                if (!_server.IsClientAlive(clientId)) return;
 
                 if (result != null)
                 {

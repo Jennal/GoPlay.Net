@@ -285,7 +285,13 @@ namespace GoPlay.Core.Transport.Ws
         
         protected virtual string KeyPath => "server.pfx";
         protected virtual string KeyPass => "qwerty";
-        
+
+        // TCP KeepAlive 配置：默认取共享值(~11s 感知半开连接)，宿主可子类化覆盖。
+        public virtual bool KeepAliveEnabled => TcpKeepAliveDefaults.Enabled;
+        public virtual int KeepAliveTimeSeconds => TcpKeepAliveDefaults.TimeSeconds;
+        public virtual int KeepAliveIntervalSeconds => TcpKeepAliveDefaults.IntervalSeconds;
+        public virtual int KeepAliveRetryCount => TcpKeepAliveDefaults.RetryCount;
+
         private List<StaticContentParams> _staticContentParams = new List<StaticContentParams>();
         
         public override void Start(string host, int port, CancellationTokenSource cancelSource = null)
@@ -294,13 +300,27 @@ namespace GoPlay.Core.Transport.Ws
             
             var address = host == "*" ? IPAddress.Any : IPAddress.Parse(host);
             m_server = new WsPackServer(this, address, port);
-            
+
+            // P3: 开启 TCP KeepAlive，让内核尽快感知半开连接并触发 OnDisconnected。
+            m_server.OptionKeepAlive = KeepAliveEnabled;
+            if (KeepAliveEnabled)
+            {
+                m_server.OptionTcpKeepAliveTime = KeepAliveTimeSeconds;
+                m_server.OptionTcpKeepAliveInterval = KeepAliveIntervalSeconds;
+                m_server.OptionTcpKeepAliveRetryCount = KeepAliveRetryCount;
+            }
+
             foreach (var param in _staticContentParams)
             {
                 m_server.AddStaticContent(param.path, param.prefix, param.filter, param.timeout);
             }
             
             m_server.Start();
+        }
+
+        public override bool IsAlive(uint clientId)
+        {
+            return m_server != null && m_server.GetSession(clientId, out _);
         }
 
         public override void Stop()
