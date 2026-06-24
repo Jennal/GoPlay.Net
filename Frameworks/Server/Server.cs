@@ -107,8 +107,22 @@ namespace GoPlay
         /// <summary>
         /// 每 session 一个发送器：同 client 内保序，不同 client 天然并行，
         /// 取代旧版全局单线程 m_sendTask（该线程是跨 session 的共享瓶颈）。
+        /// <para>
+        /// L3：sender 不再独占线程，全部由共享的 <see cref="m_sendPump"/>（固定 N 条 worker）驱动，
+        /// 线程数与连接数解耦。
+        /// </para>
         /// </summary>
         private readonly ConcurrentDictionary<uint, SessionSender> m_senders = new ConcurrentDictionary<uint, SessionSender>();
+
+        /// <summary>
+        /// 共享发送调度器（M:N）。每次 <see cref="Start"/> 重建，<see cref="Stop"/> 中在所有 sender drain 后关闭。
+        /// </summary>
+        private SessionSendPump m_sendPump;
+
+        /// <summary>
+        /// 发送 pump 的 worker 线程数。默认取 CPU 核数（下限 2）：远小于连接数，又足够并行喂满网卡。
+        /// </summary>
+        protected virtual int SendPumpWorkerCount => Math.Max(2, Environment.ProcessorCount);
 
         /// <summary>
         /// 每个 SessionSender 的出站 Channel 容量。保留旧 m_sendQueue 的 ushort.MaxValue 上限。
@@ -299,13 +313,18 @@ namespace GoPlay
 
             m_cancelSource = new CancellationTokenSource();
             InitHandShake();
+
+            // L3：先起共享发送调度器，保证第一个连接的 handshake 响应一入队就有 worker 取走。
+            m_sendPump = new SessionSendPump(SendPumpWorkerCount);
+            m_sendPump.Start();
+
             Transport.Start(host, port, m_cancelSource);
             IsStarted = true;
             OnStarted?.Invoke();
 
             StartProcessors();
 
-            // 发送侧不再有全局长跑线程：每 session 一个 SessionSender（由 OnClientConnectEvent 创建）。
+            // 发送侧不再有 per-connection 线程：每 session 一个轻量 SessionSender，由 m_sendPump 的固定线程池驱动。
             return Task.CompletedTask;
         }
 
@@ -339,8 +358,12 @@ namespace GoPlay
             //    在自己的循环里打转"这类未参与 Runner 调度的长跑任务收尾用。
             m_cancelSource.Cancel();
 
-            // 关闭所有 SessionSender：先 complete，Drain timeout 后硬 cancel
+            // 关闭所有 SessionSender：先 complete，Drain timeout 后硬 cancel（此时 pump 仍在跑，负责 drain）
             StopAllSenders();
+
+            // sender 都已 drain/abort，再停 pump 的 worker 线程。
+            m_sendPump?.Stop();
+            m_sendPump = null;
 
             Transport.Stop();
 
@@ -438,15 +461,13 @@ namespace GoPlay
             // 这里只在 OnClientConnectEvent 的合法创建点命中；其余场景拒绝创建，返回 null。
             if (!m_liveClients.ContainsKey(clientId)) return null;
 
-            var created = new SessionSender(clientId, this, Transport, capacity: SessionSenderCapacity);
-            if (m_senders.TryAdd(clientId, created))
-            {
-                created.Start(m_cancelSource.Token);
-                return created;
-            }
+            // pump 尚未就绪（Start 之前的极端时序）则不创建；正常路径下 Start 已先建好 pump。
+            var pump = m_sendPump;
+            if (pump == null) return null;
 
-            // 并发下别的线程已经建好一份：直接弃掉 created（还没 Start，无副作用）
-            return m_senders[clientId];
+            var created = new SessionSender(clientId, this, Transport, pump, capacity: SessionSenderCapacity);
+            // 并发下别的线程已经建好一份：直接弃掉 created（无独占线程/无副作用，等 GC 即可）。
+            return m_senders.TryAdd(clientId, created) ? created : m_senders[clientId];
         }
 
         private void RemoveAndStopSender(uint clientId)
