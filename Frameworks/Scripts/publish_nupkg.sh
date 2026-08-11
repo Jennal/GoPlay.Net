@@ -1,7 +1,7 @@
 #!/bin/sh -x
 DIR=$(dirname "$0")/..
 TPL_DIR="../ProjectTemplates"
-VERSION="1.0.6"
+VERSION="1.0.7"
 cd $DIR
 
 sync_template_package_versions() {
