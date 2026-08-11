@@ -2,8 +2,11 @@
 #define PROFILER
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnitTest.Helpers;
@@ -243,6 +246,131 @@ namespace UnitTest
             finally
             {
                 try { if (client != null) await client.DisconnectAsync(); } catch { /* ignore */ }
+                server.Stop();
+            }
+        }
+
+        /// <summary>
+        /// 多连接同时发送超大包：NcServer 在不同 IOCP 线程上并发进入 <c>ResolveChunk</c>。
+        /// 旧实现用全局共享 Dictionary 会在跨连接并发写时损坏或串包；
+        /// 现挂在 per-session <c>ClientLifetime.ChunkCache</c> 上应稳定，且各连接回包不得串扰。
+        /// </summary>
+        [Test]
+        public async Task TestConcurrentOverflowPackage()
+        {
+            const int clientCount = 24;
+            const int roundsPerClient = 3;
+
+            var port = TestPort.GetFree();
+            var server = new Server<NcServer>();
+            var serverErrors = new ConcurrentBag<(uint ClientId, Exception Error)>();
+            var failures = new ConcurrentBag<string>();
+            server.OnError += (u, exception) =>
+            {
+                serverErrors.Add((u, exception));
+                Console.WriteLine($"Server.OnError[{u}]: {exception}");
+            };
+
+            static string MakePayload(int clientIndex)
+            {
+                // 独特前缀：一旦跨 session 串包，断言立刻暴露。
+                var marker = $"C{clientIndex:D4}|";
+                var sb = new StringBuilder(marker, (int)Consts.Package.MAX_CHUNK_SIZE + 256);
+                var pad = (char)('A' + (clientIndex % 26));
+                while (sb.Length < Consts.Package.MAX_CHUNK_SIZE + 100)
+                {
+                    sb.Append(pad);
+                }
+                return sb.ToString();
+            }
+
+            try
+            {
+                server.Register(new TestProcessor());
+                server.Start("127.0.0.1", port);
+
+                var startGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var connected = 0;
+                var tasks = new List<Task>(clientCount);
+
+                for (var i = 0; i < clientCount; i++)
+                {
+                    var clientIndex = i;
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        var client = new Client<NcClient>();
+                        client.RequestTimeout = TimeSpan.FromSeconds(30);
+                        client.OnError += exception =>
+                        {
+                            failures.Add($"client[{clientIndex}] OnError: {exception}");
+                        };
+
+                        try
+                        {
+                            Assert.IsTrue(await client.Connect("127.0.0.1", port),
+                                $"client[{clientIndex}] connect failed");
+
+                            if (Interlocked.Increment(ref connected) == clientCount)
+                            {
+                                startGate.TrySetResult(true);
+                            }
+
+                            // 对齐起点，尽量让各连接的分包重组重叠在同一时间窗。
+                            await startGate.Task;
+
+                            var payload = MakePayload(clientIndex);
+                            var expected = $"[Test] Server reply: {payload}";
+                            for (var round = 0; round < roundsPerClient; round++)
+                            {
+                                var (status, result) = await client.Request<PbString, PbString>(
+                                    "test.echo", new PbString { Value = payload });
+
+                                if (status.Code != StatusCode.Success)
+                                {
+                                    failures.Add(
+                                        $"client[{clientIndex}] round={round}: status={status.Code}, msg={status.Message}");
+                                    continue;
+                                }
+
+                                if (result?.Value != expected)
+                                {
+                                    var preview = result?.Value == null
+                                        ? "<null>"
+                                        : result.Value.Length <= 64
+                                            ? result.Value
+                                            : result.Value.Substring(0, 64) + "...";
+                                    failures.Add(
+                                        $"client[{clientIndex}] round={round}: reply mismatch, got={preview}");
+                                }
+                            }
+                        }
+                        catch (Exception err)
+                        {
+                            failures.Add($"client[{clientIndex}] exception: {err}");
+                        }
+                        finally
+                        {
+                            try { await client.DisconnectAsync(); } catch { /* ignore */ }
+                        }
+                    }));
+                }
+
+                // 防止个别连接卡死导致 startGate 永不放行。
+                var allStarted = await Task.WhenAny(startGate.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+                if (allStarted != startGate.Task)
+                {
+                    startGate.TrySetResult(true);
+                    Assert.Fail($"only {connected}/{clientCount} clients connected before start gate timeout");
+                }
+
+                await Task.WhenAll(tasks);
+
+                Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
+                Assert.IsEmpty(serverErrors,
+                    string.Join(Environment.NewLine, serverErrors.Select(e => $"[{e.ClientId}] {e.Error}")));
+            }
+            finally
+            {
                 server.Stop();
             }
         }

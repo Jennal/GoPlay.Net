@@ -162,12 +162,15 @@ namespace GoPlay
         ///   <item><see cref="Done"/>：断开回调链(Filter/Processor/Session/Sender)全部跑完才 set，供 Stop 时 WhenAll。</item>
         ///   <item><see cref="Cts"/>：每客户端取消令牌(链到 Server 的 m_cancelSource)，断开时 Cancel，
         ///         驱动 P2 in-flight checkpoint 与 ambient <see cref="CurrentClientToken"/>。</item>
+        ///   <item><see cref="ChunkCache"/>：该连接的分包重组缓冲。收包在 per-session IOCP 路径上串行，
+        ///         因此用普通 Dictionary 即可；跨连接不再共享，避免全局字典并发写。</item>
         /// </list>
         /// </summary>
         private sealed class ClientLifetime
         {
             public TaskCompletionSource<bool> Done;
             public CancellationTokenSource Cts;
+            public readonly Dictionary<string, List<Package>> ChunkCache = new Dictionary<string, List<Package>>();
         }
 
         public override Type TransportType => typeof(T);
@@ -273,6 +276,8 @@ namespace GoPlay
                 // 取消令牌 + 完成 Done + 销毁，确保 Cancel/Dispose 恰好执行一次。
                 if (m_liveClients.TryRemove(clientId, out var lifetime))
                 {
+                    // 释放未完成分包，避免半包挂到 GC 前仍占着 Package 引用。
+                    lifetime.ChunkCache.Clear();
                     // 先取消每客户端令牌：唤醒任何读了 ambient token 的 in-flight 业务，让其尽早收手。
                     SafeCancel(lifetime.Cts);
                     lifetime.Done.TrySetResult(true);
@@ -416,6 +421,7 @@ namespace GoPlay
                     {
                         if (m_liveClients.TryRemove(key, out var lifetime))
                         {
+                            lifetime.ChunkCache.Clear();
                             SafeCancel(lifetime.Cts);
                             lifetime.Done.TrySetResult(false);
                             lifetime.Cts?.Dispose();
