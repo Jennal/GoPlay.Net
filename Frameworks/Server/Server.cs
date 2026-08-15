@@ -8,6 +8,7 @@ using GoPlay.Core.Senders;
 using GoPlay.Core.Transports;
 using GoPlay.Core.Utils;
 using GoPlay.Exceptions;
+using GoPlay.Interfaces;
 using GoPlay.Statistics;
 
 namespace GoPlay
@@ -16,7 +17,7 @@ namespace GoPlay
     {
         protected CancellationTokenSource  m_cancelSource = new CancellationTokenSource();
         public CancellationTokenSource CancelSource => m_cancelSource;
-        
+
         public EncodingType EncodingType = EncodingType.Protobuf;
 
         private static readonly AsyncLocal<CancellationToken> s_currentClientToken = new AsyncLocal<CancellationToken>();
@@ -33,11 +34,11 @@ namespace GoPlay
         /// <summary>
         /// 默认每个 Processor 允许的最大并发 in-flight 请求数。
         /// 业务可在 Processor class 上标 [MaxConcurrency(N)] 单独覆盖。
-        /// 
+        ///
         /// 传值约定：
         /// - &gt; 0：显式指定。
         /// - &lt;= 0：auto-sizing，按 Environment.ProcessorCount 推导（至少 1）。
-        /// 
+        ///
         /// 构造默认值 1：严格串行，对老业务行为完全兼容。
         /// </summary>
         public int DefaultConcurrency { get; }
@@ -50,10 +51,10 @@ namespace GoPlay
         }
 
         public abstract Type TransportType { get; }
-        
+
         public abstract Task Start(string host, int port);
         public abstract void Stop();
-        
+
         public abstract void OnErrorEvent(uint clientId, Exception err);
         public abstract void Send(Package package);
         public abstract void Kick(uint clientId, string reason);
@@ -79,13 +80,13 @@ namespace GoPlay
         public abstract void PostRecvFilter(Package pack);
         public abstract void PostSendFilter(Package pack);
         public abstract void ErrorFilter(uint clientId, Exception err);
-        
+
         public abstract bool IsSendQueueFull { get; }
         public abstract int SendQueueCount { get; }
-        
+
         public abstract List<Package> GetAllSendQueue();
         public abstract IEnumerable<ProcessorStatus> GetProcessorQueueStatus();
-        
+
         public abstract string GetRoute(Package pack);
         /// <summary>
         /// 从广播队列 drain 一批事件到 <paramref name="processor"/>。
@@ -97,7 +98,7 @@ namespace GoPlay
         public abstract Task ResolveBroadCast(ProcessorBase processor, ConcurrentQueue<(uint, int, object)> queue, int maxItems);
         public abstract Task Update(ProcessorBase processor);
     }
-    
+
     public partial class Server<T> : Server
         where T : TransportServerBase, new()
     {
@@ -174,7 +175,7 @@ namespace GoPlay
         }
 
         public override Type TransportType => typeof(T);
-        
+
         public bool IsStarted
         {
             get;
@@ -182,7 +183,7 @@ namespace GoPlay
         }
 
         public CancellationToken CanelToken => m_cancelSource.Token;
-        
+
         public event Action<uint, Exception> OnError;
         public event Action OnStarted;
         public event Action OnStopped;
@@ -197,7 +198,7 @@ namespace GoPlay
             add => Transport.OnClientDisconnected += value;
             remove => Transport.OnClientDisconnected -= value;
         }
-        
+
         public Server() : this(1) { }
 
         public Server(int defaultConcurrency) : base(defaultConcurrency)
@@ -329,6 +330,13 @@ namespace GoPlay
 
             StartProcessors();
 
+            var filterStarters = m_filters.OfType<IStart>();
+            foreach (IStart filterStarter in filterStarters)
+            {
+                try { filterStarter.OnStart(); }
+                catch (Exception err) { OnErrorEvent(IdLoopGenerator.INVALID, err); }
+            }
+
             // 发送侧不再有 per-connection 线程：每 session 一个轻量 SessionSender，由 m_sendPump 的固定线程池驱动。
             return Task.CompletedTask;
         }
@@ -379,6 +387,13 @@ namespace GoPlay
                     try { stopper.OnStop(); }
                     catch (Exception err) { OnErrorEvent(IdLoopGenerator.INVALID, err); }
                 }
+            }
+
+            // Processor.OnStop 之后：Filter 里的 IStop（例如异步日志泵）排干再退出。
+            foreach (var stopper in m_filters.OfType<IStop>())
+            {
+                try { stopper.OnStop(); }
+                catch (Exception err) { OnErrorEvent(IdLoopGenerator.INVALID, err); }
             }
 
             OnStopped?.Invoke();
@@ -505,7 +520,7 @@ namespace GoPlay
         //             }
         //
         //             if (IsBlockRecvByFilter(pack)) return;
-        //             
+        //
         //             switch (pack.Header.PackageInfo.Type)
         //             {
         //                 case PackageType.HankShakeReq:
@@ -533,7 +548,7 @@ namespace GoPlay
         //         {
         //             if (err.InnerException is OperationCanceledException) return;
         //             if (err.InnerException is TaskCanceledException) return;
-        //             
+        //
         //             OnErrorEvent(clientId, err);
         //         }
         //         catch (Exception err)
@@ -693,7 +708,7 @@ namespace GoPlay
         {
             Transport.DisconnectClient(clientId, err);
         }
-        
+
         public override void Dispose()
         {
             Stop();
