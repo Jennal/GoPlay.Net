@@ -1,6 +1,6 @@
 #!/bin/sh -x
 DIR=$(dirname "$0")
-VERSION="1.0.17"
+VERSION="1.0.18"
 rm -f $DIR/packages/*
 dotnet clean
 dotnet build --configuration Release $DIR/Tools.sln -p:Version="$VERSION"
