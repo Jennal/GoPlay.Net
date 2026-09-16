@@ -21,7 +21,7 @@ public class TestTime
     {
         if (_server != null) return;
         
-        RunArgs.AppConfigFile = "app.local.json";
+        RunArgs.AppConfigFile = "app.test.json";
         _server = new Server<NcServer>();
 
         _server.OnError += OnServerError;

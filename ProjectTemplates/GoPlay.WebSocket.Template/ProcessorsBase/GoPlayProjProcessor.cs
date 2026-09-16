@@ -48,40 +48,6 @@ public abstract partial class GoPlayProjProcessor : ProcessorBase
         return GetConfigurationValue("Wechat:AppSecret");
     }
 
-    protected string GetBscMemo()
-    {
-        return GetConfigurationValue("HDWallet:Bsc:Memo") ?? "";
-    }
-    
-    protected string GetBscPass()
-    {
-        return GetConfigurationValue("HDWallet:Bsc:Pass") ?? "";
-    }
-    
-    protected string GetTronMemo()
-    {
-        return GetConfigurationValue("HDWallet:Tron:Memo") ?? "";
-    }
-    
-    protected string GetTronPass()
-    {
-        return GetConfigurationValue("HDWallet:Tron:Pass") ?? "";
-    }
-    
-    protected string[] GetBscApiKeys()
-    {
-        var configure = GetConfiguration();
-        var section = configure.GetSection("BlockChainAPIKey:Bsc");
-        return section.Get<string[]>() ?? Array.Empty<string>();
-    }
-    
-    protected string[] GetTronApiKeys()
-    {
-        var configure = GetConfiguration();
-        var section = configure.GetSection("BlockChainAPIKey:Tron");
-        return section.Get<string[]>() ?? Array.Empty<string>();
-    }
-    
     public override Package? OnPreRecv(Package pack)
     {
         var route = GetRoute(pack);
