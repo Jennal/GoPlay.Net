@@ -80,16 +80,7 @@ public class Excel2Json
     private static void PrepareResolvers()
     {
         _typeResolvers.Clear();
-        var types = ReflectionHelper.GetTypesInAllLoadedAssemblies(t =>
-            t != typeof(TypeResolverBase) &&
-            t != typeof(TypeResolverBase<>) &&
-            (t.InheritsFrom(typeof(TypeResolverBase)) || t.InheritsFrom(typeof(TypeResolverBase<>))));
-
-        foreach (var type in types)
-        {
-            var resolver = (TypeResolverBase) Activator.CreateInstance(type);
-            _typeResolvers.Add(resolver);
-        }
+        _typeResolvers.AddRange(TypeResolverHelper.CreateAll());
     }
 
     private static void PrepareHooks()

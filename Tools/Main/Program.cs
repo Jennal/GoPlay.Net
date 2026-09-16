@@ -89,11 +89,12 @@ class Program
             cmd.AddOption(new Option<string>(new[] {"-t", "--type"}, () => "yaml", "数据类型：yaml | json，默认：yaml"));
             cmd.AddOption(new Option<string>(new[] {"-s", "--splitter"}, () => ",|", "数组分隔符，可配置多个，默认：\",|\""));
             cmd.AddOption(new Option<string>(new[] {"-s2", "--splitter-outer"}, () => ":", "数组外层分隔符，可配置多个，默认：\":\""));
+            cmd.AddOption(new Option<string>(new[] {"-d", "--dll"}, () => "", "扩展类型转换的DLL路径，从中加载 TypeResolverBase 子类，多个用逗号隔开"));
             
             
             //参数名要和Option名字对应，例如：inFolder 对应 --in-folder
             cmd.Handler = CommandHandler.Create(
-                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type, string splitter, string splitterOuter) =>
+                (string inFolder, string outCodeFolder, string outDataFolder, string platform, bool force, bool clearOld, string templateConf, string templateManager, string templateEnum, string type, string splitter, string splitterOuter, string dll) =>
                 {
                     RunArgs.Config.ArraySplitter = splitter;
                     RunArgs.Config.ArraySplitOuter = splitterOuter;
@@ -101,6 +102,7 @@ class Program
                     var watch = new Stopwatch();
                     watch.Start();
                     {
+                        if (!ExtensionAssemblyLoader.Load(dll)) return;
                         if (force) ExportCache.Remove(inFolder, platform);
                         if (clearOld)
                         {

@@ -3,6 +3,10 @@ using OfficeOpenXml;
 
 namespace GoPlay.Generators.Config
 {
+    /// <summary>
+    /// Excel 列类型转换器。可通过 <c>goplay config -d|--dll</c> 加载外部程序集中的子类来扩展。
+    /// 子类需提供无参构造函数；<see cref="RecognizeType"/> 命中后由 <see cref="GetValue"/> 完成单元格解析。
+    /// </summary>
     public abstract class TypeResolverBase
     {
         public abstract object Default { get; }
