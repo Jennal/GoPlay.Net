@@ -17,7 +17,7 @@ public class Excel2Script
     private static string CLASS_TEMPLETE_FULL = GeneratorUtils.GetTpl("tpl_class_conf");
     private static string CLASS_MANAGER_TEMPLETE = GeneratorUtils.GetTpl("tpl_class_manager");
 
-    public static void Generate(string xlsFolder, string csFolder, string platform, string templateConfPath="", string templateManagerPath="")
+    public static bool Generate(string xlsFolder, string csFolder, string platform, string templateConfPath="", string templateManagerPath="")
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         
@@ -33,16 +33,12 @@ public class Excel2Script
         if (!Directory.Exists(xlsFolder))
         {
             ExporterUtils.Error($"Excel目录不存在：{xlsFolder}");
-            return;
+            return false;
         }
 
-        if (!CheckConflictNames(xlsFolder)) return;
+        var files = ExporterUtils.GetExcelFiles(xlsFolder);
+        if (!CheckSameNameSheets(files, platform)) return false;
 
-        var files = Directory.EnumerateFiles(xlsFolder, "*.*")
-            .Where(p => ExporterConsts.extensionPattern.Any(p.EndsWith))
-            .Where(xls => !xls.EndsWith(".converting") &&
-                          !ExporterConsts.ignorePattern.Any(o => Path.GetFileName(xls).StartsWith(o)))
-            .ToList();
         for (var i = 0; i < files.Count; i++)
         {
             var xls = files[i];
@@ -56,41 +52,25 @@ public class Excel2Script
                         _finishedTypeNames.Add(typeName);
                     }
 
-                    ExporterUtils.Info($"\t=>　cache验证，已忽略: {Path.GetFileNameWithoutExtension(xls)} => {entity.Name}");
+                    ExporterUtils.Info($"\t=>　cache验证，已忽略: {Path.GetRelativePath(xlsFolder, xls)} => {entity.Name}");
                 }
 
                 continue;
             }
 
-            var tmpFileName = xls + ".converting";
-            if (File.Exists(tmpFileName))
+            var index = i;
+            ExporterUtils.ReadExcel(xls, excelReader =>
             {
-                File.Delete(tmpFileName);
-            }
-
-            File.Copy(xls, tmpFileName);
-
-            try
-            {
-                using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
+                foreach (var sheet in excelReader.Workbook.Worksheets)
                 {
-                    var excelReader = new ExcelPackage(stream);
-                    foreach (var sheet in excelReader.Workbook.Worksheets)
-                    {
-                        var name = sheet.Name;
-                        if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
+                    var name = sheet.Name;
+                    if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
 
-//                            Debug.Log($"{xls} => {name}");
-                        ExporterUtils.Info(
-                            $"正在导出代码 ({i+1} / {files.Count}) {Path.GetFileNameWithoutExtension(xls)} => {name.Substring(ExporterConsts.exportPrefix.Length)} ...");
-                        ConvertToClasses(xls, sheet, platform, csFolder, tplConf);
-                    }
+                    ExporterUtils.Info(
+                        $"正在导出代码 ({index + 1} / {files.Count}) {Path.GetRelativePath(xlsFolder, xls)} => {name.Substring(ExporterConsts.exportPrefix.Length)} ...");
+                    ConvertToClasses(xls, sheet, platform, csFolder, tplConf);
                 }
-            }
-            finally
-            {
-                File.Delete(tmpFileName);
-            }
+            });
         }
 
         CreateManagerCode(csFolder, tplManager);
@@ -98,13 +78,18 @@ public class Excel2Script
         cache.RefreshExportCSharp(xlsFolder, platform, files);
 
         _finishedTypeNames = null;
+        return true;
     }
 
     static void ConvertToClasses(string xls, ExcelWorksheet table, string platform, string csFolder, string tpl)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
         var entityName = ExporterUtils.EntityNameFromTable(table);
-        if (_finishedTypeNames.Contains(entityName)) return;
+        if (_finishedTypeNames.Contains(entityName))
+        {
+            ExporterUtils.Info($"\t=>　{entityName} 已生成，跳过");
+            return;
+        }
 
         if (string.IsNullOrEmpty(tableName))
         {
@@ -131,10 +116,6 @@ public class Excel2Script
         if (rowColumn.x <= 0 || rowColumn.y <= 0) return;
 
         var tableDesc = FixMultilineComment(table.Cells[ExporterConsts.LINE_TABLE_DESC, 1].GetValue<string>());
-        var fieldNames = ExporterUtils.GetFieldNames(table);
-        var fieldTypes = ExporterUtils.GetFieldTypes(table);
-        var fieldDescs = ExporterUtils.GetFieldDescs(table);
-        var fieldPlatforms = ExporterUtils.GetFieldPlatform(table);
         var entityName = ExporterUtils.EntityNameFromTable(table);
 
         //template
@@ -142,13 +123,39 @@ public class Excel2Script
         tplData.tableName = tableName;
         tplData.tableDesc = tableDesc.Split("\n");
         tplData.entityName = entityName;
-        
-        //name => exists
-        var arrDict = new Dictionary<string, bool>();
 
-        var namespaces = tplData.namespaces;
-        namespaces.AddRange(BASIC_NAMESPACES);
-        for (var i = 0; i < rowColumn.x; i++)
+        tplData.namespaces.AddRange(BASIC_NAMESPACES);
+        var fields = BuildFields(xls, table, rowColumn.x, exportPlatform, tplData.namespaces, null);
+        if (fields == null) return;
+        tplData.fields.AddRange(fields);
+
+        var content = GeneratorUtils.RenderTpl(tpl, new {data = tplData});
+        var path = WriteEntityFile(csFolder, entityName, content);
+        _finishedTypeNames.Add(entityName);
+
+        HookFinish(xls, table, rowColumn, path);
+    }
+
+    /// <summary>
+    /// 根据表头生成字段列表，出错时返回null
+    /// </summary>
+    /// <param name="namespaces">需要自动引用的名称空间，为null时不收集</param>
+    /// <param name="signature">表头签名（Excel字段名 + 生成的C#类型），用于同名Sheet的一致性校验，为null时不收集</param>
+    static List<TemplateField>? BuildFields(string xls, ExcelWorksheet table, int columnCount, string exportPlatform,
+        List<string>? namespaces, List<string>? signature)
+    {
+        var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
+        var fieldNames = ExporterUtils.GetFieldNames(table);
+        var fieldTypes = ExporterUtils.GetFieldTypes(table);
+        var fieldDescs = ExporterUtils.GetFieldDescs(table);
+        var fieldPlatforms = ExporterUtils.GetFieldPlatform(table);
+
+        var fields = new List<TemplateField>();
+
+        //数组字段可以配置多列同名的 xxx[]，只按第一列生成代码：fieldName => fieldType
+        var arrDict = new Dictionary<string, string>();
+
+        for (var i = 0; i < columnCount; i++)
         {
             var fieldData = new TemplateField();
             var platform = fieldPlatforms[i];
@@ -170,45 +177,55 @@ public class Excel2Script
             type = resolver.TypeName;
 
             //自动引用名称空间
-            var typeNs = resolver.Namespace;
-            if (!string.IsNullOrEmpty(typeNs))
+            if (namespaces != null)
             {
-                if (!BASIC_TYPES.Contains(type) && !BASIC_NAMESPACES.Contains(typeNs))
+                var typeNs = resolver.Namespace;
+                if (!string.IsNullOrEmpty(typeNs))
                 {
-                    if (!namespaces.Contains(typeNs)) namespaces.Add(typeNs);
-                    ExporterUtils.Info($"--------------------> {type} => {typeNs}");
-                }
-            }
-            else
-            {
-                var csType = ReflectionHelper.GetTypeInAllLoadedAssemblies(type);
-                if (!BASIC_TYPES.Contains(type))
-                {
-                    if (csType != null)
+                    if (!BASIC_TYPES.Contains(type) && !BASIC_NAMESPACES.Contains(typeNs))
                     {
-                        if (!string.IsNullOrEmpty(csType.Namespace) && !BASIC_NAMESPACES.Contains(csType.Namespace))
+                        if (!namespaces.Contains(typeNs)) namespaces.Add(typeNs);
+                        ExporterUtils.Info($"--------------------> {type} => {typeNs}");
+                    }
+                }
+                else
+                {
+                    var csType = ReflectionHelper.GetTypeInAllLoadedAssemblies(type);
+                    if (!BASIC_TYPES.Contains(type))
+                    {
+                        if (csType != null)
                         {
-                            var ns = csType.Namespace;
-                            if (!namespaces.Contains(ns)) namespaces.Add(ns);
-                            ExporterUtils.Info($"--------------------> {type} => {csType.Namespace}");
+                            if (!string.IsNullOrEmpty(csType.Namespace) && !BASIC_NAMESPACES.Contains(csType.Namespace))
+                            {
+                                var ns = csType.Namespace;
+                                if (!namespaces.Contains(ns)) namespaces.Add(ns);
+                                ExporterUtils.Info($"--------------------> {type} => {csType.Namespace}");
+                            }
                         }
                     }
                 }
             }
-            
+
             var fieldName = ExporterUtils.ToCamelCase(name);
             string fieldType;
             if (!GetFieldType(type, resolver.Type, out fieldType))
             {
                 ExporterUtils.Error("[错误]存在错误字段类型：" + type + " - " + tableName + "." + name);
-                return;
+                return null;
             }
 
             if (fieldName.EndsWith("[]"))
             {
-                if (arrDict.ContainsKey(fieldName)) continue;
+                if (arrDict.TryGetValue(fieldName, out var firstType))
+                {
+                    if (firstType != fieldType)
+                    {
+                        ExporterUtils.Warning($"数组字段各列类型不一致，代码按第一列类型 {firstType} 生成：{xls} => {table.Name}.{name} : {fieldType}");
+                    }
+                    continue;
+                }
 
-                arrDict[fieldName] = true;
+                arrDict[fieldName] = fieldType;
                 fieldName = fieldName.Substring(0, fieldName.Length - 2);
                 fieldType = $"{fieldType}[]";
 
@@ -219,15 +236,75 @@ public class Excel2Script
             fieldData.name = fieldName;
             fieldData.desc = desc.Split("\n");
             fieldData.isArray = isArray;
-            
-            tplData.fields.Add(fieldData);
+
+            fields.Add(fieldData);
+            signature?.Add($"{name} : {fieldType}");
         }
 
-        var content = GeneratorUtils.RenderTpl(tpl, new {data = tplData});
-        var path = WriteEntityFile(csFolder, entityName, content);
-        _finishedTypeNames.Add(entityName);
+        return fields;
+    }
 
-        HookFinish(xls, table, rowColumn, path);
+    /// <summary>
+    /// 多个Excel中允许存在同名Sheet（数据会合并导出），但它们生成的代码必须一致
+    /// </summary>
+    private static bool CheckSameNameSheets(List<string> files, string platform)
+    {
+        //entityName(含variant) => (xls, sheetName, signature)
+        var dict = new Dictionary<string, (string xls, string sheetName, List<string> signature)>();
+        var result = true;
+
+        foreach (var xls in files)
+        {
+            ExporterUtils.ReadExcel(xls, excelReader =>
+            {
+                foreach (var sheet in excelReader.Workbook.Worksheets)
+                {
+                    var name = sheet.Name;
+                    if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
+                    if (string.IsNullOrEmpty(ExporterUtils.GetVariantMainName(name))) continue;
+
+                    var rowColumn = ExporterUtils.GetRowColumn(sheet);
+                    var signature = new List<string>();
+                    if (BuildFields(xls, sheet, rowColumn.x, platform, null, signature) == null)
+                    {
+                        result = false;
+                        continue;
+                    }
+
+                    var key = ExporterUtils.EntityNameFromTable(sheet, true);
+                    if (!dict.TryGetValue(key, out var first))
+                    {
+                        dict[key] = (xls, name, signature);
+                        continue;
+                    }
+
+                    var diff = DiffSignature(first.signature, signature);
+                    if (diff == null) continue;
+
+                    ExporterUtils.Error($"同名Sheet的表头不一致（平台：{platform}）：" +
+                                        $"\n\t前者：{first.xls} => {first.sheetName}" +
+                                        $"\n\t后者：{xls} => {name}{diff}");
+                    result = false;
+                }
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 只比较字段集合，不要求列顺序一致（数据按字段名反序列化，代码按第一个文件的顺序生成）
+    /// </summary>
+    private static string? DiffSignature(List<string> a, List<string> b)
+    {
+        var onlyA = a.Except(b).ToList();
+        var onlyB = b.Except(a).ToList();
+        if (onlyA.Count == 0 && onlyB.Count == 0) return null;
+
+        var sb = new StringBuilder();
+        if (onlyA.Count > 0) sb.Append($"\n\t仅前者存在：{string.Join(", ", onlyA)}");
+        if (onlyB.Count > 0) sb.Append($"\n\t仅后者存在：{string.Join(", ", onlyB)}");
+        return sb.ToString();
     }
 
     private static void HookFinish(string xls, ExcelWorksheet table, Vector2Int rowColumn, string path)
@@ -323,56 +400,6 @@ public class Excel2Script
         {
             hook.OnExportAllFinished();
         }
-    }
-
-    private static bool CheckConflictNames(string xlsFolder)
-    {
-        var set = new Dictionary<string, string>();
-
-        foreach (var xls in Directory.EnumerateFiles(xlsFolder, "*.xlsx"))
-        {
-            if (ExporterConsts.ignorePattern.Any(o => Path.GetFileName(xls).StartsWith(o))) continue;
-
-            var tmpFileName = xls + ".converting";
-            if (File.Exists(tmpFileName))
-            {
-                File.Delete(tmpFileName);
-            }
-
-            File.Copy(xls, tmpFileName);
-
-            try
-            {
-                using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
-                {
-                    var excelReader = new ExcelPackage(stream);
-                    foreach (var sheet in excelReader.Workbook.Worksheets)
-                    {
-                        var name = sheet.Name;
-                        if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
-
-                        if (set.ContainsKey(name))
-                        {
-                            var file = set[name];
-                            ExporterUtils.Error($"{name} exists in {file} and {xls}");
-                            return false;
-                        }
-
-                        set[name] = xls;
-                    }
-                }
-            }
-            catch
-            {
-                throw;
-            }
-            finally
-            {
-                File.Delete(tmpFileName);
-            }
-        }
-
-        return true;
     }
 
     private static void CreateManagerCode(string csFolder, string tpl)

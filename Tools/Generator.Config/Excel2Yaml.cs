@@ -33,7 +33,7 @@ public class Excel2Yaml
 
         var cache = ExportCache.Load(_xlsFolder, platform);
         _serializer = BuildSerializer();
-        _finishList = new Dictionary<string, ConfValues>();
+        _finishList = new Dictionary<string, ConfValues>(StringComparer.OrdinalIgnoreCase);
 
         if (!Directory.Exists(xlsFolder))
         {
@@ -46,29 +46,22 @@ public class Excel2Yaml
             ExporterUtils.CreateFolderIfNotExists(outFolder);
         }
 
-        var files = Directory.EnumerateFiles(xlsFolder, "*.*")
-            .Where(p => ExporterConsts.extensionPattern.Any(p.EndsWith))
-            .Where(o => !Path.GetFileName(o).StartsWith("~$") && !o.EndsWith(".converting"))
-            .ToList();
-        try
+        var files = ExporterUtils.GetExcelFiles(xlsFolder);
+        var plan = DataExportPlan.Create(files, cache, outFolder, _platform);
+
+        var i = 0;
+        foreach (var xls in files)
         {
-            var i = 0;
-            foreach (var xls in files)
+            i++;
+            ExporterUtils.Info($"正在导出数据 ({i} / {files.Count}) {Path.GetRelativePath(xlsFolder, xls)} ...");
+            if (plan.ShouldExportFile(xls))
             {
-                i++;
-                ExporterUtils.Info($"正在导出数据 ({i} / {files.Count}) {Path.GetFileNameWithoutExtension(xls)} ...");
-                if (cache.FilterExportScriptableObject(outFolder, xls, _platform))
-                {
-                    ExportFile(xls);
-                }
-                else
-                {
-                    ExporterUtils.Info($"\t=>　cache验证，已忽略");
-                }
+                ExportFile(xls, plan);
             }
-        }
-        finally
-        {
+            else
+            {
+                ExporterUtils.Info($"\t=>　cache验证，已忽略");
+            }
         }
 
         //clear memory
@@ -108,48 +101,29 @@ public class Excel2Yaml
         }
     }
 
-    private static void ExportFile(string xls)
+    private static void ExportFile(string xls, DataExportPlan plan)
     {
-        if (ExporterConsts.ignorePattern.Any(o => Path.GetFileName(xls).StartsWith(o))) return;
-
-        var tmpFileName = xls + ".converting";
-        if (File.Exists(tmpFileName))
+        ExporterUtils.ReadExcel(xls, excelReader =>
         {
-            File.Delete(tmpFileName);
-        }
-
-        File.Copy(xls, tmpFileName);
-
-        try
-        {
-            using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
+            var ExcelWorksheetList = new List<ExcelWorksheet>();
+            foreach (var table in excelReader.Workbook.Worksheets)
             {
-                var excelReader = new ExcelPackage(stream);
+                var name = table.Name;
+                if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
+                if (!plan.ShouldExportSheet(xls, name)) continue;
 
-                var ExcelWorksheetList = new List<ExcelWorksheet>();
-                foreach (var table in excelReader.Workbook.Worksheets)
-                {
-                    var name = table.Name;
-                    if (name == null || !name.StartsWith(ExporterConsts.exportPrefix)) continue;
-
-//                            Debug.Log($"{xls} => {name}");
-                    ExcelWorksheetList.Add(table);
-                }
-
-                //执行导出
-                OnAllExportBegin(xls, excelReader);
-                foreach (var table in ExcelWorksheetList)
-                {
-                    Export(xls, table, excelReader);
-                }
-
-                OnAllExportFinish(xls, excelReader);
+                ExcelWorksheetList.Add(table);
             }
-        }
-        finally
-        {
-            File.Delete(tmpFileName);
-        }
+
+            //执行导出
+            OnAllExportBegin(xls, excelReader);
+            foreach (var table in ExcelWorksheetList)
+            {
+                Export(xls, table, excelReader, plan);
+            }
+
+            OnAllExportFinish(xls, excelReader);
+        });
     }
 
     private static void OnAllExportBegin(string xls, ExcelPackage excel)
@@ -168,7 +142,7 @@ public class Excel2Yaml
         }
     }
 
-    private static void Export(string xls, ExcelWorksheet table, ExcelPackage package)
+    private static void Export(string xls, ExcelWorksheet table, ExcelPackage package, DataExportPlan plan)
     {
         var tableName = GetTableName(table);
         if (string.IsNullOrEmpty(tableName))
@@ -183,17 +157,28 @@ public class Excel2Yaml
         var variantName = ExporterUtils.GetVariantName(tableName);
 
         var typeName = GetTypeNameByTableName(mainName);
-        var asset = CreateAsset();
         var outPath = Path.Combine(_outFolder, ExporterConsts.dataFolder, variantName, typeName + ".asset");
+
+        //多个Excel中的同名Sheet，按文件名顺序追加到同一个Asset
+        var dataKey = DataExportPlan.GetDataKeyBySheetName(table.Name);
+        if (!_finishList.TryGetValue(dataKey, out var asset))
+        {
+            asset = CreateAsset();
+            _finishList[dataKey] = asset;
+        }
+        else
+        {
+            ExporterUtils.Info($"\t=>　合并到已有数据：{typeName} ({variantName})");
+        }
 
         OnExportBegin(xls, table);
 
+        var startIndex = asset.Count;
         FillAsset(asset, table, package);
+        plan.CheckDuplicateIds(dataKey, xls, ExporterUtils.GetIdFieldName(table, _platform), asset.Skip(startIndex));
         SaveAsset(asset, table, outPath);
 
         OnExportFinish(xls, table, outPath);
-
-        _finishList[tableName] = asset;
     }
 
     private static void SaveAsset(ConfValues asset, ExcelWorksheet table, string outPath)

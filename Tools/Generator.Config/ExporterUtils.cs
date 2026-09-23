@@ -1,11 +1,182 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Numerics;
+using System.Xml.Linq;
 using OfficeOpenXml;
 
 namespace GoPlay.Generators.Config
 {
     public static class ExporterUtils
     {
+        /// <summary>
+        /// 递归获取目录下所有Excel文件，按文件名自然排序（Item2 在 Item10 之前）。
+        /// 子目录中存在 .exportignore 文件时，忽略该子目录（包括其下所有子目录）。
+        /// </summary>
+        public static List<string> GetExcelFiles(string xlsFolder)
+        {
+            var result = new List<string>();
+            CollectExcelFiles(xlsFolder, result, true);
+
+            return result
+                .OrderBy(Path.GetFileName, NaturalComparer.Instance)
+                .ThenBy(o => o, NaturalComparer.Instance)
+                .ToList();
+        }
+
+        /// <summary>
+        /// 自然排序：连续数字按数值比较，其余字符忽略大小写比较
+        /// </summary>
+        public class NaturalComparer : IComparer<string?>
+        {
+            public static readonly NaturalComparer Instance = new NaturalComparer();
+
+            public int Compare(string? x, string? y)
+            {
+                if (ReferenceEquals(x, y)) return 0;
+                if (x == null) return -1;
+                if (y == null) return 1;
+
+                int i = 0, j = 0;
+                while (i < x.Length && j < y.Length)
+                {
+                    if (char.IsDigit(x[i]) && char.IsDigit(y[j]))
+                    {
+                        var si = i;
+                        var sj = j;
+                        while (i < x.Length && char.IsDigit(x[i])) i++;
+                        while (j < y.Length && char.IsDigit(y[j])) j++;
+
+                        var numX = x.Substring(si, i - si).TrimStart('0');
+                        var numY = y.Substring(sj, j - sj).TrimStart('0');
+                        if (numX.Length != numY.Length) return numX.Length.CompareTo(numY.Length);
+
+                        var cmp = string.CompareOrdinal(numX, numY);
+                        if (cmp != 0) return cmp;
+
+                        //数值相同时，前导0少的在前：1 < 01
+                        cmp = (i - si).CompareTo(j - sj);
+                        if (cmp != 0) return cmp;
+                    }
+                    else
+                    {
+                        var cmp = char.ToUpperInvariant(x[i]).CompareTo(char.ToUpperInvariant(y[j]));
+                        if (cmp != 0) return cmp;
+                        i++;
+                        j++;
+                    }
+                }
+
+                var lengthCmp = (x.Length - i).CompareTo(y.Length - j);
+                return lengthCmp != 0 ? lengthCmp : string.CompareOrdinal(x, y);
+            }
+        }
+
+        /// <summary>
+        /// 约定第一个导出的字段为ID，第一个字段是数组时视为没有ID
+        /// </summary>
+        public static string? GetIdFieldName(ExcelWorksheet table, string platform)
+        {
+            var fieldNames = GetFieldNames(table);
+            var fieldTypes = GetFieldTypes(table);
+            var fieldPlatforms = GetFieldPlatform(table);
+            for (var i = 0; i < fieldNames.Count; i++)
+            {
+                if (!fieldPlatforms[i].Contains(platform)) continue;
+                if (string.IsNullOrEmpty(fieldNames[i]) || string.IsNullOrEmpty(fieldTypes[i])) continue;
+
+                return fieldNames[i].EndsWith("[]") ? null : fieldNames[i];
+            }
+
+            return null;
+        }
+
+        private static void CollectExcelFiles(string folder, List<string> result, bool isRoot)
+        {
+            if (!isRoot && File.Exists(Path.Combine(folder, ExporterConsts.exportIgnoreFile)))
+            {
+                Info($"存在 {ExporterConsts.exportIgnoreFile}，已忽略目录：{folder}");
+                return;
+            }
+
+            result.AddRange(Directory.EnumerateFiles(folder, "*.*").Where(IsExcelFile));
+
+            foreach (var subFolder in Directory.EnumerateDirectories(folder))
+            {
+                CollectExcelFiles(subFolder, result, false);
+            }
+        }
+
+        public static bool IsExcelFile(string path)
+        {
+            var fileName = Path.GetFileName(path);
+            if (!ExporterConsts.extensionPattern.Any(o => fileName.EndsWith(o, StringComparison.OrdinalIgnoreCase))) return false;
+            if (ExporterConsts.ignorePattern.Any(o => fileName.StartsWith(o))) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// 以临时副本的方式打开Excel（避免Excel正在打开时无法读取）
+        /// </summary>
+        public static void ReadExcel(string xls, Action<ExcelPackage> action)
+        {
+            var tmpFileName = xls + ".converting";
+            if (File.Exists(tmpFileName))
+            {
+                File.Delete(tmpFileName);
+            }
+
+            File.Copy(xls, tmpFileName);
+
+            try
+            {
+                using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
+                using (var excelReader = new ExcelPackage(stream))
+                {
+                    action(excelReader);
+                }
+            }
+            finally
+            {
+                File.Delete(tmpFileName);
+            }
+        }
+
+        /// <summary>
+        /// 只读取工作簿中的Sheet名称，不加载Sheet内容
+        /// </summary>
+        public static List<string> GetSheetNames(string xls)
+        {
+            try
+            {
+                using (var stream = new FileStream(xls, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+                {
+                    var entry = zip.GetEntry("xl/workbook.xml");
+                    if (entry != null)
+                    {
+                        using (var entryStream = entry.Open())
+                        {
+                            return XDocument.Load(entryStream)
+                                .Descendants()
+                                .Where(o => o.Name.LocalName == "sheet")
+                                .Select(o => (string?) o.Attribute("name"))
+                                .Where(o => o != null)
+                                .Select(o => o!)
+                                .ToList();
+                        }
+                    }
+                }
+            }
+            catch (Exception err)
+            {
+                Warning($"快速读取Sheet名称失败，改用完整读取：{xls} => {err.Message}");
+            }
+
+            var names = new List<string>();
+            ReadExcel(xls, package => names.AddRange(package.Workbook.Worksheets.Select(o => o.Name)));
+            return names;
+        }
+
         public static bool IsEmptyLine(ExcelWorksheet table, int line, int fieldNamesCount)
         {
             for (var i = 1; i <= fieldNamesCount; i++)

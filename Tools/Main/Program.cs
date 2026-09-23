@@ -118,7 +118,12 @@ class Program
                         if (!string.IsNullOrEmpty(outCodeFolder))
                         {
                             Excel2Enum.Generate(inFolder, outCodeFolder, false, templateEnum);
-                            Excel2Script.Generate(inFolder, outCodeFolder, platform, templateConf, templateManager);
+                            if (!Excel2Script.Generate(inFolder, outCodeFolder, platform, templateConf, templateManager))
+                            {
+                                Console.WriteLine("========== Generate Config Failed ==========");
+                                Environment.ExitCode = 1;
+                                return;
+                            }
                         }
                         else
                         {

@@ -26,47 +26,31 @@ public class Excel2ProtoEnum
         if (!CheckConflictNames(xlsFolder)) return;
 
         var tpl = string.IsNullOrEmpty(tplPath) ? CLASS_TEMPLETE : File.ReadAllText(tplPath);
-        var files = Directory.EnumerateFiles(xlsFolder, "*.*")
-            .Where(p => ExporterConsts.extensionPattern.Any(p.EndsWith))
-            .Where(xls => !xls.EndsWith(".converting") &&
-                          !ExporterConsts.ignorePattern.Any(o => Path.GetFileName(xls).StartsWith(o)))
-            .ToList();
-        for (var i = 0; i < files.Count; i++)
+        var files = ExporterUtils.GetExcelFiles(xlsFolder);
+
+        //所有Excel中的枚举都写入同一个 BaseEnum.proto
+        var tplDataList = new List<TemplateEnumData>();
+        foreach (var xls in files)
         {
-            var xls = files[i];
-            var tmpFileName = xls + ".converting";
-            if (File.Exists(tmpFileName)) File.Delete(tmpFileName);
-            File.Copy(xls, tmpFileName);
-
-            try
+            ExporterUtils.ReadExcel(xls, excelReader =>
             {
-                using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
+                foreach (var sheet in excelReader.Workbook.Worksheets)
                 {
-                    var excelReader = new ExcelPackage(stream);
-                    
-                    List<TemplateEnumData> tplDataList = new List<TemplateEnumData>();
-                    foreach (var sheet in excelReader.Workbook.Worksheets)
-                    {
-                        var name = sheet.Name;
-                        if (name == null || !ExporterConsts.exportEnumPrefix.Any(o => name.StartsWith(o))) continue;
+                    var name = sheet.Name;
+                    if (name == null || !ExporterConsts.exportEnumPrefix.Any(o => name.StartsWith(o))) continue;
 
-//                            Debug.Log($"{xls} => {name}");   
-                        ExporterUtils.Info(
-                            $"正在导出 {Path.GetFileNameWithoutExtension(xls)} => {name.Substring(ExporterConsts.exportPrefix.Length)} ...");
-                        var tplData = ConvertToEnum(csFolder, xls, sheet, isDryRun, tpl);
-                        tplDataList.Add(tplData);
-                    }
-                    if (!isDryRun && tplDataList.Count > 0)
-                    {
-                        var content = GeneratorUtils.RenderTpl(tpl, new { data = tplDataList });
-                        WriteEntityFile(csFolder, "BaseEnum", content);
-                    }
+                    ExporterUtils.Info(
+                        $"正在导出 {Path.GetRelativePath(xlsFolder, xls)} => {name.Substring(ExporterConsts.exportPrefix.Length)} ...");
+                    var tplData = ConvertToEnum(csFolder, xls, sheet, isDryRun, tpl);
+                    tplDataList.Add(tplData);
                 }
-            }
-            finally
-            {
-                File.Delete(tmpFileName);
-            }
+            });
+        }
+
+        if (!isDryRun && tplDataList.Count > 0)
+        {
+            var content = GeneratorUtils.RenderTpl(tpl, new { data = tplDataList });
+            WriteEntityFile(csFolder, "BaseEnum", content);
         }
     }
 
@@ -74,46 +58,19 @@ public class Excel2ProtoEnum
     {
         var set = new Dictionary<string, string>();
 
-        foreach (var xls in Directory.EnumerateFiles(xlsFolder, "*.xlsx"))
+        foreach (var xls in ExporterUtils.GetExcelFiles(xlsFolder))
         {
-            if (ExporterConsts.ignorePattern.Any(o => Path.GetFileName(xls).StartsWith(o))) continue;
-
-            var tmpFileName = xls + ".converting";
-            if (File.Exists(tmpFileName))
+            foreach (var name in ExporterUtils.GetSheetNames(xls))
             {
-                File.Delete(tmpFileName);
-            }
+                if (!ExporterConsts.exportEnumPrefix.Any(o => name.StartsWith(o))) continue;
 
-            File.Copy(xls, tmpFileName);
-
-            try
-            {
-                using (var stream = File.Open(tmpFileName, FileMode.Open, FileAccess.Read))
+                if (set.TryGetValue(name, out var file))
                 {
-                    var excelReader = new ExcelPackage(stream);
-                    foreach (var sheet in excelReader.Workbook.Worksheets)
-                    {
-                        var name = sheet.Name;
-                        if (name == null || !ExporterConsts.exportEnumPrefix.Any(o => name.StartsWith(o)) ) continue;
-
-                        if (set.ContainsKey(name))
-                        {
-                            var file = set[name];
-                            ExporterUtils.Error($"{name} exists in {file} and {xls}");
-                            return false;
-                        }
-
-                        set[name] = xls;
-                    }
+                    ExporterUtils.Error($"{name} exists in {file} and {xls}");
+                    return false;
                 }
-            }
-            catch
-            {
-                throw;
-            }
-            finally
-            {
-                File.Delete(tmpFileName);
+
+                set[name] = xls;
             }
         }
 

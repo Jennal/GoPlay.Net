@@ -14,6 +14,7 @@ namespace GoPlay.Generators.Config
         public const string defaultVariant = "zh_cn";
 
         public static readonly string cacheFile = ".exportCache";
+        public static readonly string exportIgnoreFile = ".exportignore";
 
         public static readonly string csFolder = "Generated";
         public static readonly string enumFolder = "Generated/Enum";
