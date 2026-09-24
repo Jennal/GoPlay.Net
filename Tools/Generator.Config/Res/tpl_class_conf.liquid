@@ -95,5 +95,62 @@ namespace GoPlay.Config
 		{
 			return !lhs.Equals(rhs);
 		}
+		{%- if data.indexes.size > 0 %}
+
+		#region Indexes
+
+		/// <summary>
+		/// 数据加载后首次查询时构建，数据重新加载（ConfigData.RefreshCache）后会自动重建
+		/// </summary>
+		private sealed class IndexData
+		{
+			{%- for index in data.indexes %}
+			public readonly Dictionary<{{index.key_type}}, {{data.entity_name}}> By{{index.name}};
+			{%- endfor %}
+
+			public IndexData(List<{{data.entity_name}}> values)
+			{
+				{%- for index in data.indexes %}
+				By{{index.name}} = new Dictionary<{{index.key_type}}, {{data.entity_name}}>(values.Count);
+				{%- endfor %}
+
+				foreach (var conf in values)
+				{
+					{%- for index in data.indexes %}
+					Add(By{{index.name}}, {{index.value_key}}, conf, "{{index.label}}");
+					{%- endfor %}
+				}
+			}
+
+			private static void Add<TKey>(Dictionary<TKey, {{data.entity_name}}> dict, TKey key, {{data.entity_name}} conf, string label)
+			{
+				if (key == null) return;
+				if (!dict.TryAdd(key, conf))
+				{
+					throw new InvalidOperationException($"{{data.entity_name}} 索引 {label} 重复：{key}");
+				}
+			}
+		}
+
+		private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<List<{{data.entity_name}}>, IndexData> _indexData =
+			new System.Runtime.CompilerServices.ConditionalWeakTable<List<{{data.entity_name}}>, IndexData>();
+
+		private static IndexData GetIndexData(string lang)
+		{
+			return _indexData.GetValue(ConfigData.Get<{{data.entity_name}}>(lang), values => new IndexData(values));
+		}
+		{%- for index in data.indexes %}
+
+		/// <summary>
+		/// 索引 {{index.label}}：{{index.parameters}}
+		/// </summary>
+		public static bool TryGetBy{{index.name}}({{index.parameters}}, out {{data.entity_name}} {{index.result_name}}, string {{index.lang_name}} = ConfigData.DEFAULT_LANGUAGE)
+		{
+			return GetIndexData({{index.lang_name}}).By{{index.name}}.TryGetValue({{index.parameter_key}}, out {{index.result_name}});
+		}
+		{%- endfor %}
+
+		#endregion
+		{%- endif %}
 	}
 }

@@ -22,6 +22,23 @@ public class TemplateData
     
     public List<string> namespaces { get; set; }
     public List<TemplateField> fields { get; set; }
+    public List<TemplateIndex> indexes { get; set; } = new List<TemplateIndex>();
+}
+
+/// <summary>
+/// 一个索引组（k / k1 / k2 ...）生成的查询接口：TryGetBy{name}({parameters}, out {entity} {resultName}, string {langName})
+/// </summary>
+[LiquidType("*")]
+public class TemplateIndex
+{
+    public string label { get; set; }
+    public string name { get; set; }
+    public string keyType { get; set; }
+    public string parameters { get; set; }
+    public string parameterKey { get; set; }
+    public string valueKey { get; set; }
+    public string resultName { get; set; }
+    public string langName { get; set; }
 }
 
 [LiquidType("*")]

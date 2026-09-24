@@ -40,8 +40,8 @@ namespace GoPlay.Config
             
             var yaml = File.ReadAllText(path);
             var confs = _deserializer.Deserialize<List<T>>(yaml);
-            _cache.TryAdd(path, confs);
-            _reloadStatus.TryAdd(path, true);
+            _cache[path] = confs;
+            _reloadStatus[path] = true;
 
             return confs;
         }

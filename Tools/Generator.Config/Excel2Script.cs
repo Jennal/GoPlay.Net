@@ -125,7 +125,7 @@ public class Excel2Script
         tplData.entityName = entityName;
 
         tplData.namespaces.AddRange(BASIC_NAMESPACES);
-        var fields = BuildFields(xls, table, rowColumn.x, exportPlatform, tplData.namespaces, null);
+        var fields = BuildFields(xls, table, rowColumn.x, exportPlatform, tplData.namespaces, null, tplData.indexes);
         if (fields == null) return;
         tplData.fields.AddRange(fields);
 
@@ -140,9 +140,10 @@ public class Excel2Script
     /// 根据表头生成字段列表，出错时返回null
     /// </summary>
     /// <param name="namespaces">需要自动引用的名称空间，为null时不收集</param>
-    /// <param name="signature">表头签名（Excel字段名 + 生成的C#类型），用于同名Sheet的一致性校验，为null时不收集</param>
+    /// <param name="signature">表头签名（Excel字段名 + 生成的C#类型 + 索引组），用于同名Sheet的一致性校验，为null时不收集</param>
+    /// <param name="indexes">platform 行中 k / k1 / k2 ... 标记的索引，为null时不收集</param>
     static List<TemplateField>? BuildFields(string xls, ExcelWorksheet table, int columnCount, string exportPlatform,
-        List<string>? namespaces, List<string>? signature)
+        List<string>? namespaces, List<string>? signature, List<TemplateIndex>? indexes = null)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
         var fieldNames = ExporterUtils.GetFieldNames(table);
@@ -154,6 +155,9 @@ public class Excel2Script
 
         //数组字段可以配置多列同名的 xxx[]，只按第一列生成代码：fieldName => fieldType
         var arrDict = new Dictionary<string, string>();
+
+        //索引组 => 字段（按列顺序）
+        var indexFields = new SortedDictionary<int, List<TemplateField>>();
 
         for (var i = 0; i < columnCount; i++)
         {
@@ -214,6 +218,13 @@ public class Excel2Script
                 return null;
             }
 
+            var groups = ConfigIndex.ParseGroups(platform);
+            if (groups.Count > 0 && ConfigIndex.IsArray(name, fieldType))
+            {
+                ExporterUtils.Error($"[错误]索引组 {ConfigIndex.GroupLabel(groups[0])} 的字段 {name} 是数组，数组不能作为索引：{xls} => {table.Name}");
+                return null;
+            }
+
             if (fieldName.EndsWith("[]"))
             {
                 if (arrDict.TryGetValue(fieldName, out var firstType))
@@ -238,10 +249,66 @@ public class Excel2Script
             fieldData.isArray = isArray;
 
             fields.Add(fieldData);
-            signature?.Add($"{name} : {fieldType}");
+
+            foreach (var group in groups)
+            {
+                if (!indexFields.TryGetValue(group, out var list))
+                {
+                    list = new List<TemplateField>();
+                    indexFields.Add(group, list);
+                }
+
+                list.Add(fieldData);
+            }
+
+            var groupLabels = groups.Count > 0 ? $" [{string.Join(",", groups.Select(ConfigIndex.GroupLabel))}]" : "";
+            signature?.Add($"{name} : {fieldType}{groupLabels}");
         }
 
+        var builtIndexes = BuildIndexes(xls, table, indexFields);
+        if (builtIndexes == null) return null;
+        indexes?.AddRange(builtIndexes);
+
         return fields;
+    }
+
+    private static List<TemplateIndex>? BuildIndexes(string xls, ExcelWorksheet table, SortedDictionary<int, List<TemplateField>> indexFields)
+    {
+        var result = new List<TemplateIndex>();
+        foreach (var pair in indexFields)
+        {
+            var label = ConfigIndex.GroupLabel(pair.Key);
+            var fields = pair.Value;
+            var name = string.Join("And", fields.Select(o => char.ToUpperInvariant(o.name[0]) + o.name.Substring(1)));
+
+            var exists = result.FirstOrDefault(o => o.name == name);
+            if (exists != null)
+            {
+                ExporterUtils.Error($"[错误]索引组 {exists.label} 和 {label} 的字段完全相同（TryGetBy{name}），请删除其中一个：{xls} => {table.Name}");
+                return null;
+            }
+
+            var paramNames = fields.Select(o => o.name).ToList();
+            result.Add(new TemplateIndex
+            {
+                label = label,
+                name = name,
+                keyType = fields.Count == 1 ? fields[0].typeName : $"({string.Join(", ", fields.Select(o => o.typeName))})",
+                parameters = string.Join(", ", fields.Select(o => $"{o.typeName} {o.name}")),
+                parameterKey = fields.Count == 1 ? fields[0].name : $"({string.Join(", ", paramNames)})",
+                valueKey = fields.Count == 1 ? $"conf.{fields[0].name}" : $"({string.Join(", ", fields.Select(o => $"conf.{o.name}"))})",
+                resultName = GetUniqueName("result", paramNames),
+                langName = GetUniqueName("lang", paramNames),
+            });
+        }
+
+        return result;
+    }
+
+    private static string GetUniqueName(string name, List<string> takenNames)
+    {
+        while (takenNames.Contains(name)) name = "_" + name;
+        return name;
     }
 
     /// <summary>

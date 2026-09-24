@@ -22,7 +22,7 @@ public class Excel2Yaml
 
     private static string DATA_TEMPLETE = GeneratorUtils.GetTpl("tpl_data");
     
-    public static void Generate(string xlsFolder, string outFolder, string platform)
+    public static bool Generate(string xlsFolder, string outFolder, string platform)
     {
         _platform = platform;
         _xlsFolder = xlsFolder;
@@ -38,7 +38,7 @@ public class Excel2Yaml
         if (!Directory.Exists(xlsFolder))
         {
             ExporterUtils.Error("Excel目录不存在，请检查：" + xlsFolder);
-            return;
+            return false;
         }
 
         if (!Directory.Exists(outFolder))
@@ -48,6 +48,14 @@ public class Excel2Yaml
 
         var files = ExporterUtils.GetExcelFiles(xlsFolder);
         var plan = DataExportPlan.Create(files, cache, outFolder, _platform);
+
+        ExporterUtils.Info("正在检查索引唯一性 ...");
+        if (!ConfigIndex.CheckUnique(files, _platform, plan, GetValue))
+        {
+            ExporterUtils.Error("索引检查未通过，已取消导出数据");
+            _finishList = null;
+            return false;
+        }
 
         var i = 0;
         foreach (var xls in files)
@@ -69,6 +77,7 @@ public class Excel2Yaml
 
         cache.RefreshExportScriptableObject(_xlsFolder, platform, files);
         ExporterUtils.Info("Export Complete!");
+        return true;
     }
 
     private static ISerializer BuildSerializer()

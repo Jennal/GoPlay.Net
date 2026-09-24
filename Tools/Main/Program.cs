@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
 using System.Diagnostics;
+using System.Text;
 using GoPlay.Common.Data;
 using GoPlay.Generators.Config;
 using GoPlay.Generators.Extension;
@@ -11,6 +12,9 @@ class Program
 {
     public static async Task Main(string[] args)
     {
+        Console.OutputEncoding = Encoding.UTF8;
+        Console.InputEncoding  = Encoding.UTF8;
+
         var rootCommand = new RootCommand();
         {
             rootCommand.AddCommand(CreateInfoCommand());
@@ -130,13 +134,14 @@ class Program
                             Excel2Enum.Generate(inFolder, outCodeFolder, true, templateEnum);
                         }
 
-                        if (type == "json")
+                        var dataSucceed = type == "json"
+                            ? Excel2Json.Generate(inFolder, outDataFolder, platform)
+                            : Excel2Yaml.Generate(inFolder, outDataFolder, platform);
+                        if (!dataSucceed)
                         {
-                            Excel2Json.Generate(inFolder, outDataFolder, platform);
-                        }
-                        else
-                        {
-                            Excel2Yaml.Generate(inFolder, outDataFolder, platform);
+                            Console.WriteLine("========== Generate Config Failed ==========");
+                            Environment.ExitCode = 1;
+                            return;
                         }
                     }
                     watch.Stop();
