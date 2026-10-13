@@ -10,7 +10,7 @@ namespace GoPlay.Config
     {
         public const string DEFAULT_LANGUAGE = "zh_cn";
                 
-        private static IDeserializer _deserializer = new DeserializerBuilder().Build();
+        private static IDeserializer _deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
         private static ConcurrentDictionary<string, object> _cache = new ConcurrentDictionary<string, object>();
         private static ConcurrentDictionary<string, bool> _reloadStatus = new ConcurrentDictionary<string, bool>();
 

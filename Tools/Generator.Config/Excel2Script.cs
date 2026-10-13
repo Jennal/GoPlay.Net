@@ -9,6 +9,10 @@ public class Excel2Script
 {
     static List<TypeResolverBase> _typeResolvers = new List<TypeResolverBase>();
     private static HashSet<string> _finishedTypeNames = new HashSet<string>();
+
+    //已由基准Sheet生成（或基准Sheet命中缓存）的类型，同类型的其他Sheet不再生成代码
+    private static HashSet<string> _generatedTypeNames = new HashSet<string>();
+    private static SheetBaseline _baseline;
     private static List<ScriptGenHookBase> _hooks = new List<ScriptGenHookBase>();
 
     private static string[] BASIC_TYPES => GeneratorUtils.GetBasicConf("basic_types");
@@ -29,6 +33,7 @@ public class Excel2Script
 
         var cache = ExportCache.Load(xlsFolder, platform);
         _finishedTypeNames = new HashSet<string>();
+        _generatedTypeNames = new HashSet<string>();
 
         if (!Directory.Exists(xlsFolder))
         {
@@ -37,6 +42,7 @@ public class Excel2Script
         }
 
         var files = ExporterUtils.GetExcelFiles(xlsFolder);
+        _baseline = SheetBaseline.Create(files, xlsFolder, platform);
         if (!CheckSameNameSheets(files, platform)) return false;
 
         for (var i = 0; i < files.Count; i++)
@@ -50,6 +56,7 @@ public class Excel2Script
                     {
                         var typeName = ExporterUtils.GetVariantMainName(entity.Name);
                         _finishedTypeNames.Add(typeName);
+                        if (_baseline.IsBaseEntity(xls, entity.Name)) _generatedTypeNames.Add(typeName);
                     }
 
                     ExporterUtils.Info($"\t=>　cache验证，已忽略: {Path.GetRelativePath(xlsFolder, xls)} => {entity.Name}");
@@ -78,22 +85,31 @@ public class Excel2Script
         cache.RefreshExportCSharp(xlsFolder, platform, files);
 
         _finishedTypeNames = null;
+        _generatedTypeNames = null;
+        _baseline = null;
         return true;
     }
 
     static void ConvertToClasses(string xls, ExcelWorksheet table, string platform, string csFolder, string tpl)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
-        var entityName = ExporterUtils.EntityNameFromTable(table);
-        if (_finishedTypeNames.Contains(entityName))
-        {
-            ExporterUtils.Info($"\t=>　{entityName} 已生成，跳过");
-            return;
-        }
-
         if (string.IsNullOrEmpty(tableName))
         {
             ExporterUtils.Error($"[错误]表名不存在：{xls} => {table.Name}");
+            return;
+        }
+
+        var entityName = ExporterUtils.EntityNameFromTable(table);
+        var dataKey = DataExportPlan.GetDataKeyBySheetName(table.Name);
+        if (!_baseline.IsBase(xls, dataKey))
+        {
+            ExporterUtils.Info($"\t=>　{entityName} 以表头基准 {_baseline.GetBaseXls(dataKey)} 生成，跳过");
+            return;
+        }
+
+        if (_generatedTypeNames.Contains(entityName))
+        {
+            ExporterUtils.Info($"\t=>　{entityName} 已生成，跳过");
             return;
         }
 
@@ -132,6 +148,7 @@ public class Excel2Script
         var content = GeneratorUtils.RenderTpl(tpl, new {data = tplData});
         var path = WriteEntityFile(csFolder, entityName, content);
         _finishedTypeNames.Add(entityName);
+        _generatedTypeNames.Add(entityName);
 
         HookFinish(xls, table, rowColumn, path);
     }
@@ -142,8 +159,9 @@ public class Excel2Script
     /// <param name="namespaces">需要自动引用的名称空间，为null时不收集</param>
     /// <param name="signature">表头签名（Excel字段名 + 生成的C#类型 + 索引组），用于同名Sheet的一致性校验，为null时不收集</param>
     /// <param name="indexes">platform 行中 k / k1 / k2 ... 标记的索引，为null时不收集</param>
+    /// <param name="indexSignature">signature 中属于索引字段的部分，为null时不收集</param>
     static List<TemplateField>? BuildFields(string xls, ExcelWorksheet table, int columnCount, string exportPlatform,
-        List<string>? namespaces, List<string>? signature, List<TemplateIndex>? indexes = null)
+        List<string>? namespaces, List<string>? signature, List<TemplateIndex>? indexes = null, HashSet<string>? indexSignature = null)
     {
         var tableName = table.Name.Substring(ExporterConsts.exportPrefix.Length);
         var fieldNames = ExporterUtils.GetFieldNames(table);
@@ -262,7 +280,9 @@ public class Excel2Script
             }
 
             var groupLabels = groups.Count > 0 ? $" [{string.Join(",", groups.Select(ConfigIndex.GroupLabel))}]" : "";
-            signature?.Add($"{name} : {fieldType}{groupLabels}");
+            var fieldSignature = $"{name} : {fieldType}{groupLabels}";
+            signature?.Add(fieldSignature);
+            if (groups.Count > 0) indexSignature?.Add(fieldSignature);
         }
 
         var builtIndexes = BuildIndexes(xls, table, indexFields);
@@ -312,12 +332,14 @@ public class Excel2Script
     }
 
     /// <summary>
-    /// 多个Excel中允许存在同名Sheet（数据会合并导出），但它们生成的代码必须一致
+    /// 多个Excel中允许存在同名Sheet（数据会合并导出），代码按基准Sheet生成（见 SheetBaseline）。
+    /// 其余同名Sheet的表头只能是基准表头的子集，且不能缺少索引字段
     /// </summary>
     private static bool CheckSameNameSheets(List<string> files, string platform)
     {
-        //entityName(含variant) => (xls, sheetName, signature)
-        var dict = new Dictionary<string, (string xls, string sheetName, List<string> signature)>();
+        //dataKey => 基准Sheet的表头
+        var bases = new Dictionary<string, (string xls, string sheetName, List<string> signature, HashSet<string> indexSignature)>(StringComparer.OrdinalIgnoreCase);
+        var others = new List<(string dataKey, string xls, string sheetName, List<string> signature)>();
         var result = true;
 
         foreach (var xls in files)
@@ -332,45 +354,66 @@ public class Excel2Script
 
                     var rowColumn = ExporterUtils.GetRowColumn(sheet);
                     var signature = new List<string>();
-                    if (BuildFields(xls, sheet, rowColumn.x, platform, null, signature) == null)
+                    var indexSignature = new HashSet<string>();
+                    if (BuildFields(xls, sheet, rowColumn.x, platform, null, signature, null, indexSignature) == null)
                     {
                         result = false;
                         continue;
                     }
 
-                    var key = ExporterUtils.EntityNameFromTable(sheet, true);
-                    if (!dict.TryGetValue(key, out var first))
+                    var dataKey = DataExportPlan.GetDataKeyBySheetName(name);
+                    if (_baseline.IsBase(xls, dataKey))
                     {
-                        dict[key] = (xls, name, signature);
-                        continue;
+                        bases[dataKey] = (xls, name, signature, indexSignature);
                     }
-
-                    var diff = DiffSignature(first.signature, signature);
-                    if (diff == null) continue;
-
-                    ExporterUtils.Error($"同名Sheet的表头不一致（平台：{platform}）：" +
-                                        $"\n\t前者：{first.xls} => {first.sheetName}" +
-                                        $"\n\t后者：{xls} => {name}{diff}");
-                    result = false;
+                    else
+                    {
+                        others.Add((dataKey, xls, name, signature));
+                    }
                 }
             });
+        }
+
+        foreach (var other in others)
+        {
+            if (!bases.TryGetValue(other.dataKey, out var baseSheet)) continue;
+
+            var error = DiffSignature(baseSheet.signature, baseSheet.indexSignature, other.signature, out var missing);
+            if (error != null)
+            {
+                ExporterUtils.Error($"同名Sheet的表头与基准不一致（平台：{platform}）：" +
+                                    $"\n\t基准：{baseSheet.xls} => {baseSheet.sheetName}" +
+                                    $"\n\t当前：{other.xls} => {other.sheetName}{error}");
+                result = false;
+                continue;
+            }
+
+            if (missing.Count > 0)
+            {
+                ExporterUtils.Info($"同名Sheet缺少的字段按空值导出（平台：{platform}）：{other.xls} => {other.sheetName}" +
+                                   $"\n\t缺少：{string.Join(", ", missing)}");
+            }
         }
 
         return result;
     }
 
     /// <summary>
-    /// 只比较字段集合，不要求列顺序一致（数据按字段名反序列化，代码按第一个文件的顺序生成）
+    /// 只比较字段集合，不要求列顺序一致（数据按字段名反序列化，代码按基准Sheet的顺序生成）。
+    /// 多出字段或缺少索引字段时返回错误信息
     /// </summary>
-    private static string? DiffSignature(List<string> a, List<string> b)
+    private static string? DiffSignature(List<string> baseSignature, HashSet<string> baseIndexSignature,
+        List<string> signature, out List<string> missing)
     {
-        var onlyA = a.Except(b).ToList();
-        var onlyB = b.Except(a).ToList();
-        if (onlyA.Count == 0 && onlyB.Count == 0) return null;
+        var extra = signature.Except(baseSignature).ToList();
+        missing = baseSignature.Except(signature).ToList();
+        var missingIndex = missing.Where(baseIndexSignature.Contains).ToList();
+        if (extra.Count == 0 && missingIndex.Count == 0) return null;
 
         var sb = new StringBuilder();
-        if (onlyA.Count > 0) sb.Append($"\n\t仅前者存在：{string.Join(", ", onlyA)}");
-        if (onlyB.Count > 0) sb.Append($"\n\t仅后者存在：{string.Join(", ", onlyB)}");
+        if (extra.Count > 0) sb.Append($"\n\t基准中不存在：{string.Join(", ", extra)}");
+        if (missingIndex.Count > 0) sb.Append($"\n\t缺少索引字段：{string.Join(", ", missingIndex)}");
+        if (missing.Count > missingIndex.Count) sb.Append($"\n\t缺少（允许）：{string.Join(", ", missing.Except(missingIndex))}");
         return sb.ToString();
     }
 

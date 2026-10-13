@@ -15,6 +15,7 @@ public class Excel2Yaml
     private static List<DataExportHookBase> _hooks = new List<DataExportHookBase>();
     private static ISerializer _serializer;
     private static Dictionary<string, ConfValues> _finishList;
+    private static SheetBaseline _baseline;
 
     private static string _platform;
     private static string _xlsFolder;
@@ -48,6 +49,15 @@ public class Excel2Yaml
 
         var files = ExporterUtils.GetExcelFiles(xlsFolder);
         var plan = DataExportPlan.Create(files, cache, outFolder, _platform);
+        _baseline = SheetBaseline.Create(files, xlsFolder, _platform);
+
+        ExporterUtils.Info("正在检查同名Sheet表头 ...");
+        if (!_baseline.CheckSheets(files, plan))
+        {
+            ExporterUtils.Error("表头检查未通过，已取消导出数据");
+            _finishList = null;
+            return false;
+        }
 
         ExporterUtils.Info("正在检查索引唯一性 ...");
         if (!ConfigIndex.CheckUnique(files, _platform, plan, GetValue))
@@ -74,6 +84,7 @@ public class Excel2Yaml
 
         //clear memory
         _finishList = null;
+        _baseline = null;
 
         cache.RefreshExportScriptableObject(_xlsFolder, platform, files);
         ExporterUtils.Info("Export Complete!");
@@ -184,7 +195,20 @@ public class Excel2Yaml
 
         var startIndex = asset.Count;
         FillAsset(asset, table, package);
-        plan.CheckDuplicateIds(dataKey, xls, ExporterUtils.GetIdFieldName(table, _platform), asset.Skip(startIndex));
+
+        var newItems = asset.Skip(startIndex).ToList();
+        string? idField;
+        if (_baseline.IsBase(xls, dataKey))
+        {
+            idField = ExporterUtils.GetIdFieldName(table, _platform);
+        }
+        else
+        {
+            _baseline.FillMissingFields(dataKey, newItems, _typeResolvers);
+            idField = _baseline.GetBaseHeader(dataKey)?.IdField;
+        }
+
+        plan.CheckDuplicateIds(dataKey, xls, idField, newItems);
         SaveAsset(asset, table, outPath);
 
         OnExportFinish(xls, table, outPath);
